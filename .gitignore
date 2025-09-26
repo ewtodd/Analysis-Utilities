@@ -5,6 +5,7 @@
 *.pdf 
 *.svg 
 *.o
+lib
 .cache
 __pycache__
 conda
