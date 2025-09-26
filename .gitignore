@@ -1,0 +1,10 @@
+*.h5
+*.root
+*.pkl
+*.png
+*.pdf 
+*.svg 
+*.o
+.cache
+__pycache__
+conda
