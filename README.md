@@ -5,7 +5,7 @@ Example usage in nix flake, i.e. to be used via `nix develop`:
 ```
 {
   inputs = {
-    waveform-analysis.url = "github:yourusername/Waveform-DSP-Toolkit";
+    waveform-analysis.url = "github:ewtodd/Waveform-DSP-Toolkit";
   };
 
   outputs = { self, nixpkgs, waveform-analysis }:
