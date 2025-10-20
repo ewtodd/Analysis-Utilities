@@ -6,6 +6,7 @@
 *.svg 
 *.o
 lib
+result
 .cache
 __pycache__
 conda

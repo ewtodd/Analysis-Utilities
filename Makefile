@@ -40,44 +40,44 @@ $(SHAREDLIB): $(OBJECTS) | $(LIBDIR)
 
 # CRITICAL: Run target depends on the library being built first
 initial: $(SHAREDLIB)
-    @echo "Setting up ROOT environment..."
-    @export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-     export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-     cd macros && \
-     echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-     root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x InitialProcessing.C");'
+	@echo "Setting up ROOT environment..."
+	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
+	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
+	 cd macros && \
+	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x InitialProcessing.C");'
 
 calibrate: $(SHAREDLIB)
-    @echo "Setting up ROOT environment..."
-    @export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-     export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-     cd macros && \
-     echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-     root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Calibration.C");'
+	@echo "Setting up ROOT environment..."
+	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
+	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
+	 cd macros && \
+	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Calibration.C");'
 
 background: $(SHAREDLIB)
-    @echo "Setting up ROOT environment..."
-    @export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-     export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-     cd macros && \
-     echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-     root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Background.C");'
+	@echo "Setting up ROOT environment..."
+	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
+	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
+	 cd macros && \
+	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Background.C");'
 
 plots: $(SHAREDLIB)
-    @echo "Setting up ROOT environment..."
-    @export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-     export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-     cd macros && \
-     echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-     root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Plotting.C");'
+	@echo "Setting up ROOT environment..."
+	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
+	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
+	 cd macros && \
+	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Plotting.C");'
 
 PSD: $(SHAREDLIB)
-    @echo "Setting up ROOT environment..."
-    @export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-     export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-     cd macros && \
-     echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-     root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x PSD.C");'
+	@echo "Setting up ROOT environment..."
+	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
+	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
+	 cd macros && \
+	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x PSD.C");'
 
 optimize: $(SHAREDLIB)
 	@echo "Setting up ROOT environment..."
