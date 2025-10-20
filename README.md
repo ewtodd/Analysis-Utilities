@@ -1,5 +1,5 @@
 # Waveform Digital Signal Processing Toolkit for CAEN digitizers + CoMPASS
-## Features: Baseline subtraction, waveform inversion, charge integration, calibration, histogramming, plotting utilities, etc...
+## Features: Baseline subtraction, waveform inversion, charge integration, calibration, histogramming, plotting utilities, etc... Machine learning utilities via sklearn in Python are here but are not yet integrated into the flake. 
 
 Example usage in nix flake, i.e. to be used via `nix develop`: 
 ```
