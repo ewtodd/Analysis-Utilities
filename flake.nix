@@ -26,14 +26,18 @@
           '';
 
           installPhase = ''
-            mkdir -p $out/{lib,include,bin,share/macros}
+            mkdir -p $out/{lib,include,share/macros}
 
-            cp build/lib*.so $out/lib/ 2>/dev/null || true
-            cp build/lib*.a $out/lib/ 2>/dev/null || true
+            cp lib/*.so $out/lib/ 2>/dev/null || true
+            cp lib/*.a $out/lib/ 2>/dev/null || true
 
-            cp include/*.h $out/include/
+            if [ -d include ] && [ -n "$(ls -A include/*.h 2>/dev/null)" ]; then
+              cp include/*.h $out/include/
+            fi
 
-            cp macros/*.C $out/share/macros/
+            if [ -d macros ] && [ -n "$(ls -A macros/*.C 2>/dev/null)" ]; then
+              cp macros/*.C $out/share/macros/
+            fi
           '';
         };
 
