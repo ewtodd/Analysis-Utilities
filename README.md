@@ -9,7 +9,6 @@ to be used via `nix develop`:
   inputs = {
     waveform-analysis.url = "github:ewtodd/Waveform-DSP-Toolkit";
   };
-<!---->
   outputs = { self, nixpkgs, waveform-analysis }:
     # ...
     devShells.default = pkgs.mkShell {
