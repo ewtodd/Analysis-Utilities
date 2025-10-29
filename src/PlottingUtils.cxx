@@ -142,8 +142,9 @@ void PlottingUtils::PlotIndividualSpectra(
     ConfigureHistogram(hist, color);
     hist->Draw("HIST");
 
-    AddSubplotLabel("(" + std::string(1, 'a' + src_id) + ") " + source_name,
-                    0.9, 0.83);
+    // AddSubplotLabel("(" + std::string(1, 'a' + src_id) + ") " + source_name,
+    // 0.9, 0.83);
+    AddSubplotLabel(source_name, 0.9, 0.83);
 
     c->Modified();
     c->Update();
@@ -588,6 +589,119 @@ void PlottingUtils::PlotAverageWaveforms(const std::vector<Float_t> &f_alpha,
   delete c;
 }
 
+void PlottingUtils::PlotSingleWaveforms(const std::string &waveforms_file,
+                                        const std::string &output_name) {
+
+  TFile *file = TFile::Open(waveforms_file.c_str(), "READ");
+  if (!file || file->IsZombie()) {
+    std::cout << "Error: Could not open " << waveforms_file << std::endl;
+    return;
+  }
+
+  TTree *tree = static_cast<TTree *>(file->Get("features"));
+  if (!tree) {
+    std::cout << "Error: Could not find features tree" << std::endl;
+    file->Close();
+    return;
+  }
+
+  // Set up branch addresses
+  TArrayS *samples = nullptr;
+  Int_t source_id;
+
+  tree->SetBranchAddress("Samples", &samples);
+  tree->SetBranchAddress("source_id", &source_id);
+
+  std::map<Int_t, std::string> source_names = {{0, "Am-241"}, {2, "Na-22"}};
+  std::vector<Int_t> sources_to_plot = {0, 2}; // Am-241 and Na-22
+
+  // Get waveform length from first entry
+  tree->GetEntry(0);
+  Int_t waveform_length = samples->GetSize();
+
+  // Time array (2 ns per sample)
+  Double_t *time_array = new Double_t[waveform_length];
+  for (Int_t i = 0; i < waveform_length; ++i) {
+    time_array[i] = 2.0 * i;
+  }
+
+  // Process each source
+  for (Int_t src_id : sources_to_plot) {
+    std::cout << "Processing " << source_names[src_id] << "..." << std::endl;
+
+    // Find first entry for this source
+    Bool_t found = kFALSE;
+    std::vector<Float_t> waveform;
+
+    for (Long64_t i = 0; i < tree->GetEntries(); ++i) {
+      tree->GetEntry(i);
+      if (source_id == src_id) {
+        // Convert TArrayS to vector
+        for (Int_t j = 0; j < waveform_length; ++j) {
+          waveform.push_back(Float_t(samples->At(j)));
+        }
+        found = kTRUE;
+        break;
+      }
+    }
+
+    if (!found) {
+      std::cout << "  No events found for " << source_names[src_id]
+                << std::endl;
+      continue;
+    }
+
+    // Create canvas for this source
+    TCanvas *c = new TCanvas(
+        ("c_wf_" + source_names[src_id]).c_str(),
+        ("Single Waveform - " + source_names[src_id]).c_str(), 1200, 800);
+    ConfigureCanvas(c, kFALSE);
+
+    // Create TGraph
+    Double_t *amp_array = new Double_t[waveform_length];
+    for (Int_t i = 0; i < waveform_length; ++i) {
+      amp_array[i] = waveform[i];
+    }
+
+    TGraph *gr = new TGraph(waveform_length, time_array, amp_array);
+    gr->SetLineColor(kBlue);
+    gr->SetLineWidth(2);
+    gr->SetMarkerColor(kBlue);
+    gr->SetTitle("");
+    gr->GetXaxis()->SetTitle("Time [ns]");
+    gr->GetYaxis()->SetTitle("Amplitude [ADC]");
+    gr->GetXaxis()->SetTitleSize(0.05);
+    gr->GetYaxis()->SetTitleSize(0.05);
+    gr->GetXaxis()->SetLabelSize(0.045);
+    gr->GetYaxis()->SetLabelSize(0.045);
+    gr->GetXaxis()->SetTitleOffset(1.2);
+    gr->GetYaxis()->SetTitleOffset(1.2);
+    gr->Draw("AL");
+
+    c->Modified();
+    c->Update();
+
+    // Save plot
+    std::string clean_name = source_names[src_id];
+    std::replace(clean_name.begin(), clean_name.end(), '-', '_');
+    std::string pdf_name = output_name + "_single_wf_" + clean_name + ".pdf";
+    c->SaveAs(pdf_name.c_str());
+
+    std::cout << "Saved: " << pdf_name << std::endl;
+
+    // Cleanup
+    delete[] amp_array;
+    delete gr;
+    delete c;
+  }
+
+  // Cleanup
+  delete[] time_array;
+  file->Close();
+
+  std::cout << "Single waveform check plots completed." << std::endl;
+}
+
 void PlottingUtils::PlotSIWeightingFactor(
     const std::vector<Float_t> &f_alpha, const std::vector<Float_t> &f_gamma,
     const std::vector<Float_t> &weighting_factor,
@@ -855,8 +969,8 @@ void PlottingUtils::PlotPSD2D(const std::string &waveforms_file,
 
     hist2d->Draw("COLZ");
 
-    AddSubplotLabel("(" + std::string(1, 'a' + sid) + ") " + source_name, 0.8,
-                    0.83);
+    // AddSubplotLabel("(" + std::string(1, 'a' + sid) + ") " + source_name,
+    // 0.8,               0.83);
 
     c->Modified();
     c->Update();

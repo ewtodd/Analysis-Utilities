@@ -32,7 +32,7 @@ struct ProcessingStats {
 
 class WaveformProcessingUtils {
 private:
-  // Analysis parameters - set by user in analysis macro
+  // Analysis parameters - set by user
   std::string polarity_;
   Double_t trigger_threshold_;
   Int_t pre_samples_;
@@ -47,15 +47,14 @@ private:
   TTree *output_tree_;
   WaveformFeatures current_features_;
   Bool_t store_waveforms_;
-  TArrayS *current_waveform_;
-
+  TArrayS *current_waveform_; // For ROOT tree branch
 public:
   WaveformProcessingUtils();
   ~WaveformProcessingUtils();
 
   TTree *GetOutputTree() { return output_tree_; }
   TFile *GetOutputFile() { return output_file_; }
-  // Parameter setters (call this from analysis macro)
+  // Parameter setters (called from analysis macro)
   void SetPolarity(const std::string &polarity) { polarity_ = polarity; }
   void SetTriggerThreshold(Double_t threshold) {
     trigger_threshold_ = threshold;
@@ -87,8 +86,6 @@ public:
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
 
   // Utilities
-  //
-  // Assumes CAEN DT5730 digitizer by default
   std::vector<std::string>
   FindROOTFiles(const std::string &basepath,
                 const std::string &pattern = "*DT5730*.root");

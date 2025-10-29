@@ -18,7 +18,6 @@
 
 class PlottingUtils {
 public:
-  // Style configuration
   static void SetROOTStyle();
   static void ConfigureHistogram(TH1 *hist, Int_t color,
                                  const std::string &title = "");
@@ -49,6 +48,11 @@ public:
   PlotAverageWaveforms(const std::vector<Float_t> &f_alpha,
                        const std::vector<Float_t> &f_gamma,
                        const std::string &output_name = ";average_waveforms");
+
+  static void PlotSingleWaveforms(
+      const std::string &waveforms_file = "processed_waveforms.root",
+      const std::string &output_name = "test_wf");
+
   static void
   PlotSIWeightingFactor(const std::vector<Float_t> &f_alpha,
                         const std::vector<Float_t> &f_gamma,
@@ -71,7 +75,6 @@ public:
       Float_t bin_width = 250.0, Float_t min_light = 0.0,
       Float_t max_light = 1750.0, Int_t min_events_per_bin = 50);
 
-  // Utility
   static TLegend *CreateLegend(Double_t x1 = 0.7, Double_t y1 = 0.7,
                                Double_t x2 = 0.9, Double_t y2 = 0.9);
   static void AddSubplotLabel(const std::string &label, Double_t x = 0.9,
@@ -91,7 +94,6 @@ public:
                             const std::string &psd_type = "PSD",
                             const std::string &output_name = "filtered_psd");
 
-  // Colors
   static std::vector<Int_t> GetDefaultColors();
   static Int_t GetSourceColor(Int_t source_id);
 };
