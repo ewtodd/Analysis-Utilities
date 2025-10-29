@@ -15,7 +15,7 @@ OBJECTS = $(SOURCES:$(SRCDIR)/%.cxx=$(OBJDIR)/%.o)
 HEADERS = $(wildcard $(INCDIR)/*.h)
 
 # Library name
-LIBNAME = lib-DSP-Toolkit
+LIBNAME = lib-nm-toolkit
 SHAREDLIB = $(LIBDIR)/$(LIBNAME).so
 STATICLIB = $(LIBDIR)/$(LIBNAME).a
 

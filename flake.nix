@@ -1,5 +1,5 @@
 {
-  description = "Digital Signal Processing Framework";
+  description = "Nuclear Measurements Analysis Toolkit";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -11,7 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
-          pname = "dsp-toolkit";
+          pname = "nm-toolkit";
           version = "0.1";
 
           src = ./.;
@@ -50,16 +50,16 @@
             fi
 
             mkdir -p $out/lib/pkgconfig
-            cat > $out/lib/pkgconfig/dsp-toolkit.pc <<EOF
+            cat > $out/lib/pkgconfig/nm-toolkit.pc <<EOF
             prefix=$out
             exec_prefix=\''${prefix}
             libdir=\''${exec_prefix}/lib
             includedir=\''${prefix}/include
 
-            Name: dsp-toolkit
-            Description: Digital Signal Processing Framework for CAEN digitizers
+            Name: nm-toolkit 
+            Description: Nuclear Measurements Analysis Toolkit 
             Version: 0.1
-            Libs: -L\''${libdir} -lDSP-Toolkit
+            Libs: -L\''${libdir} -lnm-toolkit
             Cflags: -I\''${includedir}
             EOF
           '';
