@@ -13,24 +13,43 @@
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "dsp-toolkit";
           version = "0.1";
+
           src = ./.;
-          nativeBuildInputs = with pkgs; [ pkg-config autoPatchelfHook ];
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            autoPatchelfHook
+            gnumake
+          ];
+
           buildInputs = with pkgs; [ root ];
+
+          buildPhase = ''
+            make
+          '';
+
           installPhase = ''
             mkdir -p $out/{lib,include}
 
-            # Copy libraries
-            if [ -d lib ]; then
-              cp lib/*.so $out/lib/ 2>/dev/null || true
-              cp lib/*.a $out/lib/ 2>/dev/null || true
+            # Copy built libraries
+            if [ -d lib ] && [ -n "$(ls -A lib/*.so 2>/dev/null)" ]; then
+              cp lib/*.so $out/lib/
+            else
+              echo "ERROR: No shared libraries found in lib/"
+              exit 1
             fi
 
-            # Copy headers
+            if [ -d lib ] && [ -n "$(ls -A lib/*.a 2>/dev/null)" ]; then
+              cp lib/*.a $out/lib/
+            fi
+
             if [ -d include ] && [ -n "$(ls -A include/*.h 2>/dev/null)" ]; then
               cp include/*.h $out/include/
+            else
+              echo "ERROR: No headers found in include/"
+              exit 1
             fi
 
-            # Generate pkg-config file
             mkdir -p $out/lib/pkgconfig
             cat > $out/lib/pkgconfig/dsp-toolkit.pc <<EOF
             prefix=$out
@@ -47,7 +66,6 @@
           '';
 
           postFixup = ''
-            # Set rpath for all shared libraries
             for lib in $out/lib/*.so; do
               if [ -f "$lib" ]; then
                 patchelf --set-rpath "$out/lib:${pkgs.root}/lib:${pkgs.stdenv.cc.cc.lib}/lib" "$lib" || true
