@@ -17,7 +17,6 @@
           buildInputs = with pkgs; [
             dsp-toolkit
             root
-            gsl
             gnumake
             pkg-config
             clang-tools

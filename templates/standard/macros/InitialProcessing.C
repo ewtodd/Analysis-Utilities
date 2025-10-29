@@ -5,18 +5,6 @@
 #include <TSystem.h>
 
 void InitialProcessing() {
-  // Load the analysis library
-  if (gSystem->Load("../lib/libWaveformAnalysis.so") < 0) {
-    std::cerr << "Error: Could not load libWaveformAnalysis.so" << std::endl;
-    std::cerr << "Make sure you've built the library with 'make' first!"
-              << std::endl;
-    return;
-  }
-
-  // Add include path
-  gROOT->ProcessLine(".I ../include");
-
-  // Data paths and labels
   std::vector<std::string> filepaths = {
       "/home/e-work/LABDATA/ANSG/CeYAP/"
       "May12-14/YAP_am241_new_settings",
@@ -31,11 +19,9 @@ void InitialProcessing() {
   std::vector<std::string> labels = {"Am-241", "Cs-137", "Na-22",
                                      "Am-241 & Cs-137"};
 
-  // Step 1: Process waveforms
   std::cout << "Processing waveforms..." << std::endl;
   WaveformProcessingUtils *processor = new WaveformProcessingUtils();
 
-  // Set YAP analysis parameters
   processor->SetPolarity("negative");
   processor->SetTriggerThreshold(0.15);
   processor->SetSampleWindows(17, 190); // pre_samples, post_samples

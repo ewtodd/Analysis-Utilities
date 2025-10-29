@@ -4,19 +4,9 @@
 #include <TSystem.h>
 
 void Calibration() {
-  // Load the analysis library
-  if (gSystem->Load("../lib/libWaveformAnalysis.so") < 0) {
-    std::cerr << "Error: Could not load libWaveformAnalysis.so" << std::endl;
-    return;
-  }
-
-  gROOT->ProcessLine(".I ../include");
-
-  // Step 1: Load existing histograms from file
   std::cout << "Loading histograms from file..." << std::endl;
   HistogramUtils *histMgr = new HistogramUtils();
 
-  // Configure histogram ranges (same as main macro)
   HistogramConfig histConfig;
   histConfig.light_output_min = 0;
   histConfig.light_output_max = 2000;
@@ -95,7 +85,6 @@ void Calibration() {
   calMgr->ApplyCalibratedLightOutput("processed_waveforms.root",
                                      "histograms.root", histMgr);
 
-  // Save calibrated spectra
   histMgr->SaveToFile("histograms.root");
   std::cout << "Calibrated spectra saved." << std::endl;
 

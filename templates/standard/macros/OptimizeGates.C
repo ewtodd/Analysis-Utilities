@@ -4,16 +4,6 @@
 #include <iostream>
 
 void OptimizeGates() {
-  // Load the analysis library
-  if (gSystem->Load("../lib/libWaveformAnalysis.so") < 0) {
-    std::cerr << "Error: Could not load libWaveformAnalysis.so" << std::endl;
-    return;
-  }
-
-  // Add include path
-  gROOT->ProcessLine(".I ../include");
-
-  // Set ROOT style
   PlottingUtils::SetROOTStyle();
 
   std::cout << "Starting gate optimization for Charge Comparison PSD..."

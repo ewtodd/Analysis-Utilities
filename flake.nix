@@ -31,7 +31,6 @@
           installPhase = ''
             mkdir -p $out/{lib,include}
 
-            # Copy built libraries
             if [ -d lib ] && [ -n "$(ls -A lib/*.so 2>/dev/null)" ]; then
               cp lib/*.so $out/lib/
             else
