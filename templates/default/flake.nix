@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    waveform-analysis.url = "github:ewtodd/Waveform-DSP-Toolkit";
+    toolkit.url = "github:ewtodd/CAEN-DSP-Toolkit";
   };
 
   outputs = { self, nixpkgs, flake-utils }:
@@ -14,13 +14,12 @@
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            waveform-analysis.packages.${system}.default
+            toolkit.packages.${system}.default
             root
             gsl
             gnumake
             pkg-config
             clang-tools
-            gdb
             (python3.withPackages (python-pkgs:
               with python-pkgs; [
                 matplotlib

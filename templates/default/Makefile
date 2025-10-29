@@ -38,59 +38,55 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cxx $(HEADERS) | $(OBJDIR)
 $(SHAREDLIB): $(OBJECTS) | $(LIBDIR)
 	$(CXX) -shared -o $@ $^ $(ROOTLIBS)
 
-# CRITICAL: Run target depends on the library being built first
 initial: $(SHAREDLIB)
-	@echo "Setting up ROOT environment..."
 	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
 	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
 	 cd macros && \
 	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing initial processing macro..." && \
 	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x InitialProcessing.C");'
 
 calibrate: $(SHAREDLIB)
-	@echo "Setting up ROOT environment..."
 	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
 	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
 	 cd macros && \
 	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing calibration macro..." && \
 	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Calibration.C");'
 
 background: $(SHAREDLIB)
-	@echo "Setting up ROOT environment..."
 	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
 	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
 	 cd macros && \
 	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing background subtraction macro..." && \
 	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Background.C");'
 
 plots: $(SHAREDLIB)
-	@echo "Setting up ROOT environment..."
 	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
 	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
 	 cd macros && \
 	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing main plotting macro..." && \
 	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Plotting.C");'
 
 PSD: $(SHAREDLIB)
-	@echo "Setting up ROOT environment..."
 	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
 	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
 	 cd macros && \
 	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing pulse shape discrimination macro..." && \
 	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x PSD.C");'
 
 optimize: $(SHAREDLIB)
-	@echo "Setting up ROOT environment..."
 	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
 	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
 	 cd macros && \
 	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing PSD gate optimization macro..." && \
 	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x OptimizeGates.C");'
 
-
-# Clean build files
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR)
 
-.PHONY: all clean run run-alt
 
