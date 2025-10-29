@@ -6,14 +6,10 @@
 
 void InitialProcessing() {
   std::vector<std::string> filepaths = {
-      "/home/e-work/LABDATA/ANSG/CeYAP/"
-      "May12-14/YAP_am241_new_settings",
-      "/home/e-work/LABDATA/ANSG/CeYAP/"
-      "May12-14/YAP_cs137_new_settings",
-      "/home/e-work/LABDATA/ANSG/CeYAP/"
-      "May12-14/YAP_na22_new_settings",
-      "/home/e-work/LABDATA/ANSG/CeYAP/"
-      "May12-14/YAP_am241_cs137_new_settings",
+      "path/to/Am-241/Data",
+      "path/to/Cs-137/Data",
+      "path/to/Na-22/Data",
+      "path/to/Combined/Am-241/and/Cs-137/Data",
   };
 
   std::vector<std::string> labels = {"Am-241", "Cs-137", "Na-22",
