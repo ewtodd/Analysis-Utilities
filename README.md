@@ -1,12 +1,11 @@
 # Digital Signal Processing Toolkit for CAEN digitizers + CoMPASS + wavedump
 ## Features: Baseline subtraction, waveform inversion, charge integration, calibration, histogramming, plotting utilities, etc...
-```
-
 Usage in a new project directory:
+
 ```
 nix flake init -t github:ewtodd/CAEN-DSP-Toolkit
 ```
-<!---->
+
 This will create a flake.nix file containing a development environment that has access to the libraries. It also has example macros showing use with a fast inorganic scintillator and common radioactive check sources.
 
 # Roadmap
