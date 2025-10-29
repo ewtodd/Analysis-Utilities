@@ -46,5 +46,16 @@
           '';
         };
 
-      in { packages.default = toolkit; });
+      in {
+        packages.default = toolkit;
+        templates = {
+          default = {
+            path = ./templates/default;
+            description = "Standard ROOT waveform analysis pipeline.";
+            welcomeText = ''
+              Run `nix develop` to enter the development environment.
+            '';
+          };
+        };
+      });
 }
