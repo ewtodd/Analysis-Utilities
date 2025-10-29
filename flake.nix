@@ -52,7 +52,7 @@
             Run `nix develop` to enter the development environment.
           '';
         };
+        "templates/default" = self.templates.default;
       };
-      default = self.templates.default;
     };
 }
