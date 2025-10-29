@@ -47,7 +47,7 @@
       packages.default = toolkit;
       templates = {
         default = {
-          path = ./templates/standard;
+          path = ./standard;
           description = "Standard ROOT waveform analysis pipeline.";
           welcomeText = ''
             Run `nix develop` to enter the development environment.
