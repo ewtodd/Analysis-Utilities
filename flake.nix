@@ -13,36 +13,49 @@
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "dsp-toolkit";
           version = "0.1";
-
           src = ./.;
-
-          nativeBuildInputs = with pkgs; [ pkg-config ];
-
-          buildInputs = with pkgs; [ root gsl ];
-
+          nativeBuildInputs = with pkgs; [ pkg-config autoPatchelfHook ];
+          buildInputs = with pkgs; [ root ];
           installPhase = ''
-            mkdir -p $out/{lib,include,share/macros}
+            mkdir -p $out/{lib,include}
 
-            cp lib/*.so $out/lib/ 2>/dev/null || true
-            cp lib/*.a $out/lib/ 2>/dev/null || true
+            # Copy libraries
+            if [ -d lib ]; then
+              cp lib/*.so $out/lib/ 2>/dev/null || true
+              cp lib/*.a $out/lib/ 2>/dev/null || true
+            fi
 
+            # Copy headers
             if [ -d include ] && [ -n "$(ls -A include/*.h 2>/dev/null)" ]; then
               cp include/*.h $out/include/
             fi
 
-            if [ -d macros ] && [ -n "$(ls -A macros/*.C 2>/dev/null)" ]; then
-              cp macros/*.C $out/share/macros/
-            fi
-          '';
-          shellHook = ''
-            echo "Digital Signal Processing Development Environment for CAEN digitizers"
-            echo "ROOT version: $(root-config --version)"
-            echo ""
+            # Generate pkg-config file
+            mkdir -p $out/lib/pkgconfig
+            cat > $out/lib/pkgconfig/dsp-toolkit.pc <<EOF
+            prefix=$out
+            exec_prefix=\''${prefix}
+            libdir=\''${exec_prefix}/lib
+            includedir=\''${prefix}/include
 
-            # For clang?
-            export ROOT_INCLUDE_PATH="$PWD/include:$ROOT_INCLUDE_PATH"
-            export LD_LIBRARY_PATH="$PWD/build:$LD_LIBRARY_PATH"
+            Name: dsp-toolkit
+            Description: Digital Signal Processing Framework for CAEN digitizers
+            Version: 0.1
+            Libs: -L\''${libdir} -lDSP-Toolkit
+            Cflags: -I\''${includedir}
+            EOF
           '';
+
+          postFixup = ''
+            # Set rpath for all shared libraries
+            for lib in $out/lib/*.so; do
+              if [ -f "$lib" ]; then
+                patchelf --set-rpath "$out/lib:${pkgs.root}/lib:${pkgs.stdenv.cc.cc.lib}/lib" "$lib" || true
+              fi
+            done
+          '';
+
+          propagatedBuildInputs = [ pkgs.root ];
         };
       in { packages.default = toolkit; })) // {
         templates = {

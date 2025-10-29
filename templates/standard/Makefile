@@ -1,9 +1,20 @@
 # ROOT Analysis Framework Makefile
 
-CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -fPIC
-ROOTFLAGS = $(shell root-config --cflags)
+CXX = $(shell root-config --cxx)
+CXXFLAGS = $(shell root-config --cflags) -std=c++17 -Wall -Wextra -O2 -fPIC
 ROOTLIBS = $(shell root-config --libs)
+
+# Check if dsp-toolkit is available via pkg-config
+ifneq ($(shell pkg-config --exists dsp-toolkit && echo yes),yes)
+    $(warning dsp-toolkit not found via pkg-config, using fallback paths)
+    TOOLKIT_CFLAGS = 
+    TOOLKIT_LIBS = 
+    TOOLKIT_LIBDIR = 
+else
+    TOOLKIT_CFLAGS = $(shell pkg-config --cflags dsp-toolkit)
+    TOOLKIT_LIBS = $(shell pkg-config --libs dsp-toolkit)
+    TOOLKIT_LIBDIR = $(shell pkg-config --variable=libdir dsp-toolkit)
+endif
 
 # Directories
 SRCDIR = src
@@ -17,7 +28,7 @@ OBJECTS = $(SOURCES:$(SRCDIR)/%.cxx=$(OBJDIR)/%.o)
 HEADERS = $(wildcard $(INCDIR)/*.h)
 
 # Library name
-LIBNAME = libWaveformAnalysis
+LIBNAME = lib-DSP-Toolkit
 SHAREDLIB = $(LIBDIR)/$(LIBNAME).so
 
 # Default target
@@ -32,61 +43,45 @@ $(LIBDIR):
 
 # Compile object files
 $(OBJDIR)/%.o: $(SRCDIR)/%.cxx $(HEADERS) | $(OBJDIR)
-	$(CXX) $(CXXFLAGS) $(ROOTFLAGS) -I$(INCDIR) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(TOOLKIT_CFLAGS) -I$(INCDIR) -c $< -o $@
 
 # Create shared library
 $(SHAREDLIB): $(OBJECTS) | $(LIBDIR)
-	$(CXX) -shared -o $@ $^ $(ROOTLIBS)
+	$(CXX) -shared -o $@ $^ $(ROOTLIBS) $(TOOLKIT_LIBS)
+
+# Helper function to run ROOT macros with proper library loading
+define run_root_macro
+	@cd macros && \
+	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
+	 echo "Executing $(1) macro..." && \
+	 root -l -b -q -e 'gSystem->AddIncludePath("-I$(PWD)/$(INCDIR)"); \
+	                    gSystem->AddLinkedLibs(" $(PWD)/$(LIBDIR)/$(LIBNAME).so"); \
+	                    $(if $(TOOLKIT_LIBDIR),gSystem->AddLinkedLibs(" $(TOOLKIT_LIBS)");,) \
+	                    gSystem->Load("$(PWD)/$(LIBDIR)/$(LIBNAME).so"); \
+	                    $(if $(TOOLKIT_LIBDIR),gSystem->Load("$(TOOLKIT_LIBDIR)/lib-DSP-Toolkit.so");,) \
+	                    .L $(2).C+; $(2)();'
+endef
 
 initial: $(SHAREDLIB)
-	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-	 cd macros && \
-	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-	 echo "Executing initial processing macro..." && \
-	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x InitialProcessing.C");'
+	$(call run_root_macro,initial processing,InitialProcessing)
 
 calibrate: $(SHAREDLIB)
-	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-	 cd macros && \
-	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-	 echo "Executing calibration macro..." && \
-	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Calibration.C");'
+	$(call run_root_macro,calibration,Calibration)
 
 background: $(SHAREDLIB)
-	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-	 cd macros && \
-	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-	 echo "Executing background subtraction macro..." && \
-	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Background.C");'
+	$(call run_root_macro,background subtraction,Background)
 
 plots: $(SHAREDLIB)
-	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-	 cd macros && \
-	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-	 echo "Executing main plotting macro..." && \
-	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x Plotting.C");'
+	$(call run_root_macro,main plotting,Plotting)
 
 PSD: $(SHAREDLIB)
-	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-	 cd macros && \
-	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-	 echo "Executing pulse shape discrimination macro..." && \
-	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x PSD.C");'
+	$(call run_root_macro,pulse shape discrimination,PSD)
 
 optimize: $(SHAREDLIB)
-	@export ROOT_INCLUDE_PATH="$(PWD)/$(INCDIR):$$ROOT_INCLUDE_PATH" && \
-	 export LD_LIBRARY_PATH="$(PWD)/$(LIBDIR):$$LD_LIBRARY_PATH" && \
-	 cd macros && \
-	 echo "Loading library: ../$(LIBDIR)/$(LIBNAME).so" && \
-	 echo "Executing PSD gate optimization macro..." && \
-	 root -l -b -q -e 'gSystem->Load("../$(LIBDIR)/$(LIBNAME).so"); gROOT->ProcessLine(".x OptimizeGates.C");'
+	$(call run_root_macro,PSD gate optimization,OptimizeGates)
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR)
+	rm -f macros/*_C.so macros/*_C.d macros/*_C_ACLiC_dict_rdict.pcm
 
-
+.PHONY: all initial calibrate background plots PSD optimize clean
