@@ -38,9 +38,9 @@
 
             # Verify toolkit is available
             if pkg-config --exists dsp-toolkit; then
-              echo "✓ DSP Toolkit pkg-config found"
-              echo "  Includes: $(pkg-config --cflags dsp-toolkit)"
-              echo "  Libs: $(pkg-config --libs dsp-toolkit)"
+              echo "DSP Toolkit pkg-config found"
+              echo "Includes: $(pkg-config --cflags dsp-toolkit)"
+              echo "Libs: $(pkg-config --libs dsp-toolkit)"
             fi
           '';
         };
