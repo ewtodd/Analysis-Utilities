@@ -1,16 +1,16 @@
-# Check if dsp-toolkit is available via pkg-config
-ifneq ($(shell pkg-config --exists dsp-toolkit && echo yes),yes)
-    $(error dsp-toolkit not found. Run 'nix develop' first)
+# Check if nm-toolkit is available via pkg-config
+ifneq ($(shell pkg-config --exists nm-toolkit && echo yes),yes)
+    $(error nm-toolkit not found. Run 'nix develop' first)
 endif
 
-TOOLKIT_CFLAGS = $(shell pkg-config --cflags dsp-toolkit)
-TOOLKIT_LIBDIR = $(shell pkg-config --variable=libdir dsp-toolkit)
-TOOLKIT_LIBPATH = $(TOOLKIT_LIBDIR)/lib-DSP-Toolkit.so
+TOOLKIT_CFLAGS = $(shell pkg-config --cflags nm-toolkit)
+TOOLKIT_LIBDIR = $(shell pkg-config --variable=libdir nm-toolkit)
+TOOLKIT_LIBPATH = $(TOOLKIT_LIBDIR)/lib-nm-toolkit.so
 
 # Helper function to run ROOT macros with toolkit loaded
 define run_root_macro
 	@cd macros && \
-	 echo "Loading DSP Toolkit from: $(TOOLKIT_LIBDIR)" && \
+	 echo "Loading Nuclear Measurement Toolkit from: $(TOOLKIT_LIBDIR)" && \
 	 echo "Executing $(1) macro..." && \
 	 root -l -b -q -e 'gSystem->AddIncludePath("$(TOOLKIT_CFLAGS)"); \
 	                    gSystem->Load("$(TOOLKIT_LIBPATH)");' \
