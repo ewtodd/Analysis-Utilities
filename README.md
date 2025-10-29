@@ -1,4 +1,4 @@
-# Waveform Digital Signal Processing Toolkit for CAEN digitizers + CoMPASS
+# Digital Signal Processing Toolkit for CAEN digitizers + CoMPASS + wavedump
 ## Features: Baseline subtraction, waveform inversion, charge integration, calibration, histogramming, plotting utilities, etc...
 Machine learning utilities via sklearn in Python are in this repository but are not yet integrated into the flake.
 <!---->
