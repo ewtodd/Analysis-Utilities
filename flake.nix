@@ -74,7 +74,25 @@
 
           propagatedBuildInputs = [ pkgs.root ];
         };
-      in { packages.default = toolkit; })) // {
+      in {
+        packages.default = toolkit;
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
+
+          shellHook = ''
+            echo "Nuclear Measurement Toolkit Development Environment for working on source!"
+            echo "ROOT version: $(root-config --version)"
+            echo ""
+
+            # Set up environment for local development
+            export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"
+            export CPLUS_INCLUDE_PATH="$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
+
+            # For building locally
+            export LD_LIBRARY_PATH="$PWD/lib:$LD_LIBRARY_PATH"
+          '';
+        };
+      })) // {
         templates = {
           default = {
             path = ./templates/standard;
