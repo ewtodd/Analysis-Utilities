@@ -10,9 +10,9 @@ OBJDIR = obj
 LIBDIR = lib
 
 # Source files
-SOURCES = $(wildcard $(SRCDIR)/*.cxx)
-OBJECTS = $(SOURCES:$(SRCDIR)/%.cxx=$(OBJDIR)/%.o)
-HEADERS = $(wildcard $(INCDIR)/*.h)
+SOURCES = $(wildcard $(SRCDIR)/*.cc)
+OBJECTS = $(SOURCES:$(SRCDIR)/%.cc=$(OBJDIR)/%.o)
+HEADERS = $(wildcard $(INCDIR)/*.hh)
 
 # Library name
 LIBNAME = lib-nm-toolkit
@@ -30,7 +30,7 @@ $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 # Compile object files
-$(OBJDIR)/%.o: $(SRCDIR)/%.cxx $(HEADERS) | $(OBJDIR)
+$(OBJDIR)/%.o: $(SRCDIR)/%.cc $(HEADERS) | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 # Create shared library

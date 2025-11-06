@@ -49,7 +49,7 @@ private:
   HistogramConfig config_;
   std::map<Int_t, std::string> source_names_;
 
-  std::map<Int_t, TH1F *> light_output_spectra_;
+  std::map<Int_t, TH1F *> calibrated_spectra_;
   std::map<Int_t, TH1F *> integral_spectra_;
   std::map<Int_t, TH1F *> pulse_height_spectra_;
   std::map<Int_t, TH1F *> charge_comparison_spectra_;

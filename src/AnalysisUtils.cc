@@ -1,4 +1,4 @@
-#include "AnalysisUtils.h"
+#include "AnalysisUtils.hh"
 std::map<Int_t, std::vector<Float_t>>
 AnalysisUtils::CalculateAverageWaveforms(const std::string &filename,
                                          const SpectralCuts &cuts) {

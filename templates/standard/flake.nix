@@ -25,7 +25,7 @@
           shellHook = ''
             echo "ROOT Waveform Analysis Framework"
             echo "ROOT version: $(root-config --version)"
-            echo "DSP Toolkit: ${nm-toolkit}"
+            echo "Nuclear Measurements Toolkit: ${nm-toolkit}"
             echo ""
 
             # Make pkg-config aware of the toolkit

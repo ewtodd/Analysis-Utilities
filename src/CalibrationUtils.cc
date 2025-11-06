@@ -1,4 +1,4 @@
-#include "CalibrationUtils.h"
+#include "CalibrationUtils.hh"
 #include <TDirectory.h>
 #include <TF1.h>
 #include <TFile.h>
@@ -12,49 +12,45 @@
 
 CalibrationUtils::CalibrationUtils()
     : calibration_curve_(nullptr), calibration_function_(nullptr),
-      linear_calibration_function_(nullptr), linear_calibration_curve_(nullptr),
       include_zero_point_(kTRUE) {}
 
 CalibrationUtils::~CalibrationUtils() {
   calibration_curve_ = nullptr;
   calibration_function_ = nullptr;
-  linear_calibration_function_ = nullptr;
-  linear_calibration_curve_ = nullptr;
-  integral_spectra_.clear();
+  measured_spectra_.clear();
 }
 
 void CalibrationUtils::AddCalibrationPeak(
-    const std::string &isotope, Double_t deposited_energy_kev,
-    Double_t expected_integral, Double_t expected_sigma,
-    Double_t expected_amplitude, Double_t expected_background,
-    Double_t fit_range_low, Double_t fit_range_high, Int_t source_id) {
+    const std::string &calibration_source, Int_t source_id,
+    Double_t deposited_energy_keV, Double_t guess_peak_mu, Double_t guess_sigma,
+    Double_t guess_amplitude, Double_t guess_bkg_const,
+    Double_t guess_bkg_slope, Double_t fit_range_low, Double_t fit_range_high) {
 
   CalibrationPeak peak;
-  peak.isotope = isotope;
-  peak.deposited_energy_kev = deposited_energy_kev;
-  peak.expected_integral = expected_integral;
-  peak.expected_sigma = expected_sigma;
-  peak.expected_amplitude = expected_amplitude;
-  peak.expected_background = expected_background;
-  peak.fit_range_low = fit_range_low;
-  peak.fit_range_high = fit_range_high;
-  peak.fit_successful = kFALSE;
-  peak.source_id = source_id;
+  peak.calibration_source_ = calibration_source;
+  peak.source_id_ = source_id;
+  peak.deposited_energy_keV_ = deposited_energy_keV;
+  peak.guess_peak_mu_ = guess_peak_mu;
+  peak.guess_sigma_ = guess_sigma;
+  peak.guess_amplitude_ = guess_amplitude;
+  peak.guess_bkg_const_ = guess_bkg_const;
+  peak.guess_bkg_slope_ = guess_bkg_slope;
+  peak.fit_range_low_ = fit_range_low;
+  peak.fit_range_high_ = fit_range_high;
+  peak.fit_successful_ = kFALSE;
 
   peaks_.push_back(peak);
-  std::cout << "Added calibration peak: " << isotope << " ("
-            << deposited_energy_kev << " keV) for source_id " << source_id
+  std::cout << "Added calibration peak: " << calibration_source << " ("
+            << deposited_energy_keV << " keV) for source_id " << source_id
             << std::endl;
 }
 
-void CalibrationUtils::LoadIntegralSpectra(HistogramUtils *histMgr,
-                                           const std::string &filename) {
-  // Use HistogramUtils to load the spectra
+void CalibrationUtils::LoadSpectra(HistogramUtils *histMgr,
+                                   const std::string &filename) {
   histMgr->LoadFromFile(filename);
-  // Copy the loaded spectra to our local map for fitting
-  integral_spectra_ = histMgr->GetAllIntegralSpectra();
+  measured_spectra_ = histMgr->GetAllMeasuredSpectra();
 
-  std::cout << "CalibrationUtils loaded " << integral_spectra_.size()
+  std::cout << "CalibrationUtils loaded " << measured_spectra_.size()
             << " integral spectra from HistogramUtils." << std::endl;
 }
 

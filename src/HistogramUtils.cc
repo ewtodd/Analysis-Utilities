@@ -1,4 +1,4 @@
-#include "HistogramUtils.h"
+#include "HistogramUtils.hh"
 #include <TMath.h>
 #include <fstream> // For std::ifstream
 #include <glob.h>  // For glob, glob_t, GLOB_TILDE, globfree

@@ -1,7 +1,7 @@
 #ifndef ANALYSIS_UTILS_H
 #define ANALYSIS_UTILS_H
 
-#include "PlottingUtils.h"
+#include "PlottingUtils.hh"
 #include <TArrayS.h>
 #include <TFile.h>
 #include <TH1.h>

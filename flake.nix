@@ -42,8 +42,8 @@
               cp lib/*.a $out/lib/
             fi
 
-            if [ -d include ] && [ -n "$(ls -A include/*.h 2>/dev/null)" ]; then
-              cp include/*.h $out/include/
+            if [ -d include ] && [ -n "$(ls -A include/*.hh 2>/dev/null)" ]; then
+              cp include/*.hh $out/include/
             else
               echo "ERROR: No headers found in include/"
               exit 1
@@ -80,7 +80,7 @@
           buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
 
           shellHook = ''
-            echo "Nuclear Measurement Toolkit Development Environment for working on source!"
+            echo "Development environment for working on the nuclear measurement toolkit source"
             echo "ROOT version: $(root-config --version)"
             echo ""
 
