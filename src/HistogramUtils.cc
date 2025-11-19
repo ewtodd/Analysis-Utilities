@@ -10,8 +10,7 @@
 HistogramUtils::HistogramUtils() {}
 
 HistogramUtils::~HistogramUtils() {
-  // Clean up histograms
-  for (auto &pair : light_output_spectra_) {
+  for (auto &pair : calibrated_spectra_) {
     delete pair.second;
   }
   for (auto &pair : integral_spectra_) {
@@ -21,9 +20,6 @@ HistogramUtils::~HistogramUtils() {
     delete pair.second;
   }
   for (auto &pair : charge_comparison_spectra_) {
-    delete pair.second;
-  }
-  for (auto &pair : shape_indicator_spectra_) {
     delete pair.second;
   }
 }
@@ -45,21 +41,20 @@ void HistogramUtils::CreateAllHistograms() {
 void HistogramUtils::CreateHistogramForSource(Int_t source_id) {
   std::string source_name = source_names_[source_id];
 
-  // Clean histogram name (remove spaces, special characters)
   std::string clean_name = source_name;
   std::replace(clean_name.begin(), clean_name.end(), ' ', '_');
   std::replace(clean_name.begin(), clean_name.end(), '-', '_');
   std::replace(clean_name.begin(), clean_name.end(), '&', '_');
 
-  Int_t light_output_bins = config_.GetLightOutputBins();
-  std::string light_hist_name = "h_light_output_" + clean_name;
-  std::string light_hist_title =
-      source_name + " Light Output;Light Output [keVee];Counts / " +
-      std::to_string(Int_t(config_.light_output_bin_width)) + " keV";
+  std::string cal_hist_name = "h_calibrated_" + clean_name;
+  std::string cal_hist_title =
+      source_name +
+      " Calibrated Energy Deposition;Deposited Energy [keVee];Counts / " +
+      std::to_string(Int_t(config_.calibrated_bin_width)) + " keV";
 
-  light_output_spectra_[source_id] = new TH1F(
-      light_hist_name.c_str(), light_hist_title.c_str(), light_output_bins,
-      config_.light_output_min, config_.light_output_max);
+  calibrated_spectra_[source_id] = new TH1F(
+      cal_hist_name.c_str(), cal_hist_title.c_str(), config_.calibrated_bins,
+      config_.calibrated_min, config_.calibrated_max);
 
   std::string integral_hist_name = "h_integral_" + clean_name;
   std::string integral_hist_title =
@@ -91,16 +86,11 @@ void HistogramUtils::CreateHistogramForSource(Int_t source_id) {
   std::string si_hist_title =
       source_name + " Shape Indicator;SI Parameter;Counts";
 
-  shape_indicator_spectra_[source_id] =
-      new TH1F(si_hist_name.c_str(), si_hist_title.c_str(), config_.si_bins,
-               config_.si_min, config_.si_max);
-
   // Set ownership to avoid ROOT auto-deletion
-  light_output_spectra_[source_id]->SetDirectory(0);
+  calibrated_spectra_[source_id]->SetDirectory(0);
   integral_spectra_[source_id]->SetDirectory(0);
   pulse_height_spectra_[source_id]->SetDirectory(0);
   charge_comparison_spectra_[source_id]->SetDirectory(0);
-  shape_indicator_spectra_[source_id]->SetDirectory(0);
 }
 
 void HistogramUtils::FillFromTree(const std::string &filename,
@@ -159,9 +149,9 @@ void HistogramUtils::FillFromTree(const std::string &filename,
   file->Close();
 }
 
-TH1F *HistogramUtils::GetLightOutputSpectrum(Int_t source_id) const {
-  auto it = light_output_spectra_.find(source_id);
-  return (it != light_output_spectra_.end()) ? it->second : nullptr;
+TH1F *HistogramUtils::GetCalibratedSpectrum(Int_t source_id) const {
+  auto it = calibrated_spectra_.find(source_id);
+  return (it != calibrated_spectra_.end()) ? it->second : nullptr;
 }
 
 TH1F *HistogramUtils::GetIntegralSpectrum(Int_t source_id) const {
@@ -179,11 +169,6 @@ TH1F *HistogramUtils::GetChargeComparisonSpectrum(Int_t source_id) const {
   return (it != charge_comparison_spectra_.end()) ? it->second : nullptr;
 }
 
-TH1F *HistogramUtils::GetShapeIndicatorSpectrum(Int_t source_id) const {
-  auto it = shape_indicator_spectra_.find(source_id);
-  return (it != shape_indicator_spectra_.end()) ? it->second : nullptr;
-}
-
 Bool_t HistogramUtils::LoadFromFile(const std::string &filename) {
   TFile *file = TFile::Open(filename.c_str(), "READ");
   if (!file || file->IsZombie()) {
@@ -193,7 +178,6 @@ Bool_t HistogramUtils::LoadFromFile(const std::string &filename) {
 
   std::cout << "Loading histograms from " << filename << "..." << std::endl;
 
-  // Load histograms from each directory using the OLD reliable approach
   for (const auto &source_pair : source_names_) {
     Int_t source_id = source_pair.first;
     std::string source_name = source_pair.second;
@@ -205,8 +189,7 @@ Bool_t HistogramUtils::LoadFromFile(const std::string &filename) {
     std::replace(clean_name.begin(), clean_name.end(), '&', '_');
 
     // Try to load each histogram type
-    std::string light_hist_name =
-        "light_output_spectra/h_light_output_" + clean_name;
+    std::string cal_hist_name = "calibrated_spectra/h_calibrated_" + clean_name;
     std::string integral_hist_name =
         "integral_spectra/h_integral_" + clean_name;
     std::string ph_hist_name =
@@ -216,16 +199,16 @@ Bool_t HistogramUtils::LoadFromFile(const std::string &filename) {
     std::string si_hist_name =
         "shape_indicator_spectra/h_shape_indicator_" + clean_name;
 
-    TH1F *light_hist = static_cast<TH1F *>(file->Get(light_hist_name.c_str()));
+    TH1F *cal_hist = static_cast<TH1F *>(file->Get(cal_hist_name.c_str()));
     TH1F *integral_hist =
         static_cast<TH1F *>(file->Get(integral_hist_name.c_str()));
     TH1F *ph_hist = static_cast<TH1F *>(file->Get(ph_hist_name.c_str()));
     TH1F *cc_hist = static_cast<TH1F *>(file->Get(cc_hist_name.c_str()));
     TH1F *si_hist = static_cast<TH1F *>(file->Get(si_hist_name.c_str()));
 
-    if (light_hist) {
-      light_hist->SetDirectory(0);
-      light_output_spectra_[source_id] = light_hist;
+    if (cal_hist) {
+      cal_hist->SetDirectory(0);
+      calibrated_spectra_[source_id] = cal_hist;
     }
     if (integral_hist) {
       integral_hist->SetDirectory(0);
@@ -238,10 +221,6 @@ Bool_t HistogramUtils::LoadFromFile(const std::string &filename) {
     if (cc_hist) {
       cc_hist->SetDirectory(0);
       charge_comparison_spectra_[source_id] = cc_hist;
-    }
-    if (si_hist) {
-      si_hist->SetDirectory(0);
-      shape_indicator_spectra_[source_id] = si_hist;
     }
   }
 
@@ -261,15 +240,15 @@ void HistogramUtils::SaveToFile(const std::string &filename) {
   std::cout << "Saving histograms to " << filename << "..." << std::endl;
 
   // Create directories for organization
-  TDirectory *light_output_dir = file->mkdir("light_output_spectra");
+  TDirectory *calibrated_dir = file->mkdir("calibrated_spectra");
   TDirectory *integral_dir = file->mkdir("integral_spectra");
   TDirectory *pulse_height_dir = file->mkdir("pulse_height_spectra");
   TDirectory *cc_dir = file->mkdir("charge_comparison_spectra");
   TDirectory *si_dir = file->mkdir("shape_indicator_spectra");
 
   // Save light output spectra
-  light_output_dir->cd();
-  for (const auto &pair : light_output_spectra_) {
+  calibrated_dir->cd();
+  for (const auto &pair : calibrated_spectra_) {
     pair.second->Write("", TObject::kOverwrite);
   }
 
@@ -288,11 +267,6 @@ void HistogramUtils::SaveToFile(const std::string &filename) {
   // Save charge comparison spectra
   cc_dir->cd();
   for (const auto &pair : charge_comparison_spectra_) {
-    pair.second->Write("", TObject::kOverwrite);
-  }
-
-  si_dir->cd();
-  for (const auto &pair : shape_indicator_spectra_) {
     pair.second->Write("", TObject::kOverwrite);
   }
 
@@ -407,11 +381,11 @@ void HistogramUtils::SubtractSpectrumType(Int_t source_id,
   TH1F *bg_hist = nullptr;
 
   // Get the appropriate histograms
-  if (spectrum_type == "light_output") {
-    auto source_it = light_output_spectra_.find(source_id);
-    auto bg_it = light_output_spectra_.find(background_source_id_);
-    if (source_it != light_output_spectra_.end() &&
-        bg_it != light_output_spectra_.end()) {
+  if (spectrum_type == "calibrated") {
+    auto source_it = calibrated_spectra_.find(source_id);
+    auto bg_it = calibrated_spectra_.find(background_source_id_);
+    if (source_it != calibrated_spectra_.end() &&
+        bg_it != calibrated_spectra_.end()) {
       source_hist = source_it->second;
       bg_hist = bg_it->second;
     }
@@ -494,9 +468,8 @@ void HistogramUtils::SubtractSpectrumType(Int_t source_id,
 
 TH1F *HistogramUtils::GetBackgroundSubtractedSpectrum(
     Int_t source_id, const std::string &spectrum_type) const {
-  // This returns the spectrum after background subtraction has been applied
-  if (spectrum_type == "light_output") {
-    return GetLightOutputSpectrum(source_id);
+  if (spectrum_type == "calibrated") {
+    return GetCalibratedSpectrum(source_id);
   } else if (spectrum_type == "integral") {
     return GetIntegralSpectrum(source_id);
   } else if (spectrum_type == "pulse_height") {
@@ -550,7 +523,7 @@ void HistogramUtils::ApplyBackgroundSubtraction() {
               << " (live time: " << source_norm_factor << " s)..." << std::endl;
 
     // Subtract background from each spectrum type
-    SubtractSpectrumType(source_id, "light_output", source_norm_factor,
+    SubtractSpectrumType(source_id, "calibrated", source_norm_factor,
                          bg_norm_factor);
     SubtractSpectrumType(source_id, "integral", source_norm_factor,
                          bg_norm_factor);

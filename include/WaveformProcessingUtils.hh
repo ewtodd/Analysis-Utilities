@@ -37,6 +37,8 @@ private:
   Double_t trigger_threshold_;
   Int_t pre_samples_;
   Int_t post_samples_;
+  Int_t short_gate_;
+  Int_t long_gate_;
   Int_t max_events_;
   Bool_t verbose_;
 
@@ -47,22 +49,26 @@ private:
   TTree *output_tree_;
   WaveformFeatures current_features_;
   Bool_t store_waveforms_;
-  TArrayS *current_waveform_; // For ROOT tree branch
+  TArrayS *current_waveform_;
+
 public:
   WaveformProcessingUtils();
   ~WaveformProcessingUtils();
 
   TTree *GetOutputTree() { return output_tree_; }
   TFile *GetOutputFile() { return output_file_; }
-  // Parameter setters (called from analysis macro)
+
   void SetPolarity(const std::string &polarity) { polarity_ = polarity; }
   void SetTriggerThreshold(Double_t threshold) {
     trigger_threshold_ = threshold;
   }
-
   void SetSampleWindows(Int_t pre_samples, Int_t post_samples) {
     pre_samples_ = pre_samples;
     post_samples_ = post_samples;
+  }
+  void SetPSDGates(Int_t short_gate, Int_t long_gate) {
+    short_gate_ = short_gate;
+    long_gate_ = long_gate;
   }
   void SetMaxEvents(Int_t max_events) { max_events_ = max_events; }
   void SetVerbose(Bool_t verbose) { verbose_ = verbose; }

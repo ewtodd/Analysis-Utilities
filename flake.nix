@@ -12,7 +12,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "nm-toolkit";
-          version = "0.1";
+          version = "0.2";
 
           src = ./.;
 

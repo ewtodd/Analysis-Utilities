@@ -97,65 +97,6 @@ AnalysisUtils::CalculateAverageWaveforms(const std::string &filename,
   return average_waveforms;
 }
 
-std::vector<Float_t> AnalysisUtils::CalculateSIWeightingFactor(
-    const std::map<Int_t, std::vector<Float_t>> &waveforms,
-    Int_t alpha_source_id, Int_t gamma_source_id) {
-
-  auto [f_alpha, f_gamma] =
-      ExtractWaveformsBySourceId(waveforms, alpha_source_id, gamma_source_id);
-
-  if (f_alpha.empty() || f_gamma.empty()) {
-    std::cout
-        << "Error: Need both alpha and gamma waveforms for SI weighting factor!"
-        << std::endl;
-    return {};
-  }
-
-  size_t min_length = std::min(f_alpha.size(), f_gamma.size());
-  std::vector<Float_t> alpha_norm(f_alpha.begin(),
-                                  f_alpha.begin() + min_length);
-  std::vector<Float_t> gamma_norm(f_gamma.begin(),
-                                  f_gamma.begin() + min_length);
-
-  Float_t alpha_peak = *std::max_element(alpha_norm.begin(), alpha_norm.end());
-  Float_t gamma_peak = *std::max_element(gamma_norm.begin(), gamma_norm.end());
-
-  if (alpha_peak <= 0 || gamma_peak <= 0) {
-    std::cout << "Error: Invalid peak values in waveforms!" << std::endl;
-    return {};
-  }
-
-  for (size_t i = 0; i < min_length; ++i) {
-    alpha_norm[i] /= alpha_peak;
-    gamma_norm[i] /= gamma_peak;
-  }
-
-  std::vector<Float_t> p_t(min_length);
-  for (size_t i = 0; i < min_length; ++i) {
-    Float_t sum = alpha_norm[i] + gamma_norm[i];
-    if (sum > 5e-3) { // Avoid division by zero
-      p_t[i] = (alpha_norm[i] - gamma_norm[i]) / sum;
-    } else {
-      p_t[i] = 0.0;
-    }
-  }
-
-  auto pt_abs_max_it =
-      std::max_element(p_t.begin(), p_t.end(), [](Float_t a, Float_t b) {
-        return std::abs(a) < std::abs(b);
-      });
-  Float_t pt_abs_max = std::abs(*pt_abs_max_it);
-
-  if (pt_abs_max > 0) {
-    for (size_t i = 0; i < min_length; ++i) {
-      p_t[i] /= pt_abs_max;
-    }
-  }
-
-  SaveSIWeightingFactor(p_t);
-  return p_t;
-}
-
 void AnalysisUtils::SaveAverageWaveforms(
     const std::map<Int_t, std::vector<Float_t>> &avgWaveforms,
     const std::string &filename) {
@@ -252,70 +193,6 @@ void AnalysisUtils::SaveSIWeightingFactor(
               << std::endl;
   }
   file->Close();
-}
-
-std::vector<Float_t>
-AnalysisUtils::LoadSIWeightingFactor(const std::string &filename) {
-  TFile *file = TFile::Open(filename.c_str(), "READ");
-  if (!file || file->IsZombie()) {
-    std::cout << "Error: Could not load " << filename << "!" << std::endl;
-    return {};
-  }
-
-  TTree *tree = static_cast<TTree *>(file->Get("averages"));
-  if (!tree) {
-    std::cout << "Error: Could not find averages tree!" << std::endl;
-    file->Close();
-    return {};
-  }
-
-  std::vector<Float_t> *si_weighting_factor = nullptr;
-
-  // Check if the branch exists
-  TBranch *si_branch = tree->GetBranch("si_weighting_factor");
-  if (!si_branch) {
-    std::cout << "Error: Could not find si_weighting_factor branch!"
-              << std::endl;
-    file->Close();
-    return {};
-  }
-
-  tree->SetBranchAddress("si_weighting_factor", &si_weighting_factor);
-
-  // Since SI weighting factor should be stored once, get the first (and likely
-  // only) entry
-  if (tree->GetEntries() > 0) {
-    if (tree->GetEntry(0) > 0 && si_weighting_factor) {
-      std::vector<Float_t> result = *si_weighting_factor;
-      file->Close();
-      std::cout << "Loaded SI weighting factor with " << result.size()
-                << " points." << std::endl;
-      return result;
-    }
-  }
-
-  std::cout << "Error: Could not read SI weighting factor data!" << std::endl;
-  file->Close();
-  return {};
-}
-std::pair<std::vector<Float_t>, std::vector<Float_t>>
-AnalysisUtils::ExtractWaveformsBySourceId(
-    const std::map<Int_t, std::vector<Float_t>> &waveforms,
-    Int_t alpha_source_id, Int_t gamma_source_id) {
-
-  std::vector<Float_t> f_alpha, f_gamma;
-
-  auto alpha_it = waveforms.find(alpha_source_id);
-  if (alpha_it != waveforms.end()) {
-    f_alpha = alpha_it->second;
-  }
-
-  auto gamma_it = waveforms.find(gamma_source_id);
-  if (gamma_it != waveforms.end()) {
-    f_gamma = gamma_it->second;
-  }
-
-  return std::make_pair(f_alpha, f_gamma);
 }
 
 Bool_t AnalysisUtils::CalculateChargeComparisonPSD(
@@ -506,210 +383,8 @@ Bool_t AnalysisUtils::CalculateChargeComparisonPSD(
   return kTRUE;
 }
 
-Bool_t AnalysisUtils::CalculateSIPSD(const std::string &waveforms_file,
-                                     const std::string &histograms_file,
-                                     const std::string &average_waveforms_file,
-                                     Bool_t force_recalculate) {
-
-  // Load SI weighting factor first
-  std::vector<Float_t> weighting_factor =
-      LoadSIWeightingFactor(average_waveforms_file);
-  if (weighting_factor.empty()) {
-    std::cout << "Error: Could not load SI weighting factor from "
-              << average_waveforms_file << std::endl;
-    return kFALSE;
-  }
-
-  // Open input files
-  TFile *wffile = TFile::Open(waveforms_file.c_str(), "UPDATE");
-  TFile *histfile = TFile::Open(histograms_file.c_str(), "UPDATE");
-
-  if (!wffile || wffile->IsZombie()) {
-    std::cout << "Error: Could not open " << waveforms_file << std::endl;
-    return kFALSE;
-  }
-  if (!histfile || histfile->IsZombie()) {
-    std::cout << "Error: Could not open " << histograms_file << std::endl;
-    wffile->Close();
-    return kFALSE;
-  }
-
-  // Get the tree
-  TTree *wftree = static_cast<TTree *>(wffile->Get("features"));
-  if (!wftree) {
-    std::cout << "Error: No features tree found" << std::endl;
-    wffile->Close();
-    histfile->Close();
-    return kFALSE;
-  }
-
-  // Check if si_psd branch already exists
-  TBranch *si_psd_branch = wftree->GetBranch("si_psd");
-  if (si_psd_branch && !force_recalculate) {
-    std::cout << "SI PSD branch already exists. Use force_recalculate=true to "
-                 "recreate."
-              << std::endl;
-  } else {
-    if (si_psd_branch && force_recalculate) {
-      std::cout << "Recreating si_psd branch..." << std::endl;
-    } else {
-      std::cout << "Creating si_psd branch..." << std::endl;
-    }
-
-    // Create the branch
-    TArrayS *samples = nullptr;
-    Int_t source_id;
-    Float_t si_psd;
-
-    wftree->SetBranchAddress("Samples", &samples);
-    wftree->SetBranchAddress("source_id", &source_id);
-
-    // Remove existing branch if force recalculating
-    if (si_psd_branch && force_recalculate) {
-      // ROOT doesn't easily delete branches, so we'll overwrite
-      wftree->SetBranchAddress("si_psd", &si_psd);
-    } else {
-      wftree->Branch("si_psd", &si_psd, "si_psd/F");
-    }
-
-    Long64_t n_entries = wftree->GetEntries();
-    for (Long64_t i = 0; i < n_entries; ++i) {
-      wftree->GetEntry(i);
-
-      // Calculate SI PSD = sum(weighting_factor[i] * waveform[i]) /
-      // sum(waveform[i])
-      Float_t weighted_sum = 0.0;
-      Float_t total_sum = 0.0;
-
-      Int_t n_samples = samples->GetSize();
-      Int_t n_points = std::min(n_samples, (Int_t)weighting_factor.size());
-
-      for (Int_t j = 0; j < n_points; ++j) {
-        Float_t sample_value = Float_t(samples->At(j));
-        weighted_sum += weighting_factor[j] * sample_value;
-        total_sum += sample_value;
-      }
-
-      // Calculate normalized SI PSD
-      if (total_sum > 0) {
-        si_psd = weighted_sum / total_sum;
-      } else {
-        si_psd = 0.0;
-      }
-
-      wftree->GetBranch("si_psd")->Fill();
-    }
-    wftree->AutoSave("SaveSelf");
-    std::cout << "SI PSD branch created and saved." << std::endl;
-  }
-
-  // Check if histograms already exist and are filled
-  bool histograms_already_filled = false;
-  TDirectory *psd_dir = histfile->GetDirectory("shape_indicator_spectra");
-  if (psd_dir && !force_recalculate) {
-    psd_dir->cd();
-
-    // Check for a specific histogram you expect
-    TH1F *test_hist = (TH1F *)gDirectory->Get("h_shape_indicator_Am_241");
-    if (test_hist && test_hist->GetEntries() > 0) {
-      histograms_already_filled = true;
-      std::cout << "SI PSD histograms already filled. Use "
-                   "force_recalculate=true to recreate."
-                << std::endl;
-    } else {
-      std::cout << "DEBUG: No valid histograms found in directory" << std::endl;
-    }
-  }
-  if (!histograms_already_filled || force_recalculate) {
-    if (force_recalculate) {
-      std::cout << "Recreating SI PSD histograms..." << std::endl;
-    } else {
-      std::cout << "Determining SI PSD range and filling histograms..."
-                << std::endl;
-    }
-
-    Float_t si_psd;
-    Int_t source_id;
-
-    wftree->SetBranchAddress("si_psd", &si_psd);
-    wftree->SetBranchAddress("source_id", &source_id);
-
-    // Create source name mapping
-    std::map<Int_t, std::string> source_names = {
-        {0, "Am-241"}, {1, "Cs-137"}, {2, "Na-22"}, {3, "Am-241 & Cs-137"}};
-
-    // First pass: find min/max for reasonable binning
-    Float_t min_psd = 1e10, max_psd = -1e10;
-    Long64_t n_entries = wftree->GetEntries();
-    std::set<Int_t> source_ids;
-
-    for (Long64_t i = 0; i < n_entries; ++i) {
-      wftree->GetEntry(i);
-      source_ids.insert(source_id);
-      if (si_psd < min_psd)
-        min_psd = si_psd;
-      if (si_psd > max_psd)
-        max_psd = si_psd;
-    }
-
-    // Add some padding to the range
-    Float_t range_padding = (max_psd - min_psd) * 0.1;
-    min_psd -= range_padding;
-    max_psd += range_padding;
-
-    std::cout << "SI PSD range: " << min_psd << " to " << max_psd << std::endl;
-
-    // Create histograms for each source with proper names
-    std::map<Int_t, TH1F *> si_psd_histograms;
-    for (Int_t sid : source_ids) {
-      // Get source name and clean it
-      auto name_it = source_names.find(sid);
-      std::string source_name = (name_it != source_names.end())
-                                    ? name_it->second
-                                    : "Source_" + std::to_string(sid);
-
-      std::string clean_name = source_name;
-      std::replace(clean_name.begin(), clean_name.end(), ' ', '_');
-      std::replace(clean_name.begin(), clean_name.end(), '-', '_');
-      std::replace(clean_name.begin(), clean_name.end(), '&', '_');
-
-      std::string hist_name = "h_shape_indicator_" + clean_name;
-      std::string hist_title = source_name + " SI PSD;SI PSD Parameter;Counts";
-
-      TH1F *hist = new TH1F(hist_name.c_str(), hist_title.c_str(), 100, min_psd,
-                            max_psd);
-      si_psd_histograms[sid] = hist;
-    }
-
-    // Second pass: fill histograms
-    for (Long64_t i = 0; i < n_entries; ++i) {
-      wftree->GetEntry(i);
-      if (si_psd_histograms.count(source_id)) {
-        si_psd_histograms[source_id]->Fill(si_psd);
-      }
-    }
-
-    // Save histograms
-    if (!psd_dir) {
-      psd_dir = histfile->mkdir("shape_indicator_spectra");
-    }
-    psd_dir->cd();
-
-    for (auto &pair : si_psd_histograms) {
-      pair.second->Write("", TObject::kOverwrite);
-    }
-
-    std::cout << "SI PSD histograms filled and saved." << std::endl;
-  }
-
-  wffile->Close();
-  histfile->Close();
-  return kTRUE;
-}
-
 TH1F *AnalysisUtils::GetFilteredPSDHistogram(
-    const std::string &psd_type, Float_t min_light_output,
-    Float_t max_light_output, Int_t source_id_calc,
+    Float_t min_light_output, Float_t max_light_output, Int_t source_id_calc,
     const std::string &waveforms_file) {
 
   TFile *file = TFile::Open(waveforms_file.c_str(), "READ");
@@ -730,29 +405,23 @@ TH1F *AnalysisUtils::GetFilteredPSDHistogram(
   Float_t light_output_keVee;
   Int_t source_id;
 
-  tree->SetBranchAddress(psd_type.c_str(), &psd_value);
+  tree->SetBranchAddress("charge_comparison_psd", &psd_value);
   tree->SetBranchAddress("light_output_keVee", &light_output_keVee);
   tree->SetBranchAddress("source_id", &source_id);
-  Float_t min_psd = psd_type == "charge_comparison_psd" ? 0.5 : -0.2;
-  Int_t max_psd = psd_type == "charge_comparison_psd" ? 1 : 0;
-
   std::string hist_name =
-      "hist_" + psd_type + "_" + std::to_string(source_id_calc);
-  TH1F *hist =
-      new TH1F(hist_name.c_str(), ";PSD;Counts", 200, min_psd, max_psd);
+      "hist_charge_comparison_psd_" + std::to_string(source_id_calc);
+  TH1F *hist = new TH1F(hist_name.c_str(), ";PSD;Counts", 200, 0, 1);
   hist->SetDirectory(0);
   Long64_t n_entries = tree->GetEntries();
 
   for (Long64_t i = 0; i < n_entries; ++i) {
     tree->GetEntry(i);
 
-    // Apply light output filter
     if (light_output_keVee < min_light_output ||
         light_output_keVee > max_light_output) {
       continue;
     }
 
-    // Fill appropriate histogram based on source
     if (source_id == source_id_calc) {
       hist->Fill(psd_value);
     }

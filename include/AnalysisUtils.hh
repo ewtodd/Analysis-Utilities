@@ -30,31 +30,13 @@ public:
   std::map<Int_t, std::vector<Float_t>>
   LoadAverageWaveforms(const std::string &filename = "average_waveforms.root");
 
-  std::vector<Float_t> CalculateSIWeightingFactor(
-      const std::map<Int_t, std::vector<Float_t>> &waveforms,
-      Int_t alpha_source_id = 0, Int_t gamma_source_id = 2);
-
-  void
-  SaveSIWeightingFactor(const std::vector<Float_t> &SIWeightingFactor,
-                        const std::string &filename = "average_waveforms.root");
-
-  std::vector<Float_t>
-  LoadSIWeightingFactor(const std::string &filename = "average_waveforms.root");
-
   Bool_t CalculateChargeComparisonPSD(
       Int_t short_gate, Int_t long_gate,
       const std::string &waveforms_file = "processed_waveforms.root",
       const std::string &histograms_file = "histograms.root",
       Bool_t force_recalculate = kFALSE);
 
-  Bool_t CalculateSIPSD(
-      const std::string &waveforms_file = "processed_waveforms.root",
-      const std::string &histograms_file = "histograms.root",
-      const std::string &average_waveforms_file = "average_waveforms.root",
-      Bool_t force_recalculate = kFALSE);
-
   TH1F *GetFilteredPSDHistogram(
-      const std::string &psd_type, // "charge_comparison_psd" or "si_psd"
       Float_t min_light_output = 500.0, Float_t max_light_output = 1250.0,
       Int_t source_id_calc = 0, // Am-241
       const std::string &waveforms_file = "processed_waveforms.root");
