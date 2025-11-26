@@ -1,4 +1,3 @@
-# DSP Toolkit Library Makefile
 CXX = $(shell root-config --cxx)
 CXXFLAGS = $(shell root-config --cflags) -std=c++17 -Wall -Wextra -O2 -fPIC
 ROOTLIBS = $(shell root-config --libs)
@@ -10,9 +9,9 @@ OBJDIR = obj
 LIBDIR = lib
 
 # Source files
-SOURCES = $(wildcard $(SRCDIR)/*.cc)
-OBJECTS = $(SOURCES:$(SRCDIR)/%.cc=$(OBJDIR)/%.o)
-HEADERS = $(wildcard $(INCDIR)/*.hh)
+SOURCES = $(wildcard $(SRCDIR)/*.cpp)
+OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
+HEADERS = $(wildcard $(INCDIR)/*.hpp)
 
 # Library name
 LIBNAME = lib-nm-toolkit
@@ -30,7 +29,7 @@ $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 # Compile object files
-$(OBJDIR)/%.o: $(SRCDIR)/%.cc $(HEADERS) | $(OBJDIR)
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 # Create shared library

@@ -1,4 +1,4 @@
-#include "PlottingUtils.hh"
+#include "PlottingUtils.hpp"
 #include <TCanvas.h>
 #include <TGraph.h>
 #include <TGraphErrors.h>

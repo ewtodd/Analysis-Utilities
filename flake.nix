@@ -12,7 +12,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "nm-toolkit";
-          version = "0.2";
+          version = "0.3";
 
           src = ./.;
 
@@ -22,7 +22,7 @@
             gnumake
           ];
 
-          buildInputs = with pkgs; [ root ];
+          buildInputs = with pkgs; [ root tomlplusplus ];
 
           buildPhase = ''
             make
@@ -42,8 +42,8 @@
               cp lib/*.a $out/lib/
             fi
 
-            if [ -d include ] && [ -n "$(ls -A include/*.hh 2>/dev/null)" ]; then
-              cp include/*.hh $out/include/
+            if [ -d include ] && [ -n "$(ls -A include/*.hpp 2>/dev/null)" ]; then
+              cp include/*.hpp $out/include/
             else
               echo "ERROR: No headers found in include/"
               exit 1
@@ -58,7 +58,7 @@
 
             Name: nm-toolkit 
             Description: Nuclear Measurements Analysis Toolkit 
-            Version: 0.1
+            Version: 0.3
             Libs: -L\''${libdir} -lnm-toolkit
             Cflags: -I\''${includedir}
             EOF
@@ -72,17 +72,21 @@
             done
           '';
 
-          propagatedBuildInputs = [ pkgs.root ];
+          propagatedBuildInputs = [ pkgs.root pkgs.tomlplusplus ];
         };
       in {
         packages.default = toolkit;
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
+          buildInputs = with pkgs; [
+            root
+            tomlplusplus
+            gnumake
+            pkg-config
+            clang-tools
+          ];
 
           shellHook = ''
             echo "Development environment for working on the nuclear measurement toolkit source"
-            echo "ROOT version: $(root-config --version)"
-            echo ""
 
             # Set up environment for local development
             export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"

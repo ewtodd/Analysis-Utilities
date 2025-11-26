@@ -1,4 +1,4 @@
-#include "AnalysisUtils.hh"
+#include "AnalysisUtils.hpp"
 std::map<Int_t, std::vector<Float_t>>
 AnalysisUtils::CalculateAverageWaveforms(const std::string &filename,
                                          const SpectralCuts &cuts) {
@@ -159,40 +159,6 @@ AnalysisUtils::LoadAverageWaveforms(const std::string &filename) {
 
   file->Close();
   return avgWaveforms;
-}
-
-void AnalysisUtils::SaveSIWeightingFactor(
-    const std::vector<Float_t> &SIWeightingFactor,
-    const std::string &filename) {
-
-  TFile *file = TFile::Open(filename.c_str(), "UPDATE");
-  if (!file || file->IsZombie()) {
-    std::cout << "Error: Could not load average_waveforms.root!" << std::endl;
-    return;
-  }
-
-  TTree *tree = static_cast<TTree *>(file->Get("averages"));
-
-  if (!tree) {
-    std::cout << "Error: Could not find averages tree!" << std::endl;
-    return;
-  }
-
-  std::vector<Float_t> si_weighting_factor;
-
-  TBranch *si_weighting_factor_branch = tree->GetBranch("si_weighting_factor");
-
-  if (!si_weighting_factor_branch) {
-    tree->Branch("si_weighting_factor", &si_weighting_factor);
-    si_weighting_factor = SIWeightingFactor;
-    tree->GetBranch("si_weighting_factor")->Fill();
-
-    tree->AutoSave("SaveSelf");
-  } else {
-    std::cout << "SI weighting factor branch already exists, skipping..."
-              << std::endl;
-  }
-  file->Close();
 }
 
 Bool_t AnalysisUtils::CalculateChargeComparisonPSD(

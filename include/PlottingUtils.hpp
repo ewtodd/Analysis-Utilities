@@ -1,7 +1,7 @@
 #ifndef PLOTTINGUTILS_H
 #define PLOTTINGUTILS_H
 
-#include "CalibrationUtils.hh"
+#include "CalibrationUtils.hpp"
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TGaxis.h>

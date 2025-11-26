@@ -1,4 +1,4 @@
-#include "WaveformProcessingUtils.hh"
+#include "WaveformProcessingUtils.hpp"
 #include <TMath.h>
 #include <algorithm>
 #include <glob.h>

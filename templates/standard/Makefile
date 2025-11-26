@@ -14,7 +14,7 @@ define run_root_macro
 	 echo "Executing $(1) macro..." && \
 	 root -l -b -q -e 'gSystem->AddIncludePath("$(TOOLKIT_CFLAGS)"); \
 	                    gSystem->Load("$(TOOLKIT_LIBPATH)");' \
-			    $(2).cc
+			    $(2).cpp
 endef
 
 initial:

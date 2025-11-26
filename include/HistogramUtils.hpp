@@ -7,7 +7,6 @@
 #include <TTree.h>
 #include <map>
 #include <string>
-#include <vector>
 
 struct HistogramConfig {
   Int_t calibrated_bin_width = 10;
@@ -35,13 +34,6 @@ struct HistogramConfig {
   }
 };
 
-struct MeasurementStats {
-  std::string run_id;
-  Double_t live_time_seconds;
-  Int_t output_counts;
-  Double_t output_rate_cps;
-};
-
 class HistogramUtils {
 private:
   HistogramConfig config_;
@@ -52,28 +44,9 @@ private:
   std::map<Int_t, TH1F *> pulse_height_spectra_;
   std::map<Int_t, TH1F *> charge_comparison_spectra_;
 
-  std::map<Int_t, MeasurementStats> source_stats_;
-  Int_t background_source_id_;
-
-  Bool_t ParseStatsFile(const std::string &filepath, Int_t source_id);
-  std::string FindStatsFile(const std::string &directory);
-  Double_t ParseTimeString(const std::string &time_str);
-  void SubtractSpectrumType(Int_t source_id, const std::string &spectrum_type,
-                            Double_t source_norm_factor,
-                            Double_t bg_norm_factor);
-
 public:
   HistogramUtils();
   ~HistogramUtils();
-
-  void SetBackgroundSource(Int_t source_id) {
-    background_source_id_ = source_id;
-  }
-  void LoadMeasurementStatistics(const std::vector<std::string> &directories,
-                                 const std::vector<Int_t> &source_ids);
-  TH1F *GetBackgroundSubtractedSpectrum(Int_t source_id,
-                                        const std::string &spectrum_type) const;
-  void ApplyBackgroundSubtraction();
 
   void SetConfig(const HistogramConfig &config);
   void AddSource(Int_t source_id, const std::string &name);

@@ -1,4 +1,4 @@
-#include "CalibrationUtils.hh"
+#include "CalibrationUtils.hpp"
 #include <TDirectory.h>
 #include <TF1.h>
 #include <TFile.h>

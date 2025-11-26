@@ -1,7 +1,7 @@
 #ifndef CALIBRATIONUTILS_H
 #define CALIBRATIONUTILS_H
 
-#include "HistogramUtils.hh"
+#include "HistogramUtils.hpp"
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TGraphErrors.h>
