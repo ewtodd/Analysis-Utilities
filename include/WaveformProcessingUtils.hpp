@@ -82,6 +82,7 @@ public:
 
   Bool_t ProcessSingleFile(const std::string &filepath, Int_t source_id);
   Bool_t ProcessWaveform(const std::vector<Short_t> &samples, Int_t source_id);
+
   // Core waveform analysis
   std::vector<Float_t> SubtractBaseline(const std::vector<Short_t> &samples);
   Int_t FindTrigger(const std::vector<Float_t> &waveform);
@@ -90,11 +91,6 @@ public:
   WaveformFeatures ExtractFeatures(const std::vector<Float_t> &cropped_wf,
                                    Int_t source_id);
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
-
-  // Utilities
-  std::vector<std::string>
-  FindROOTFiles(const std::string &basepath,
-                const std::string &pattern = "*DT5730*.root");
 
   // Statistics
   void PrintAllStatistics() const;
