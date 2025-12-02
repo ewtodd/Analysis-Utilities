@@ -98,86 +98,57 @@ Bool_t WaveformProcessingUtils::ProcessDataSets(
 
 Bool_t WaveformProcessingUtils::ProcessSingleFile(const std::string &filepath,
                                                   Int_t source_id) {
-  std::vector<std::string> root_files = FindROOTFiles(filepath);
 
-  if (root_files.empty()) {
+  TFile *file = TFile::Open(filepath.c_str(), "READ");
+  if (!file || file->IsZombie()) {
     if (verbose_) {
-      std::cout << "No ROOT files found in " << filepath << std::endl;
+      std::cout << "  Error opening file: " << filepath << std::endl;
     }
-    return kFALSE;
   }
 
-  if (verbose_) {
-    std::cout << "  Found " << root_files.size() << " ROOT files" << std::endl;
-  }
-
-  Int_t total_processed_this_source = 0;
-
-  for (const std::string &root_file : root_files) {
-    TFile *file = TFile::Open(root_file.c_str(), "READ");
-    if (!file || file->IsZombie()) {
-      if (verbose_) {
-        std::cout << "  Error opening file: " << root_file << std::endl;
-      }
-      continue;
-    }
-
-    TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
-    if (!tree) {
-      if (verbose_) {
-        std::cout << "  Error: TTree 'Data_R' not found in " << root_file
-                  << std::endl;
-      }
-      file->Close();
-      continue;
-    }
-
-    TArrayS *samples = new TArrayS();
-    tree->SetBranchAddress("Samples", &samples);
-
-    Long64_t n_entries = tree->GetEntries();
-    Int_t processed_this_file = 0;
-    tree->GetEntry(0);
-    for (Long64_t entry = 0; entry < n_entries; ++entry) {
-      if (max_events_ > 0 && stats_[source_id].accepted >= max_events_) {
-        break;
-      }
-
-      if (tree->GetEntry(entry) <= 0)
-        continue;
-
-      stats_[source_id].total_processed++;
-
-      // Convert TArrayS to std::vector
-      std::vector<Short_t> waveform_data;
-      waveform_data.reserve(samples->GetSize());
-      for (Int_t i = 0; i < samples->GetSize(); ++i) {
-        waveform_data.push_back(samples->At(i));
-      }
-      if (ProcessWaveform(waveform_data, source_id)) {
-        processed_this_file++;
-      }
-    }
-
-    total_processed_this_source += processed_this_file;
-
+  TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
+  if (!tree) {
     if (verbose_) {
-      std::cout << "    " << root_file << ": " << processed_this_file
-                << " events" << std::endl;
+      std::cout << "  Error: TTree 'Data_R' not found in " << filepath
+                << std::endl;
     }
-
-    delete samples;
     file->Close();
+  }
 
+  TArrayS *samples = new TArrayS();
+  tree->SetBranchAddress("Samples", &samples);
+
+  Long64_t n_entries = tree->GetEntries();
+  Int_t processed_this_file = 0;
+  tree->GetEntry(0);
+  for (Long64_t entry = 0; entry < n_entries; ++entry) {
     if (max_events_ > 0 && stats_[source_id].accepted >= max_events_) {
       break;
     }
+
+    if (tree->GetEntry(entry) <= 0)
+      continue;
+
+    stats_[source_id].total_processed++;
+
+    // Convert TArrayS to std::vector
+    std::vector<Short_t> waveform_data;
+    waveform_data.reserve(samples->GetSize());
+    for (Int_t i = 0; i < samples->GetSize(); ++i) {
+      waveform_data.push_back(samples->At(i));
+    }
+    if (ProcessWaveform(waveform_data, source_id)) {
+      processed_this_file++;
+    }
   }
 
   if (verbose_) {
-    std::cout << "  Total processed for this source: "
-              << total_processed_this_source << std::endl;
+    std::cout << "    " << filepath << ": " << processed_this_file << " events"
+              << std::endl;
   }
+
+  delete samples;
+  file->Close();
 
   return kTRUE;
 }
@@ -343,31 +314,6 @@ WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
     return kFALSE;
   }
   return kTRUE;
-}
-
-std::vector<std::string>
-WaveformProcessingUtils::FindROOTFiles(const std::string &basepath,
-                                       const std::string &pattern) {
-  std::vector<std::string> files;
-  std::string full_pattern = basepath + "/RAW/" + pattern;
-
-  glob_t glob_result;
-  int glob_status = glob(full_pattern.c_str(), GLOB_TILDE, NULL, &glob_result);
-
-  if (glob_status == 0) {
-    for (unsigned int i = 0; i < glob_result.gl_pathc; ++i) {
-      files.push_back(std::string(glob_result.gl_pathv[i]));
-    }
-  }
-
-  globfree(&glob_result);
-
-  if (files.empty() && verbose_) {
-    std::cout << "  No files found matching pattern: " << full_pattern
-              << std::endl;
-  }
-
-  return files;
 }
 
 void WaveformProcessingUtils::PrintAllStatistics() const {

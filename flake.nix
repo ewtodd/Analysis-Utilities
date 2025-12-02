@@ -2,7 +2,7 @@
   description = "Nuclear Measurements Analysis Toolkit";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -72,28 +72,26 @@
             done
           '';
 
-          propagatedBuildInputs = [ pkgs.root pkgs.tomlplusplus ];
+          propagatedBuildInputs = [ pkgs.root ];
         };
       in {
         packages.default = toolkit;
+
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            root
-            tomlplusplus
-            gnumake
-            pkg-config
-            clang-tools
-          ];
+          buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
 
           shellHook = ''
             echo "Development environment for working on the nuclear measurement toolkit source"
 
-            # Set up environment for local development
-            export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"
-            export CPLUS_INCLUDE_PATH="$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
+            STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
+            STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
 
-            # For building locally
+            # Build include path in correct order: stdlib -> project -> ROOT
+            export CPLUS_INCLUDE_PATH="$STDLIB_PATH:$STDLIB_MACHINE_PATH:$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
+            export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"
             export LD_LIBRARY_PATH="$PWD/lib:$LD_LIBRARY_PATH"
+
+            echo "C++ stdlib: $STDLIB_PATH"
           '';
         };
       })) // {

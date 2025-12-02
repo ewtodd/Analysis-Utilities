@@ -33,6 +33,12 @@ name = "Am-241 & Cs-137"
 path = "/home/e-work/LABDATA/ANSG/CeYAP/May12-14/YAP_am241_cs137_new_settings/RAW/DataR_CH0@DT5730B_680_YAP_am241_cs137_new_settings.root"
 
 # ============================================================================
+# ROOT FILE TREE STRUCTURE INFORMATION 
+# ============================================================================
+
+
+
+# ============================================================================
 # WAVEFORM PROCESSING
 # ============================================================================
 
@@ -44,7 +50,7 @@ post_samples = 190
 max_events = -1  # -1 for all events
 verbose = true
 store_waveforms = true
-output_file = "ej309_processed.root"
+output_file = "processed.root"
 
 # ============================================================================
 # HISTOGRAM CONFIGURATION
@@ -55,12 +61,11 @@ light_output_min = 0
 light_output_max = 3000
 light_output_bins = 400
 
-# Scintillator-specific: integral histograms
 integral_min = 0
 integral_max = 150000
 integral_bins = 400
 
-output_file = "ej309_histograms.root"
+output_file = "histograms.root"
 
 # ============================================================================
 # CHARGE COMPARISON FOR PSD
