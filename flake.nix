@@ -1,5 +1,5 @@
 {
-  description = "Nuclear Measurements Analysis Toolkit";
+  description = "Nuclear Measurements Analysis Utilities";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -12,7 +12,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "nm-toolkit";
-          version = "0.3";
+          version = "1.0";
 
           src = ./.;
 
