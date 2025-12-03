@@ -4,7 +4,7 @@
 Usage in a new project directory:
 
 ```
-nix flake init -t github:ewtodd/Nuclear-Measurement-Toolkit
+nix flake init -t github:ewtodd/Nuclear-Measurement-Toolkit --refresh
 ```
 
 This will create a flake.nix file containing a development environment that has access to the libraries. 
