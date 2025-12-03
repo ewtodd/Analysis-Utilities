@@ -36,6 +36,7 @@ void PlottingUtils::SetROOTStyle() {
   gStyle->SetPadTickY(2);
 
   gROOT->ForceStyle(kTRUE);
+  gROOT->SetBatch(kTRUE);
 }
 
 std::string PlottingUtils::CleanSourceName(const std::string &source_name) {
