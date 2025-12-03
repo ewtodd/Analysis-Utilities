@@ -208,7 +208,6 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples,
 
 std::vector<Float_t>
 WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
-  // Calculate baseline from first 10 samples
   Float_t baseline = 0;
   Int_t baseline_samples = TMath::Min(10, Int_t(samples.size()));
 
