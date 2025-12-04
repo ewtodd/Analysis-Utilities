@@ -6,6 +6,7 @@
 #include <TGaxis.h>
 #include <TGraphErrors.h>
 #include <TH1.h>
+#include <TH2.h>
 #include <TLatex.h>
 #include <TLegend.h>
 #include <TROOT.h>
@@ -18,6 +19,9 @@ public:
   static void SetROOTStyle();
   static void ConfigureHistogram(TH1 *hist, Int_t color,
                                  const std::string &title = "");
+  static void Configure2DHistogram(TH2 *hist, TCanvas *canvas, Int_t color,
+                                   const std::string &title = "");
+
   static void ConfigureCanvas(TCanvas *canvas, Bool_t logy = kFALSE);
 
   static TLegend *CreateLegend(Double_t x1 = 0.7, Double_t y1 = 0.7,

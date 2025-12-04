@@ -78,6 +78,29 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
   hist->GetYaxis()->SetTitleOffset(1.2);
 }
 
+void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
+                                         Int_t color,
+                                         const std::string &title) {
+  if (!hist)
+    return;
+  if (!canvas)
+
+    return;
+
+  hist->SetTitle(title.c_str());
+  hist->GetYaxis()->SetMoreLogLabels(kFALSE);
+  hist->GetYaxis()->SetNoExponent(kFALSE);
+  hist->GetXaxis()->SetTitleSize(0.06);
+  hist->GetYaxis()->SetTitleSize(0.06);
+  hist->GetXaxis()->SetLabelSize(0.06);
+  hist->GetYaxis()->SetLabelSize(0.06);
+  hist->GetXaxis()->SetTitleOffset(1.2);
+  hist->GetYaxis()->SetTitleOffset(1.2);
+  hist->SetMinimum(1);
+  canvas->SetLogz(kTRUE);
+  canvas->SetRightMargin(0.15);
+}
+
 void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
   if (!canvas)
     return;
