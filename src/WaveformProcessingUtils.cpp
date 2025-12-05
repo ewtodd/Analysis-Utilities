@@ -6,9 +6,9 @@
 #include <numeric>
 
 WaveformProcessingUtils::WaveformProcessingUtils()
-    : polarity_("positive"), trigger_threshold_(0.1), pre_samples_(20),
-      post_samples_(200), max_events_(-1), verbose_(kFALSE),
-      output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kFALSE),
+    : polarity_(1), trigger_threshold_(0.15), pre_samples_(10),
+      post_samples_(100), max_events_(-1), verbose_(kFALSE),
+      output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
       current_waveform_(nullptr) {}
 
 WaveformProcessingUtils::~WaveformProcessingUtils() {
@@ -20,23 +20,12 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
     delete output_file_;
   }
 }
-void WaveformProcessingUtils::AddSource(const std::string &name, Int_t id) {
-  source_map_[name] = id;
-  stats_[id] = ProcessingStats();
-}
 
-Bool_t WaveformProcessingUtils::ProcessDataSets(
-    const std::vector<std::string> &filepaths,
-    const std::vector<std::string> &source_names,
-    const std::string &output_filename) {
-  if (filepaths.size() != source_names.size()) {
-    std::cout << "Error: Number of filepaths and source names must match!"
-              << std::endl;
-    return kFALSE;
-  }
+Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
+                                            const TString output_filename) {
 
   // Create output file and tree
-  output_file_ = new TFile(output_filename.c_str(), "RECREATE");
+  output_file_ = new TFile(output_filename, "RECREATE");
   if (!output_file_ || output_file_->IsZombie()) {
     std::cout << "Error: Could not create output file " << output_filename
               << std::endl;
@@ -54,35 +43,64 @@ Bool_t WaveformProcessingUtils::ProcessDataSets(
                        "trigger_position/I");
   output_tree_->Branch("long_integral", &current_features_.long_integral,
                        "long_integral/F");
-  output_tree_->Branch("source_id", &current_features_.source_id,
-                       "source_id/I");
   output_tree_->Branch("passes_cuts", &current_features_.passes_cuts,
                        "passes_cuts/O");
   output_tree_->Branch("negative_fraction",
                        &current_features_.negative_fraction,
                        "negative_fraction/F");
+  output_tree_->Branch("timestamp", &current_features_.timestamp,
+                       "timestamp/l");
 
-  // Add waveform branch if requested
   if (store_waveforms_) {
     current_waveform_ = nullptr;
     output_tree_->Branch("Samples", &current_waveform_);
-    std::cout << "Waveform storage enabled - storing TArrayS data for events "
-                 "that pass cuts"
-              << std::endl;
+    std::cout << "Storing waveforms that pass cuts." << std::endl;
   }
 
-  // Process each dataset
-  for (size_t i = 0; i < filepaths.size(); ++i) {
+  TFile *file = TFile::Open(filepath, "READ");
+  if (!file || file->IsZombie()) {
     if (verbose_) {
-      std::cout << "Processing: " << filepaths[i] << " (" << source_names[i]
-                << ")" << std::endl;
-    }
-
-    Int_t source_id = source_map_[source_names[i]];
-    if (!ProcessSingleFile(filepaths[i], source_id)) {
-      std::cout << "Warning: Failed to process " << filepaths[i] << std::endl;
+      std::cout << "Error opening file: " << filepath << std::endl;
     }
   }
+
+  TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
+  if (!tree) {
+    if (verbose_) {
+      std::cout << "Error: TTree 'Data_R' not found in " << filepath
+                << std::endl;
+    }
+    file->Close();
+  }
+
+  TArrayS *samples = new TArrayS();
+  tree->SetBranchAddress("Samples", &samples);
+  tree->SetBranchAddress("Timestamp", &current_timestamp_);
+
+  Long64_t n_entries = tree->GetEntries();
+  tree->GetEntry(0);
+
+  for (Long64_t entry = 0; entry < n_entries; ++entry) {
+    if (max_events_ > 0 && stats_.accepted >= max_events_) {
+      break;
+    }
+
+    if (tree->GetEntry(entry) <= 0)
+      continue;
+
+    // Convert TArrayS to std::vector
+    std::vector<Short_t> waveform_data;
+    waveform_data.reserve(samples->GetSize());
+    for (Int_t i = 0; i < samples->GetSize(); ++i) {
+      waveform_data.push_back(samples->At(i));
+    }
+    stats_.total_processed++;
+    if (ProcessWaveform(waveform_data)) {
+    }
+  }
+
+  delete samples;
+  file->Close();
 
   output_file_->cd();
   // Write and close
@@ -96,80 +114,22 @@ Bool_t WaveformProcessingUtils::ProcessDataSets(
   return kTRUE;
 }
 
-Bool_t WaveformProcessingUtils::ProcessSingleFile(const std::string &filepath,
-                                                  Int_t source_id) {
-
-  TFile *file = TFile::Open(filepath.c_str(), "READ");
-  if (!file || file->IsZombie()) {
-    if (verbose_) {
-      std::cout << "  Error opening file: " << filepath << std::endl;
-    }
-  }
-
-  TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
-  if (!tree) {
-    if (verbose_) {
-      std::cout << "  Error: TTree 'Data_R' not found in " << filepath
-                << std::endl;
-    }
-    file->Close();
-  }
-
-  TArrayS *samples = new TArrayS();
-  tree->SetBranchAddress("Samples", &samples);
-
-  Long64_t n_entries = tree->GetEntries();
-  Int_t processed_this_file = 0;
-  tree->GetEntry(0);
-  for (Long64_t entry = 0; entry < n_entries; ++entry) {
-    if (max_events_ > 0 && stats_[source_id].accepted >= max_events_) {
-      break;
-    }
-
-    if (tree->GetEntry(entry) <= 0)
-      continue;
-
-    stats_[source_id].total_processed++;
-
-    // Convert TArrayS to std::vector
-    std::vector<Short_t> waveform_data;
-    waveform_data.reserve(samples->GetSize());
-    for (Int_t i = 0; i < samples->GetSize(); ++i) {
-      waveform_data.push_back(samples->At(i));
-    }
-    if (ProcessWaveform(waveform_data, source_id)) {
-      processed_this_file++;
-    }
-  }
-
-  if (verbose_) {
-    std::cout << "    " << filepath << ": " << processed_this_file << " events"
-              << std::endl;
-  }
-
-  delete samples;
-  file->Close();
-
-  return kTRUE;
-}
-
 Bool_t
-WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples,
-                                         Int_t source_id) {
+WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
   // Baseline subtraction
   std::vector<Float_t> processed_wf = SubtractBaseline(samples);
 
   // Find trigger
   Int_t trigger_pos = FindTrigger(processed_wf);
   if (trigger_pos < 0) {
-    stats_[source_id].rejected_no_trigger++;
+    stats_.rejected_no_trigger++;
     return kFALSE;
   }
 
   // Check sufficient samples
   if (trigger_pos < pre_samples_ ||
       (Int_t(processed_wf.size()) - trigger_pos) <= post_samples_) {
-    stats_[source_id].rejected_insufficient_samples++;
+    stats_.rejected_insufficient_samples++;
     return kFALSE;
   }
 
@@ -177,7 +137,7 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples,
   std::vector<Float_t> cropped_wf = CropWaveform(processed_wf, trigger_pos);
 
   // Extract features
-  WaveformFeatures features = ExtractFeatures(cropped_wf, source_id);
+  WaveformFeatures features = ExtractFeatures(cropped_wf);
 
   // Apply quality cuts
   Bool_t passes_cuts = ApplyQualityCuts(features);
@@ -202,7 +162,7 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples,
   current_features_ = features;
   output_tree_->Fill();
 
-  stats_[source_id].accepted++;
+  stats_.accepted++;
   return kTRUE;
 }
 
@@ -220,7 +180,7 @@ WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
   processed.reserve(samples.size());
 
   for (size_t i = 0; i < samples.size(); ++i) {
-    if (polarity_ == "negative") {
+    if (polarity_ == -1) {
       processed.push_back(baseline - samples[i]);
     } else {
       processed.push_back(samples[i] - baseline);
@@ -262,11 +222,9 @@ WaveformProcessingUtils::CropWaveform(const std::vector<Float_t> &waveform,
   return cropped;
 }
 
-WaveformFeatures
-WaveformProcessingUtils::ExtractFeatures(const std::vector<Float_t> &cropped_wf,
-                                         Int_t source_id) {
+WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
+    const std::vector<Float_t> &cropped_wf) {
   WaveformFeatures features;
-  features.source_id = source_id;
   features.trigger_position = pre_samples_;
 
   // Find peak in cropped waveform
@@ -285,6 +243,7 @@ WaveformProcessingUtils::ExtractFeatures(const std::vector<Float_t> &cropped_wf,
     if (sample_value < 0)
       negative_samples++;
   }
+  features.timestamp = current_timestamp_;
 
   features.passes_cuts = kTRUE; // Will be updated in ApplyQualityCuts
   features.negative_fraction =
@@ -295,21 +254,19 @@ WaveformProcessingUtils::ExtractFeatures(const std::vector<Float_t> &cropped_wf,
 
 Bool_t
 WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
-  Int_t source_id = features.source_id;
 
-  // 1. Check for negative raw long integral (before clipping)
   if (features.long_integral <= 0) {
-    stats_[source_id].rejected_negative_integral++;
+    stats_.rejected_negative_integral++;
     return kFALSE;
   }
 
   if (features.negative_fraction > 0.4) {
-    stats_[source_id].rejected_baseline++;
+    stats_.rejected_baseline++;
     return kFALSE;
   }
 
   if (features.long_integral <= 0) {
-    stats_[source_id].rejected_negative_integral++;
+    stats_.rejected_negative_integral++;
     return kFALSE;
   }
   return kTRUE;
@@ -317,55 +274,24 @@ WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
 
 void WaveformProcessingUtils::PrintAllStatistics() const {
   std::cout << "Waveform processing statistics..." << std::endl;
-
-  for (const auto &pair : stats_) {
-    Int_t source_id = pair.first;
-    const ProcessingStats &stats = pair.second;
-
-    // Find source name
-    std::string source_name = "Unknown";
-    for (const auto &source_pair : source_map_) {
-      if (source_pair.second == source_id) {
-        source_name = source_pair.first;
-        break;
-      }
-    }
-
-    stats.Print(source_name);
-  }
-}
-
-ProcessingStats WaveformProcessingUtils::GetStats(Int_t source_id) const {
-  auto it = stats_.find(source_id);
-  if (it != stats_.end()) {
-    return it->second;
-  }
-  return ProcessingStats();
-}
-
-// ProcessingStats methods
-void ProcessingStats::Print(const std::string &source_name) const {
-  std::cout << "Source: " << source_name << std::endl;
-  std::cout << "  Total processed: " << total_processed << std::endl;
-  std::cout << "  Accepted: " << accepted << std::endl;
-  std::cout << "  Rejected breakdown:" << std::endl;
-  std::cout << "    No trigger: " << rejected_no_trigger << std::endl;
-  std::cout << "    Insufficient samples: " << rejected_insufficient_samples
+  std::cout << "Total processed: " << stats_.total_processed << std::endl;
+  std::cout << std::endl;
+  std::cout << "Accepted: " << stats_.accepted << std::endl;
+  std::cout << std::endl;
+  std::cout << "Rejected breakdown:" << std::endl;
+  std::cout << "No trigger: " << stats_.rejected_no_trigger << std::endl;
+  std::cout << "Insufficient samples: " << stats_.rejected_insufficient_samples
             << std::endl;
-  std::cout << "    Negative integral: " << rejected_negative_integral
+  std::cout << "Negative integral: " << stats_.rejected_negative_integral
             << std::endl;
-  std::cout << "    Bad baseline: " << rejected_baseline << std::endl;
+  std::cout << "Bad baseline: " << stats_.rejected_baseline << std::endl;
+  std::cout << std::endl;
 
-  if (total_processed > 0) {
-    Double_t acceptance_rate = GetAcceptanceRate();
-    std::cout << "  Acceptance rate: " << acceptance_rate << "%" << std::endl;
+  if (stats_.total_processed > 0) {
+    std::cout << "  Acceptance rate: "
+              << 100 * Float_t(stats_.accepted) /
+                     Float_t(stats_.total_processed)
+              << "%" << std::endl;
   }
   std::cout << std::endl;
-}
-
-Double_t ProcessingStats::GetAcceptanceRate() const {
-  if (total_processed > 0) {
-    return (100.0 * accepted) / total_processed;
-  }
-  return 0.0;
 }
