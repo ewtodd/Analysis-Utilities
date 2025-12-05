@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <glob.h>
 #include <iostream>
-#include <numeric>
 
 WaveformProcessingUtils::WaveformProcessingUtils()
     : polarity_(1), trigger_threshold_(0.15), pre_samples_(10),
@@ -243,7 +242,7 @@ WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
     if (sample_value < 0)
       negative_samples++;
   }
-  features.timestamp = current_timestamp_;
+  features.timestamp = current_timestamp_ * 1e-12;
 
   features.passes_cuts = kTRUE; // Will be updated in ApplyQualityCuts
   features.negative_fraction =
