@@ -14,7 +14,7 @@ void PlottingUtils::SetROOTStyle() {
   gStyle->SetOptStat(0);
   gStyle->SetOptFit(0);
   gStyle->SetPadLeftMargin(0.15);
-  gStyle->SetPadRightMargin(0.05);
+  gStyle->SetPadRightMargin(0.1);
   gStyle->SetPadTopMargin(0.12);
   gStyle->SetPadBottomMargin(0.15);
   gStyle->SetTitleSize(0.06, "XY");
@@ -25,16 +25,13 @@ void PlottingUtils::SetROOTStyle() {
   gStyle->SetTextFont(42);
   gStyle->SetHistLineWidth(1);
   gStyle->SetLineWidth(1);
-
   gStyle->SetPadGridX(1);
   gStyle->SetPadGridY(1);
   gStyle->SetGridStyle(3);
   gStyle->SetGridWidth(1);
   gStyle->SetGridColor(kGray);
-
   gStyle->SetPadTickX(2);
   gStyle->SetPadTickY(2);
-
   gROOT->ForceStyle(kTRUE);
   gROOT->SetBatch(kTRUE);
 }
@@ -42,12 +39,10 @@ void PlottingUtils::SetROOTStyle() {
 std::string PlottingUtils::CleanSourceName(const std::string &source_name) {
   std::string clean_name = source_name;
 
-  // Replace problematic characters with single underscores
   std::replace(clean_name.begin(), clean_name.end(), ' ', '_');
   std::replace(clean_name.begin(), clean_name.end(), '-', '_');
   std::replace(clean_name.begin(), clean_name.end(), '&', '_');
 
-  // Remove consecutive underscores
   std::string::iterator new_end =
       std::unique(clean_name.begin(), clean_name.end(),
                   [](char a, char b) { return a == '_' && b == '_'; });
@@ -56,16 +51,29 @@ std::string PlottingUtils::CleanSourceName(const std::string &source_name) {
   return clean_name;
 }
 
+void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
+                                   const TString title) {
+  graph->SetLineColor(color);
+  graph->SetTitle(title);
+  graph->GetXaxis()->SetTitleSize(0.06);
+  graph->GetYaxis()->SetTitleSize(0.06);
+  graph->GetXaxis()->SetLabelSize(0.06);
+  graph->GetYaxis()->SetLabelSize(0.06);
+  graph->GetXaxis()->SetTitleOffset(1.2);
+  graph->GetYaxis()->SetTitleOffset(1.2);
+}
+
 void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
-                                       const std::string &title) {
+                                       const TString title) {
   if (!hist)
     return;
 
   hist->SetLineColor(color);
-  hist->SetTitle(title.c_str());
+  hist->SetTitle(title);
   hist->SetFillColorAlpha(color, 0.2);
   hist->GetYaxis()->SetMoreLogLabels(kFALSE);
   hist->GetYaxis()->SetNoExponent(kFALSE);
+  hist->GetXaxis()->SetNoExponent(kTRUE);
 
   hist->SetMinimum(10);
   hist->GetYaxis()->SetNdivisions(50109);
@@ -79,15 +87,13 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
 }
 
 void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
-                                         Int_t color,
-                                         const std::string &title) {
+                                         Int_t color, const TString title) {
   if (!hist)
     return;
   if (!canvas)
-
     return;
 
-  hist->SetTitle(title.c_str());
+  hist->SetTitle(title);
   hist->GetYaxis()->SetMoreLogLabels(kFALSE);
   hist->GetYaxis()->SetNoExponent(kFALSE);
   hist->GetXaxis()->SetTitleSize(0.06);
@@ -133,9 +139,9 @@ TLegend *PlottingUtils::CreateLegend(Double_t x1, Double_t y1, Double_t x2,
   return leg;
 }
 
-void PlottingUtils::AddSubplotLabel(const std::string &label, Double_t x,
+void PlottingUtils::AddSubplotLabel(const TString label, Double_t x,
                                     Double_t y) {
-  TText *latex = new TText(x, y, label.c_str());
+  TText *latex = new TText(x, y, label);
   latex->SetNDC();
   latex->SetTextSize(0.06);
   latex->SetTextAlign(33);

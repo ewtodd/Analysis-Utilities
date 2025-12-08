@@ -21,8 +21,9 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
 }
 
 Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
-                                            const TString output_filename) {
+                                            const TString output_name) {
 
+  TString output_filename = output_name + ".root";
   // Create output file and tree
   output_file_ = new TFile(output_filename, "RECREATE");
   if (!output_file_ || output_file_->IsZombie()) {

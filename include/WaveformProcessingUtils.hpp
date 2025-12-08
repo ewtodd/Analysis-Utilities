@@ -5,8 +5,6 @@
 #include <TFile.h>
 #include <TROOT.h>
 #include <TTree.h>
-#include <map>
-#include <string>
 #include <vector>
 
 struct WaveformFeatures {
@@ -30,7 +28,6 @@ struct ProcessingStats {
 
 class WaveformProcessingUtils {
 private:
-  // Analysis parameters - set by user
   Int_t polarity_;
   Double_t trigger_threshold_;
   Int_t pre_samples_;
@@ -53,9 +50,6 @@ public:
   WaveformProcessingUtils();
   ~WaveformProcessingUtils();
 
-  TTree *GetOutputTree() { return output_tree_; }
-  TFile *GetOutputFile() { return output_file_; }
-
   void SetPolarity(const Int_t polarity) { polarity_ = polarity; }
   void SetTriggerThreshold(Double_t threshold) {
     trigger_threshold_ = threshold;
@@ -72,12 +66,10 @@ public:
   void SetVerbose(Bool_t verbose) { verbose_ = verbose; }
   void SetStoreWaveforms(Bool_t store = kTRUE) { store_waveforms_ = store; }
 
-  // Main processing
-  Bool_t ProcessFile(const TString filepath, const TString output_filename);
+  Bool_t ProcessFile(const TString filepath, const TString output_name);
 
   Bool_t ProcessWaveform(const std::vector<Short_t> &samples);
 
-  // Core waveform analysis
   std::vector<Float_t> SubtractBaseline(const std::vector<Short_t> &samples);
   Int_t FindTrigger(const std::vector<Float_t> &waveform);
   std::vector<Float_t> CropWaveform(const std::vector<Float_t> &waveform,
