@@ -8,6 +8,7 @@
 #include <vector>
 
 struct WaveformFeatures {
+  Short_t raw_pulse_height;
   Float_t pulse_height;
   Int_t peak_position;
   Int_t trigger_position;
@@ -24,6 +25,7 @@ struct ProcessingStats {
   Int_t rejected_insufficient_samples = 0;
   Int_t rejected_negative_integral = 0;
   Int_t rejected_baseline = 0;
+  Int_t rejected_clipped = 0;
 };
 
 class WaveformProcessingUtils {
@@ -32,6 +34,7 @@ private:
   Double_t trigger_threshold_;
   Int_t pre_samples_;
   Int_t post_samples_;
+  Int_t pre_gate_;
   Int_t short_gate_;
   Int_t long_gate_;
   Int_t max_events_;
@@ -58,7 +61,8 @@ public:
     pre_samples_ = pre_samples;
     post_samples_ = post_samples;
   }
-  void SetPSDGates(Int_t short_gate, Int_t long_gate) {
+  void SetGates(Int_t pre_gate, Int_t short_gate, Int_t long_gate) {
+    pre_gate_ = pre_gate;
     short_gate_ = short_gate;
     long_gate_ = long_gate;
   }

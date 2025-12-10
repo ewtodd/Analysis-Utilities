@@ -113,10 +113,12 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
 
 Bool_t
 WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
-  // Baseline subtraction
+  Short_t raw_max = (polarity_ == 1)
+                        ? *std::max_element(samples.begin(), samples.end())
+                        : *std::min_element(samples.begin(), samples.end());
+
   std::vector<Float_t> processed_wf = SubtractBaseline(samples);
 
-  // Find trigger
   Int_t trigger_pos = FindTrigger(processed_wf);
   if (trigger_pos < 0) {
     stats_.rejected_no_trigger++;
@@ -130,24 +132,18 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
     return kFALSE;
   }
 
-  // Crop waveform
   std::vector<Float_t> cropped_wf = CropWaveform(processed_wf, trigger_pos);
 
-  // Extract features
   WaveformFeatures features = ExtractFeatures(cropped_wf);
-
-  // Apply quality cuts
+  features.raw_pulse_height = std::abs(raw_max);
   Bool_t passes_cuts = ApplyQualityCuts(features);
   features.passes_cuts = passes_cuts;
 
-  // ONLY process further if cuts are passed
   if (!passes_cuts) {
     return kFALSE;
   }
 
-  // Store the CROPPED waveform if requested (ONLY for events that pass cuts)
   if (store_waveforms_) {
-    // Create TArrayS from cropped, baseline-subtracted waveform
     if (current_waveform_)
       delete current_waveform_;
     current_waveform_ = new TArrayS(cropped_wf.size());
@@ -189,18 +185,17 @@ WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
 
 Int_t WaveformProcessingUtils::FindTrigger(
     const std::vector<Float_t> &waveform) {
-  // Find peak value
+
   Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
   Float_t trigger_level = peak_value * trigger_threshold_;
 
-  // Find first point above trigger level
   for (size_t i = 0; i < waveform.size(); ++i) {
     if (waveform[i] >= trigger_level) {
       return Int_t(i);
     }
   }
 
-  return -1; // No trigger found
+  return -1;
 }
 
 std::vector<Float_t>
@@ -234,7 +229,7 @@ WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
   Int_t negative_samples = 0;
   Int_t long_end = Int_t(cropped_wf.size());
 
-  for (Int_t i = pre_samples_; i < long_end; ++i) {
+  for (Int_t i = pre_samples_ - pre_gate_; i < long_end; ++i) {
     Float_t sample_value = cropped_wf[i];
     features.long_integral += sample_value;
     if (sample_value < 0)
@@ -254,6 +249,12 @@ WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
 
   if (features.long_integral <= 0) {
     stats_.rejected_negative_integral++;
+    return kFALSE;
+  }
+
+  if (((features.raw_pulse_height == 16384) && (polarity_ == 1)) ||
+      ((features.raw_pulse_height == 0) && (polarity_ == -1))) {
+    stats_.rejected_clipped++;
     return kFALSE;
   }
 
@@ -277,6 +278,7 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
   std::cout << std::endl;
   std::cout << "Rejected breakdown:" << std::endl;
   std::cout << "No trigger: " << stats_.rejected_no_trigger << std::endl;
+  std::cout << "Clipped ADC: " << stats_.rejected_clipped << std::endl;
   std::cout << "Insufficient samples: " << stats_.rejected_insufficient_samples
             << std::endl;
   std::cout << "Negative integral: " << stats_.rejected_negative_integral
