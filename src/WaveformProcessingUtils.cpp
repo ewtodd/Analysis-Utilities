@@ -45,9 +45,6 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                        "long_integral/F");
   output_tree_->Branch("passes_cuts", &current_features_.passes_cuts,
                        "passes_cuts/O");
-  output_tree_->Branch("negative_fraction",
-                       &current_features_.negative_fraction,
-                       "negative_fraction/F");
   output_tree_->Branch("timestamp", &current_features_.timestamp,
                        "timestamp/l");
 
