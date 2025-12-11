@@ -17,7 +17,7 @@
       in {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [ pkg-config gnumake clang-tools ];
-          buildInputs = with pkgs; [ nm-utils root ];
+          buildInputs = with pkgs; [ nm-utils-remote nm-utils-local root ];
 
           shellHook = ''
             echo "ROOT version: $(root-config --version)"
