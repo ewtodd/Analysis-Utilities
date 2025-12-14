@@ -11,12 +11,19 @@
 #include <TLegend.h>
 #include <TROOT.h>
 #include <TStyle.h>
-#include <string>
 #include <vector>
 
 class PlottingUtils {
 public:
-  static void SetROOTStyle();
+  static void SetROOTPreferences();
+  static void ConfigureAndDrawGraph(TGraph *graph, Int_t color,
+                                    const TString title);
+  static void ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
+                                        const TString title = "");
+  static void ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
+                                          Int_t color,
+                                          const TString title = "");
+
   static void ConfigureGraph(TGraph *graph, Int_t color, const TString title);
   static void ConfigureHistogram(TH1 *hist, Int_t color,
                                  const TString title = "");
@@ -24,12 +31,12 @@ public:
                                    const TString title = "");
 
   static void ConfigureCanvas(TCanvas *canvas, Bool_t logy = kFALSE);
+  static void SaveFigure(TCanvas *canvas, TString output_name);
 
-  static TLegend *CreateLegend(Double_t x1 = 0.7, Double_t y1 = 0.7,
-                               Double_t x2 = 0.9, Double_t y2 = 0.9);
+  static void AddLegend(Double_t x1 = 0.7, Double_t y1 = 0.7, Double_t x2 = 0.9,
+                        Double_t y2 = 0.9);
   static void AddSubplotLabel(const TString label, Double_t x = 0.9,
                               Double_t y = 0.85);
-  static std::string CleanSourceName(const std::string &source_name);
 
   static std::vector<Int_t> GetDefaultColors();
   static Int_t GetSourceColor(Int_t source_id);

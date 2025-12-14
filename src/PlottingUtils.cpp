@@ -8,9 +8,8 @@
 #include <TROOT.h>
 #include <TStyle.h>
 #include <TSystem.h>
-#include <algorithm>
 
-void PlottingUtils::SetROOTStyle() {
+void PlottingUtils::SetROOTPreferences() {
   gStyle->SetOptStat(0);
   gStyle->SetOptFit(0);
   gStyle->SetPadLeftMargin(0.15);
@@ -34,21 +33,9 @@ void PlottingUtils::SetROOTStyle() {
   gStyle->SetPadTickY(2);
   gROOT->ForceStyle(kTRUE);
   gROOT->SetBatch(kTRUE);
-}
-
-std::string PlottingUtils::CleanSourceName(const std::string &source_name) {
-  std::string clean_name = source_name;
-
-  std::replace(clean_name.begin(), clean_name.end(), ' ', '_');
-  std::replace(clean_name.begin(), clean_name.end(), '-', '_');
-  std::replace(clean_name.begin(), clean_name.end(), '&', '_');
-
-  std::string::iterator new_end =
-      std::unique(clean_name.begin(), clean_name.end(),
-                  [](char a, char b) { return a == '_' && b == '_'; });
-  clean_name.erase(new_end, clean_name.end());
-
-  return clean_name;
+  if (gSystem->AccessPathName("plots")) {
+    gSystem->mkdir("plots", kTRUE);
+  }
 }
 
 void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
@@ -107,7 +94,38 @@ void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
   canvas->SetRightMargin(0.15);
 }
 
+void PlottingUtils::ConfigureAndDrawGraph(TGraph *graph, Int_t color,
+                                          const TString title) {
+  if (!graph)
+    return;
+
+  ConfigureGraph(graph, color, title);
+  graph->Draw();
+}
+
+void PlottingUtils::ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
+                                              const TString title) {
+  if (!hist)
+    return;
+
+  ConfigureHistogram(hist, color, title);
+  hist->Draw();
+}
+
+void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
+                                                Int_t color,
+                                                const TString title) {
+  if (!hist)
+    return;
+  if (!canvas)
+    return;
+
+  ConfigureAndDraw2DHistogram(hist, canvas, color, title);
+  hist->Draw();
+}
+
 void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
+
   if (!canvas)
     return;
 
@@ -117,6 +135,10 @@ void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
 
   canvas->SetTicks(1, 1);
   gPad->SetTicks(1, 1);
+}
+
+void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename) {
+  canvas->Print("plots/" + output_filename);
 }
 
 std::vector<Int_t> PlottingUtils::GetDefaultColors() {
@@ -129,14 +151,14 @@ Int_t PlottingUtils::GetSourceColor(Int_t source_id) {
   return colors[source_id % colors.size()];
 }
 
-TLegend *PlottingUtils::CreateLegend(Double_t x1, Double_t y1, Double_t x2,
-                                     Double_t y2) {
+void PlottingUtils::AddLegend(Double_t x1, Double_t y1, Double_t x2,
+                              Double_t y2) {
   TLegend *leg = new TLegend(x1, y1, x2, y2);
   leg->SetBorderSize(1);
   leg->SetFillColor(kWhite);
   leg->SetTextSize(0.05);
   leg->SetTextFont(132);
-  return leg;
+  leg->Draw();
 }
 
 void PlottingUtils::AddSubplotLabel(const TString label, Double_t x,
