@@ -31,7 +31,8 @@ public:
                                    const TString title = "");
 
   static void ConfigureCanvas(TCanvas *canvas, Bool_t logy = kFALSE);
-  static void SaveFigure(TCanvas *canvas, TString output_name);
+  static void SaveFigure(TCanvas *canvas, TString output_name,
+                         Bool_t log = kTRUE);
 
   static void AddLegend(Double_t x1 = 0.7, Double_t y1 = 0.7, Double_t x2 = 0.9,
                         Double_t y2 = 0.9);

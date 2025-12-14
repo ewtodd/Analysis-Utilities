@@ -137,8 +137,13 @@ void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
   gPad->SetTicks(1, 1);
 }
 
-void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename) {
+void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename,
+                               Bool_t log) {
   canvas->Print("plots/" + output_filename);
+  if (log) {
+    canvas->SetLogy(kTRUE);
+    canvas->Print("plots/log_" + output_filename);
+  }
 }
 
 std::vector<Int_t> PlottingUtils::GetDefaultColors() {
