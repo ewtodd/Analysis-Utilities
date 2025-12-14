@@ -5,6 +5,7 @@
 #include <TFile.h>
 #include <TROOT.h>
 #include <TTree.h>
+#include <iostream>
 #include <vector>
 
 struct WaveformFeatures {
