@@ -35,6 +35,12 @@ Bool_t FitUtils::FitPeak(TCanvas *canvas, const TString input_name,
       new TH1F("", Form(";%s [a.u.]; Counts", formatted_branch_name.Data()),
                num_hist_bins_, 0, max_hist_value_);
 
+  Int_t num_entries = working_tree_->GetEntries();
+  for (Int_t i = 0; i < num_entries; i++) {
+    working_tree_->GetEntry(i);
+    hist->Fill(working_value_);
+  }
+
   fit_function_->SetParName(0, "Amplitude");
   fit_function_->SetParName(1, "Mean");
   fit_function_->SetParName(2, "Sigma");
@@ -42,6 +48,8 @@ Bool_t FitUtils::FitPeak(TCanvas *canvas, const TString input_name,
   fit_function_->SetParName(4, "Bkg_Slope");
 
   fit_function_->SetParLimits(0, 0, 1e5);
+  fit_function_->SetParLimits(1, 0, max_hist_value_);
+  fit_function_->SetParLimits(2, 0, 0.1 * max_hist_value_);
   fit_function_->SetParLimits(3, 0, 0);
   fit_function_->SetParLimits(4, 0, 0);
 
