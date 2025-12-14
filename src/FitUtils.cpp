@@ -57,7 +57,7 @@ Bool_t FitUtils::FitPeak(TCanvas *canvas, const TString input_name,
 
   if (fit_result.Get() && fit_result->IsValid()) {
     fit_result->Draw();
-    PlottingUtils::SaveFigure(canvas, input_name, kFALSE);
+    PlottingUtils::SaveFigure(canvas, input_name + ".png", kFALSE);
     fit_successful_ = kTRUE;
     return kTRUE;
   }
