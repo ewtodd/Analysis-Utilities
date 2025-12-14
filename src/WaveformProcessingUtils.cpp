@@ -1,8 +1,4 @@
 #include "WaveformProcessingUtils.hpp"
-#include <TMath.h>
-#include <algorithm>
-#include <glob.h>
-#include <iostream>
 
 WaveformProcessingUtils::WaveformProcessingUtils()
     : polarity_(1), trigger_threshold_(0.15), pre_samples_(10),

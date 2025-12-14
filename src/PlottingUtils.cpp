@@ -1,13 +1,4 @@
 #include "PlottingUtils.hpp"
-#include <TCanvas.h>
-#include <TGraph.h>
-#include <TGraphErrors.h>
-#include <TH1F.h>
-#include <TLatex.h>
-#include <TLegend.h>
-#include <TROOT.h>
-#include <TStyle.h>
-#include <TSystem.h>
 
 void PlottingUtils::SetROOTPreferences() {
   gStyle->SetOptStat(0);
