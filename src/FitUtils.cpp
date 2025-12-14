@@ -42,8 +42,8 @@ Bool_t FitUtils::FitPeak(TCanvas *canvas, const TString input_name,
   fit_function_->SetParName(4, "Bkg_Slope");
 
   fit_function_->SetParLimits(0, 0, 1e5);
-  fit_function_->SetParLimits(3, -10, 10);
-  fit_function_->SetParLimits(4, -1e5, 0);
+  fit_function_->SetParLimits(3, 0, 0);
+  fit_function_->SetParLimits(4, 0, 0);
 
   TFitResultPtr fit_result = hist->Fit(fit_function_, "LSRN+");
 
