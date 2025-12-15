@@ -105,10 +105,8 @@ void PlottingUtils::ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
 
 void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
                                                 const TString title) {
-  if (!hist) {
-    std::cout << "No histogram." << std::endl;
+  if (!hist)
     return;
-  }
   if (!canvas)
     return;
 
