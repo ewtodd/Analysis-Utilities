@@ -1,5 +1,5 @@
 {
-  description = "Nuclear Measurements Analysis Utilities";
+  description = "Nuclear Measurement Utilities";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -56,9 +56,8 @@
             libdir=\''${exec_prefix}/lib
             includedir=\''${prefix}/include
 
-            Name: nm-toolkit 
-            Description: Nuclear Measurements Analysis Toolkit 
-            Version: 0.3
+            Name: nm-utils 
+            Description: Nuclear Measurement Utilities 
             Libs: -L\''${libdir} -lnm-toolkit
             Cflags: -I\''${includedir}
             EOF
@@ -81,7 +80,7 @@
           buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
 
           shellHook = ''
-            echo "Development environment for working on the nuclear measurement toolkit source"
+            echo "Development environment for working on the nuclear measurement utilities source"
 
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
             STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
@@ -90,17 +89,16 @@
             export CPLUS_INCLUDE_PATH="$STDLIB_PATH:$STDLIB_MACHINE_PATH:$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
             export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"
             export LD_LIBRARY_PATH="$PWD/lib:$LD_LIBRARY_PATH"
-
-            echo "C++ stdlib: $STDLIB_PATH"
           '';
         };
       })) // {
         templates = {
           default = {
             path = ./templates/standard;
-            description = "Standard ROOT waveform analysis pipeline.";
+            description = "Standard analysis development environment.";
             welcomeText = ''
               Run `nix develop` to enter the development environment.
+              If you have local libraries in include/src, use the included Makefile, and run your macros with root -l macro.cpp+.
             '';
           };
           standard = self.templates.default;
