@@ -22,13 +22,12 @@ public:
   static void ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
                                         const TString title = "");
   static void ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
-                                          Int_t color,
                                           const TString title = "");
 
   static void ConfigureGraph(TGraph *graph, Int_t color, const TString title);
   static void ConfigureHistogram(TH1 *hist, Int_t color,
                                  const TString title = "");
-  static void Configure2DHistogram(TH2 *hist, TCanvas *canvas, Int_t color,
+  static void Configure2DHistogram(TH2 *hist, TCanvas *canvas,
                                    const TString title = "");
 
   static void ConfigureCanvas(TCanvas *canvas, Bool_t logy = kFALSE);

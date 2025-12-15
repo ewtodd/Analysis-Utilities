@@ -65,7 +65,7 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
 }
 
 void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
-                                         Int_t color, const TString title) {
+                                         const TString title) {
   if (!hist)
     return;
   if (!canvas)
@@ -104,14 +104,13 @@ void PlottingUtils::ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
 }
 
 void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
-                                                Int_t color,
                                                 const TString title) {
   if (!hist)
     return;
   if (!canvas)
     return;
 
-  ConfigureAndDraw2DHistogram(hist, canvas, color, title);
+  ConfigureAndDraw2DHistogram(hist, canvas, title);
   hist->Draw();
 }
 
