@@ -1,8 +1,8 @@
 #include "WaveformProcessingUtils.hpp"
 
 WaveformProcessingUtils::WaveformProcessingUtils()
-    : polarity_(1), trigger_threshold_(0.15), pre_samples_(10),
-      post_samples_(100), max_events_(-1), verbose_(kFALSE),
+    : polarity_(1), trigger_threshold_(0.15), num_samples_baseline_(10),
+      pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
       current_waveform_(nullptr) {}
 
@@ -20,7 +20,6 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                                             const TString output_name) {
 
   TString output_filename = output_name + ".root";
-  // Create output file and tree
   output_file_ = new TFile(output_filename, "RECREATE");
   if (!output_file_ || output_file_->IsZombie()) {
     std::cout << "Error: Could not create output file " << output_filename
@@ -30,13 +29,12 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
 
   output_tree_ = new TTree("features", "Waveform Features");
 
-  // Set up feature branches
   output_tree_->Branch("pulse_height", &current_features_.pulse_height,
                        "pulse_height/F");
-  output_tree_->Branch("peak_position", &current_features_.peak_position,
-                       "peak_position/I");
   output_tree_->Branch("trigger_position", &current_features_.trigger_position,
                        "trigger_position/I");
+  output_tree_->Branch("short_integral", &current_features_.short_integral,
+                       "short_integral/F");
   output_tree_->Branch("long_integral", &current_features_.long_integral,
                        "long_integral/F");
   output_tree_->Branch("passes_cuts", &current_features_.passes_cuts,
@@ -81,7 +79,8 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
     if (tree->GetEntry(entry) <= 0)
       continue;
 
-    // Convert TArrayS to std::vector
+    // Convert TArrayS to std::vector for ease of calculation
+    // TO DO: consider whether or not this is actually necessary
     std::vector<Short_t> waveform_data;
     waveform_data.reserve(samples->GetSize());
     for (Int_t i = 0; i < samples->GetSize(); ++i) {
@@ -96,7 +95,6 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   file->Close();
 
   output_file_->cd();
-  // Write and close
   output_tree_->Write("", TObject::kOverwrite);
   output_file_->Close();
 
@@ -121,7 +119,6 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
     return kFALSE;
   }
 
-  // Check sufficient samples
   if (trigger_pos < pre_samples_ ||
       (Int_t(processed_wf.size()) - trigger_pos) <= post_samples_) {
     stats_.rejected_insufficient_samples++;
@@ -158,7 +155,8 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
 std::vector<Float_t>
 WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
   Float_t baseline = 0;
-  Int_t baseline_samples = TMath::Min(10, Int_t(samples.size()));
+  Int_t baseline_samples =
+      TMath::Min(num_samples_baseline_, Int_t(samples.size()));
 
   for (Int_t i = 0; i < baseline_samples; ++i) {
     baseline += samples[i];
@@ -213,27 +211,34 @@ WaveformProcessingUtils::CropWaveform(const std::vector<Float_t> &waveform,
 WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
     const std::vector<Float_t> &cropped_wf) {
   WaveformFeatures features;
-  features.trigger_position = pre_samples_;
+  features.trigger_position = pre_samples_ - pre_gate_;
 
-  // Find peak in cropped waveform
   auto max_it = std::max_element(cropped_wf.begin(), cropped_wf.end());
   features.pulse_height = *max_it;
   features.peak_position = std::distance(cropped_wf.begin(), max_it);
 
+  features.short_integral = 0;
   features.long_integral = 0;
 
   Int_t negative_samples = 0;
-  Int_t long_end = Int_t(cropped_wf.size());
+  Int_t short_end = TMath::Min(features.trigger_position + short_gate_,
+                               Int_t(cropped_wf.size()));
+
+  Int_t long_end = TMath::Min(features.trigger_position + long_gate_,
+                              Int_t(cropped_wf.size()));
 
   for (Int_t i = pre_samples_ - pre_gate_; i < long_end; ++i) {
     Float_t sample_value = cropped_wf[i];
     features.long_integral += sample_value;
+    if (i < short_end) {
+      features.short_integral += sample_value;
+    }
     if (sample_value < 0)
       negative_samples++;
   }
   features.timestamp = current_timestamp_ * 1e-12;
 
-  features.passes_cuts = kTRUE; // Will be updated in ApplyQualityCuts
+  features.passes_cuts = kTRUE;
   features.negative_fraction =
       Float_t(negative_samples) / Float_t(long_end - pre_samples_);
 
@@ -272,18 +277,19 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
   std::cout << std::endl;
   std::cout << "Accepted: " << stats_.accepted << std::endl;
   std::cout << std::endl;
-  std::cout << "Rejected breakdown:" << std::endl;
-  std::cout << "No trigger: " << stats_.rejected_no_trigger << std::endl;
-  std::cout << "Clipped ADC: " << stats_.rejected_clipped << std::endl;
-  std::cout << "Insufficient samples: " << stats_.rejected_insufficient_samples
+  std::cout << "Rejected no trigger: " << stats_.rejected_no_trigger
             << std::endl;
-  std::cout << "Negative integral: " << stats_.rejected_negative_integral
+  std::cout << "Rejected clipped ADC: " << stats_.rejected_clipped << std::endl;
+  std::cout << "Rejected insufficient samples: "
+            << stats_.rejected_insufficient_samples << std::endl;
+  std::cout << "Rejected negative integral: "
+            << stats_.rejected_negative_integral << std::endl;
+  std::cout << "Rejected bad baseline: " << stats_.rejected_baseline
             << std::endl;
-  std::cout << "Bad baseline: " << stats_.rejected_baseline << std::endl;
   std::cout << std::endl;
 
   if (stats_.total_processed > 0) {
-    std::cout << "  Acceptance rate: "
+    std::cout << "Acceptance rate: "
               << 100 * Float_t(stats_.accepted) /
                      Float_t(stats_.total_processed)
               << "%" << std::endl;

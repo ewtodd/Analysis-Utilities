@@ -13,6 +13,7 @@ struct WaveformFeatures {
   Float_t pulse_height;
   Int_t peak_position;
   Int_t trigger_position;
+  Float_t short_integral;
   Float_t long_integral;
   Float_t negative_fraction;
   Bool_t passes_cuts;
@@ -33,6 +34,7 @@ class WaveformProcessingUtils {
 private:
   Int_t polarity_;
   Double_t trigger_threshold_;
+  Int_t num_samples_baseline_;
   Int_t pre_samples_;
   Int_t post_samples_;
   Int_t pre_gate_;
@@ -58,6 +60,9 @@ public:
   void SetTriggerThreshold(Double_t threshold) {
     trigger_threshold_ = threshold;
   }
+  void SetNumberOfSamplesForBaseline(Int_t num_samples_baseline) {
+    num_samples_baseline_ = num_samples_baseline;
+  }
   void SetSampleWindows(Int_t pre_samples, Int_t post_samples) {
     pre_samples_ = pre_samples;
     post_samples_ = post_samples;
@@ -82,7 +87,6 @@ public:
   WaveformFeatures ExtractFeatures(const std::vector<Float_t> &cropped_wf);
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
 
-  // Statistics
   void PrintAllStatistics() const;
   ProcessingStats GetStats() const { return stats_; };
 };
