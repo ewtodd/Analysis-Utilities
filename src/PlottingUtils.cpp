@@ -110,8 +110,8 @@ void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
   if (!canvas)
     return;
 
-  ConfigureAndDraw2DHistogram(hist, canvas, title);
-  hist->Draw();
+  Configure2DHistogram(hist, canvas, title);
+  hist->Draw("COLZ");
 }
 
 void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
