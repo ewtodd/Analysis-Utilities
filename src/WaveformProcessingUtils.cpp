@@ -87,8 +87,7 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
       waveform_data.push_back(samples->At(i));
     }
     stats_.total_processed++;
-    if (ProcessWaveform(waveform_data)) {
-    }
+    ProcessWaveform(waveform_data);
   }
 
   delete samples;
