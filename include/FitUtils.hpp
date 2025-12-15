@@ -64,7 +64,7 @@ public:
   TF1 *GetFitFunction() { return fit_function_; }
 
   FitResult FitPeak(TCanvas *canvas, Int_t color, const TString peak_name,
-                    const TString formatted_branch_name);
+                    const TString formatted_branch_name_with_units);
 
   Bool_t LoadProcessed(const TString input_name, const TString branch_name);
 };

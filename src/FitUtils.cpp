@@ -52,10 +52,10 @@ void FitUtils::PlotFit(TCanvas *canvas, Int_t color, const TString peak_name) {
 
 FitResult FitUtils::FitPeak(TCanvas *canvas, Int_t color,
                             const TString peak_name,
-                            const TString formatted_branch_name) {
+                            const TString formatted_branch_name_with_units) {
   FitResult results;
   working_hist_ =
-      new TH1F("", Form(";%s [a.u.]; Counts", formatted_branch_name.Data()),
+      new TH1F("", Form(";%s; Counts", formatted_branch_name_with_units.Data()),
                num_hist_bins_, 0, max_hist_value_);
 
   Int_t num_entries = working_tree_->GetEntries();
