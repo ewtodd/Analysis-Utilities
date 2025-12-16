@@ -18,8 +18,11 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
 
 Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                                             const TString output_name) {
+  if (gSystem->AccessPathName("root_files")) {
+    gSystem->mkdir("root_files", kTRUE);
+  }
 
-  TString output_filename = output_name + ".root";
+  TString output_filename = "root_files/" + output_name + ".root";
   output_file_ = new TFile(output_filename, "RECREATE");
   if (!output_file_ || output_file_->IsZombie()) {
     std::cout << "Error: Could not create output file " << output_filename
@@ -79,8 +82,6 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
     if (tree->GetEntry(entry) <= 0)
       continue;
 
-    // Convert TArrayS to std::vector for ease of calculation
-    // TO DO: consider whether or not this is actually necessary
     std::vector<Short_t> waveform_data;
     waveform_data.reserve(samples->GetSize());
     for (Int_t i = 0; i < samples->GetSize(); ++i) {
