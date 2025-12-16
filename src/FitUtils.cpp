@@ -15,7 +15,17 @@ FitUtils::~FitUtils() {
 
 Bool_t FitUtils::LoadProcessed(const TString input_name,
                                const TString branch_name) {
-  TString input_filename = input_name + ".root";
+
+  if (gSystem->AccessPathName("root_files")) {
+    gSystem->mkdir("root_files", kTRUE);
+    std::cout << "Subdirectory root_files not found, creating..." << std::endl;
+    std::cout << "Place input files in root_files subdirectory. If you process "
+                 "with WaveformProcessingUtils, this is done automatically."
+              << std::endl;
+    return kFALSE;
+  }
+
+  TString input_filename = "root_files/" + input_name + ".root";
   TFile *input_file = new TFile(input_filename, "READ");
 
   if (!input_file || input_file->IsZombie()) {
