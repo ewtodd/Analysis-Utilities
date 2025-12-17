@@ -1,5 +1,5 @@
-#ifndef FITUTILS_H
-#define FITUTILS_H
+#ifndef FITTINGUTILS_H
+#define FITTINGUTILS_H
 
 #include "PlottingUtils.hpp"
 #include <TCanvas.h>
@@ -17,7 +17,7 @@ struct FitResult {
   Float_t sigma_error;
 };
 
-class FitUtils {
+class FittingUtils {
 private:
   TF1 *fit_function_;
   TTree *working_tree_;
@@ -31,8 +31,8 @@ private:
   void PlotFit(TCanvas *canvas, Int_t color, const TString peak_name);
 
 public:
-  FitUtils();
-  ~FitUtils();
+  FittingUtils();
+  ~FittingUtils();
   void SetNumHistBins(Int_t num_hist_bins) { num_hist_bins_ = num_hist_bins; }
 
   void SetMaxHistValue(Float_t max_hist_value) {
