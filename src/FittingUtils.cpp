@@ -1,20 +1,20 @@
-#include "FitUtils.hpp"
+#include "FittingUtils.hpp"
 
-FitUtils::FitUtils()
+FittingUtils::FittingUtils()
     : working_tree_(nullptr), working_value_(0), num_hist_bins_(0),
       max_hist_value_(0) {
   fit_function_ = new TF1("gaussian_plus_linear", "gaus(0)+pol1(3)");
   fit_function_->SetParameter(3, 0);
 }
 
-FitUtils::~FitUtils() {
+FittingUtils::~FittingUtils() {
   fit_function_ = nullptr;
   working_hist_ = nullptr;
   working_tree_ = nullptr;
 }
 
-Bool_t FitUtils::LoadProcessed(const TString input_name,
-                               const TString branch_name) {
+Bool_t FittingUtils::LoadProcessed(const TString input_name,
+                                   const TString branch_name) {
 
   if (gSystem->AccessPathName("root_files")) {
     gSystem->mkdir("root_files", kTRUE);
@@ -39,7 +39,8 @@ Bool_t FitUtils::LoadProcessed(const TString input_name,
   return kTRUE;
 }
 
-void FitUtils::PlotFit(TCanvas *canvas, Int_t color, const TString peak_name) {
+void FittingUtils::PlotFit(TCanvas *canvas, Int_t color,
+                           const TString peak_name) {
   Float_t range_low = fit_range_low_ - 0.1 * fit_range_low_;
   Float_t range_up = fit_range_high_ + 0.1 * fit_range_high_;
   working_hist_->GetXaxis()->SetRangeUser(range_low, range_up);
@@ -60,9 +61,9 @@ void FitUtils::PlotFit(TCanvas *canvas, Int_t color, const TString peak_name) {
   PlottingUtils::SaveFigure(canvas, peak_name + ".png", kTRUE);
 }
 
-FitResult FitUtils::FitPeak(TCanvas *canvas, Int_t color,
-                            const TString peak_name,
-                            const TString formatted_branch_name_with_units) {
+FitResult
+FittingUtils::FitPeak(TCanvas *canvas, Int_t color, const TString peak_name,
+                      const TString formatted_branch_name_with_units) {
   FitResult results;
   working_hist_ =
       new TH1F("", Form(";%s; Counts", formatted_branch_name_with_units.Data()),

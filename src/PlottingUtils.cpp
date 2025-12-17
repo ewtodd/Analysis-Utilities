@@ -1,6 +1,6 @@
 #include "PlottingUtils.hpp"
 
-void PlottingUtils::SetROOTPreferences() {
+void PlottingUtils::SetStylePreferences() {
   gStyle->SetOptStat(0);
   gStyle->SetOptFit(0);
   gStyle->SetPadLeftMargin(0.15);
@@ -22,11 +22,6 @@ void PlottingUtils::SetROOTPreferences() {
   gStyle->SetGridColor(kGray);
   gStyle->SetPadTickX(2);
   gStyle->SetPadTickY(2);
-  gROOT->ForceStyle(kTRUE);
-  gROOT->SetBatch(kTRUE);
-  if (gSystem->AccessPathName("plots")) {
-    gSystem->mkdir("plots", kTRUE);
-  }
 }
 
 void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
@@ -39,6 +34,7 @@ void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
   graph->GetYaxis()->SetLabelSize(0.06);
   graph->GetXaxis()->SetTitleOffset(1.2);
   graph->GetYaxis()->SetTitleOffset(1.2);
+  graph->SetLineWidth(2);
 }
 
 void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,

@@ -16,7 +16,7 @@
 
 class PlottingUtils {
 public:
-  static void SetROOTPreferences();
+  static void SetStylePreferences();
   static void ConfigureAndDrawGraph(TGraph *graph, Int_t color,
                                     const TString title);
   static void ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
