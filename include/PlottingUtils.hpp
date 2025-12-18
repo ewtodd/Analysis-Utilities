@@ -10,6 +10,7 @@
 #include <TLatex.h>
 #include <TLegend.h>
 #include <TROOT.h>
+#include <TRandom3.h>
 #include <TStyle.h>
 #include <TSystem.h>
 #include <vector>
@@ -40,6 +41,8 @@ public:
                               Double_t y = 0.85);
 
   static std::vector<Int_t> GetDefaultColors();
+
+  static TString GetRandomName();
 };
 
 #endif

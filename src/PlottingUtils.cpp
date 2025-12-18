@@ -155,3 +155,10 @@ void PlottingUtils::AddSubplotLabel(const TString label, Double_t x,
   latex->SetTextAlign(33);
   latex->Draw();
 }
+
+TString PlottingUtils::GetRandomName() {
+  TRandom3 *generator = new TRandom3();
+  Double_t number = generator->Rndm();
+  TString name = Form("name%f.4f", number);
+  return name;
+}
