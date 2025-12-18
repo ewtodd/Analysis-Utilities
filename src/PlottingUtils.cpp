@@ -51,7 +51,7 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
 
   hist->SetMinimum(10);
   hist->GetYaxis()->SetNdivisions(50109);
-  hist->GetXaxis()->SetNdivisions(506);
+  hist->GetXaxis()->SetNdivisions(505);
   hist->GetXaxis()->SetTitleSize(0.06);
   hist->GetYaxis()->SetTitleSize(0.06);
   hist->GetXaxis()->SetLabelSize(0.06);
