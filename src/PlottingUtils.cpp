@@ -157,8 +157,8 @@ void PlottingUtils::AddSubplotLabel(const TString label, Double_t x,
 }
 
 TString PlottingUtils::GetRandomName() {
-  TRandom3 *generator = new TRandom3();
-  Double_t number = generator->Rndm();
+  static TRandom3 generator(0);
+  Double_t number = generator.Rndm();
   TString name = Form("name%.7f", number);
   return name;
 }
