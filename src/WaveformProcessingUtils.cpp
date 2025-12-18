@@ -236,7 +236,7 @@ WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
     if (sample_value < 0)
       negative_samples++;
   }
-  features.timestamp = current_timestamp_ * 1e-12;
+  features.timestamp = current_timestamp_;
 
   features.passes_cuts = kTRUE;
   features.negative_fraction =
