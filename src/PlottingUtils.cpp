@@ -137,11 +137,6 @@ std::vector<Int_t> PlottingUtils::GetDefaultColors() {
           kOrange,  kCyan + 1, kYellow + 2};
 }
 
-Int_t PlottingUtils::GetSourceColor(Int_t source_id) {
-  auto colors = GetDefaultColors();
-  return colors[source_id % colors.size()];
-}
-
 void PlottingUtils::AddLegend(Double_t x1, Double_t y1, Double_t x2,
                               Double_t y2) {
   TLegend *leg = new TLegend(x1, y1, x2, y2);

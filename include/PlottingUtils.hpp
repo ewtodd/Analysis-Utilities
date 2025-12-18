@@ -40,7 +40,6 @@ public:
                               Double_t y = 0.85);
 
   static std::vector<Int_t> GetDefaultColors();
-  static Int_t GetSourceColor(Int_t source_id);
 };
 
 #endif
