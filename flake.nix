@@ -11,8 +11,8 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
-          pname = "nm-utils";
-          version = "18.12.2025";
+          pname = "analysis-utilities";
+          version = "24.12.2025";
 
           src = ./.;
 
@@ -50,15 +50,15 @@
             fi
 
             mkdir -p $out/lib/pkgconfig
-            cat > $out/lib/pkgconfig/nm-toolkit.pc <<EOF
+            cat > $out/lib/pkgconfig/analysis-utilities.pc <<EOF
             prefix=$out
             exec_prefix=\''${prefix}
             libdir=\''${exec_prefix}/lib
             includedir=\''${prefix}/include
 
-            Name: nm-utils 
-            Description: Nuclear Measurement Utilities 
-            Libs: -L\''${libdir} -lnm-toolkit
+            Name: analysis-utilities 
+            Description: Analysis Utilities for Nuclear Measurements 
+            Libs: -L\''${libdir} -lanalysis-utilities
             Cflags: -I\''${includedir}
             EOF
           '';
@@ -80,7 +80,7 @@
           buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
 
           shellHook = ''
-            echo "Development environment for working on the nuclear measurement utilities source"
+            echo "Development environment for working on the analysis utilities source"
 
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
             STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
