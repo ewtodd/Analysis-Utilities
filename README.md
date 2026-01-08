@@ -11,5 +11,6 @@ This will create a flake.nix file containing a development environment that has 
 
 # Roadmap
 - [ ] Implement "true" digital constant fraction discrimination for triggering. 
-- [ ] Implement support for converting binary files (including those from wavedump) to ROOT so that the libraries can be used. 
-- [ ] Implement support for converting CoMPASS csv files to ROOT so that the libraries can be used.
+- [x] Implement support for converting CoMPASS binary files to ROOT.
+- [ ] Implement support for converting wavedump binary files to ROOT.
+- [ ] Implement support for converting CoMPASS csv files to ROOT.

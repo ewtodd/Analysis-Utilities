@@ -84,9 +84,6 @@ void CoMPASSData::PrintHeader() const {
   std::cout << "CoMPASS event header..." << std::endl;
   std::cout << "Header:    0x" << std::hex << header << std::dec
             << " (Binary: " << std::bitset<16>(header) << ")" << std::endl;
-  std::cout << "Board:     " << board << std::endl;
-  std::cout << "Channel:   " << channel << std::endl;
-  std::cout << "Timestamp: " << timestamp << " ps" << std::endl;
 
   std::cout << std::endl;
   std::cout << "Control bits..." << std::endl;
@@ -163,10 +160,37 @@ Bool_t CoMPASSReader::Open(const char *fname) {
   }
 
   std::cout << "CoMPASS file opened: " << fname << std::endl;
-  std::cout << "Global header: 0x" << std::hex << global_header << std::dec
-            << std::endl;
-  std::cout << "Control bits: " << std::bitset<4>(global_header & 0x000F)
-            << std::endl;
+
+  return kTRUE;
+}
+
+Bool_t CoMPASSReader::Open(const char *fname, UShort_t header_override) {
+  if (!BinaryReader::Open(fname)) {
+    return kFALSE;
+  }
+
+  if (header_override != 0) {
+    global_header = header_override;
+    std::cout << "CoMPASS continuation file opened: " << fname << std::endl;
+    std::cout << "Using provided global header: 0x" << std::hex << global_header
+              << std::dec << std::endl;
+    std::cout << "Control bits: " << std::bitset<4>(global_header & 0x000F)
+              << std::endl;
+  } else {
+    file.read(reinterpret_cast<char *>(&global_header), sizeof(UShort_t));
+    bytes_read += sizeof(UShort_t);
+
+    if ((global_header & 0xCAE0) != 0xCAE0) {
+      std::cerr << "Warning: Header does not match 0xCAEx pattern: 0x"
+                << std::hex << global_header << std::dec << std::endl;
+    }
+
+    std::cout << "CoMPASS file opened: " << fname << std::endl;
+    std::cout << "Global header: 0x" << std::hex << global_header << std::dec
+              << std::endl;
+    std::cout << "Control bits: " << std::bitset<4>(global_header & 0x000F)
+              << std::endl;
+  }
 
   return kTRUE;
 }

@@ -151,6 +151,7 @@ public:
   virtual ~CoMPASSReader() {}
 
   Bool_t Open(const char *fname) override;
+  Bool_t Open(const char *fname, UShort_t header_override);
 
   Bool_t ReadEvent() override;
 
