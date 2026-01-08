@@ -7,19 +7,34 @@
     utils.url = "github:ewtodd/Analysis-Utilities";
   };
 
-  outputs = { self, nixpkgs, flake-utils, utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         analysis-utils = utils.packages.${system}.default;
-      in {
+      in
+      {
         devShells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [ pkg-config gnumake clang-tools ];
-          buildInputs = with pkgs; [ analysis-utils root ];
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            gnumake
+            clang-tools
+          ];
+          buildInputs = with pkgs; [
+            analysis-utils
+            root
+          ];
 
           shellHook = ''
             echo "ROOT version: $(root-config --version)"
-            echo "Analysis utilities version: ${analysis-utils}"
+            echo "Analysis-Utilities version: ${analysis-utils.version}"
 
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
             STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
@@ -35,5 +50,6 @@
             export LD_LIBRARY_PATH="$PWD/lib:${analysis-utils}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           '';
         };
-      });
+      }
+    );
 }

@@ -6,13 +6,19 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    (flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
+    (flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
-          version = "24.12.2025";
+          version = "08.01.2026";
 
           src = ./.;
 
@@ -22,7 +28,9 @@
             gnumake
           ];
 
-          buildInputs = with pkgs; [ root tomlplusplus ];
+          buildInputs = with pkgs; [
+            root
+          ];
 
           buildPhase = ''
             make
@@ -73,11 +81,17 @@
 
           propagatedBuildInputs = [ pkgs.root ];
         };
-      in {
+      in
+      {
         packages.default = toolkit;
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ root gnumake pkg-config clang-tools ];
+          buildInputs = with pkgs; [
+            root
+            gnumake
+            pkg-config
+            clang-tools
+          ];
 
           shellHook = ''
             echo "Development environment for working on the analysis utilities source"
@@ -91,17 +105,19 @@
             export LD_LIBRARY_PATH="$PWD/lib:$LD_LIBRARY_PATH"
           '';
         };
-      })) // {
-        templates = {
-          default = {
-            path = ./templates/standard;
-            description = "Standard analysis development environment.";
-            welcomeText = ''
-              Run `nix develop` to enter the development environment.
-              If you have local libraries in include/src, use the included Makefile, and run your macros with root -l macro.cpp+.
-            '';
-          };
-          standard = self.templates.default;
+      }
+    ))
+    // {
+      templates = {
+        default = {
+          path = ./templates/standard;
+          description = "Standard analysis development environment.";
+          welcomeText = ''
+            Run `nix develop` to enter the development environment.
+            If you have local libraries in include/src, use the included Makefile, and run your macros with root -l macro.cpp+.
+          '';
         };
+        standard = self.templates.default;
       };
+    };
 }
