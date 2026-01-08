@@ -158,8 +158,6 @@ public:
   CoMPASSData &GetCurrentEvent() { return current_event; }
 
   UShort_t GetGlobalHeader() const { return global_header; }
-
-  ClassDef(CoMPASSReader, 1)
 };
 
 class WaveDump742Data {
@@ -198,8 +196,6 @@ public:
 
   void SetCorrectionsEnabled(Bool_t enable) { corrections_enabled = enable; }
   Bool_t GetCorrectionsEnabled() const { return corrections_enabled; }
-
-  ClassDef(WaveDump742Reader, 1)
 };
 
 #endif
