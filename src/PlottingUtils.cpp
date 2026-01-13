@@ -20,8 +20,8 @@ void PlottingUtils::SetStylePreferences() {
   gStyle->SetGridStyle(3);
   gStyle->SetGridWidth(1);
   gStyle->SetGridColor(kGray);
-  gStyle->SetPadTickX(2);
-  gStyle->SetPadTickY(2);
+  gStyle->SetPadTickX(1);
+  gStyle->SetPadTickY(1);
 }
 
 void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
