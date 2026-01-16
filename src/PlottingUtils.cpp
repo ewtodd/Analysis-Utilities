@@ -96,7 +96,7 @@ void PlottingUtils::ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
     return;
 
   ConfigureHistogram(hist, color, title);
-  hist->Draw();
+  hist->Draw("HIST");
 }
 
 void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
