@@ -48,8 +48,6 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
   hist->GetYaxis()->SetMoreLogLabels(kFALSE);
   hist->GetYaxis()->SetNoExponent(kFALSE);
   hist->GetXaxis()->SetNoExponent(kTRUE);
-
-  hist->SetMinimum(10);
   hist->GetYaxis()->SetNdivisions(50109);
   hist->GetXaxis()->SetNdivisions(505);
   hist->GetXaxis()->SetTitleSize(0.06);
