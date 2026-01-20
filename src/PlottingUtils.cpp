@@ -131,8 +131,11 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename,
 }
 
 std::vector<Int_t> PlottingUtils::GetDefaultColors() {
-  return {kRed + 1, kBlue + 1, kGreen + 2, kMagenta,
-          kOrange,  kCyan + 1, kYellow + 2};
+  return {kRed + 1,   kBlue + 1,   kGreen + 2,  kOrange + 1,  kMagenta + 1,
+          kCyan + 2,  kViolet + 1, kSpring - 1, kPink + 1,    kTeal + 2,
+          kAzure + 2, kYellow + 1, kOrange - 3, kMagenta - 3, kCyan - 6,
+          kRed - 4,   kBlue - 4,   kGreen - 6,  kViolet - 4,  kSpring + 5,
+          kPink - 3,  kTeal - 5,   kAzure - 3,  kOrange + 7};
 }
 
 void PlottingUtils::AddLegend(Double_t x1, Double_t y1, Double_t x2,
