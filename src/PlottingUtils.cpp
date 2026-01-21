@@ -44,7 +44,8 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
 
   hist->SetLineColor(color);
   hist->SetTitle(title);
-  hist->SetFillColorAlpha(color, 0.2);
+  hist->SetLineWidth(2);
+  hist->SetFillStyle(0);
   hist->GetYaxis()->SetMoreLogLabels(kFALSE);
   hist->GetYaxis()->SetNoExponent(kFALSE);
   hist->GetXaxis()->SetNoExponent(kTRUE);
@@ -74,7 +75,6 @@ void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
   hist->GetYaxis()->SetLabelSize(0.06);
   hist->GetXaxis()->SetTitleOffset(1.2);
   hist->GetYaxis()->SetTitleOffset(1.2);
-  hist->SetMinimum(1);
   canvas->SetLogz(kTRUE);
   canvas->SetRightMargin(0.15);
 }
