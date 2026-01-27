@@ -94,6 +94,7 @@
           ];
 
           shellHook = ''
+            export SHELL="/run/current-system/sw/bin/bash"
             echo "Development environment for working on the analysis utilities source"
 
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
