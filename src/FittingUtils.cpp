@@ -1,6 +1,6 @@
 #include "FittingUtils.hpp"
 
-Double_t Gaus(Double_t *x, Double_t *par) {
+Double_t FittingUtils::Gaus(Double_t *x, Double_t *par) {
   Double_t A = par[0];
   Double_t m = par[1];
   Double_t s = par[2];
@@ -9,7 +9,7 @@ Double_t Gaus(Double_t *x, Double_t *par) {
          TMath::Exp(-0.5 * y * y / (s * s));
 }
 
-Double_t LowTail(Double_t *x, Double_t *par) {
+Double_t FittingUtils::LowTail(Double_t *x, Double_t *par) {
   Double_t A = par[0];
   Double_t m = par[1];
   Double_t s = par[2];
@@ -18,7 +18,7 @@ Double_t LowTail(Double_t *x, Double_t *par) {
   return A * TMath::Exp(y / t) * (TMath::Erfc(y / (TMath::Sqrt(2) * s)) / 2);
 }
 
-Double_t HighTail(Double_t *x, Double_t *par) {
+Double_t FittingUtils::HighTail(Double_t *x, Double_t *par) {
   Double_t A = par[0];
   Double_t m = par[1];
   Double_t s = par[2];
@@ -27,7 +27,7 @@ Double_t HighTail(Double_t *x, Double_t *par) {
   return A * TMath::Exp(y / t) * (TMath::Erfc(y / (TMath::Sqrt(2) * s)) / 2);
 }
 
-Double_t LowStep(Double_t *x, Double_t *par) {
+Double_t FittingUtils::LowStep(Double_t *x, Double_t *par) {
   Double_t A = par[0];
   Double_t m = par[1];
   Double_t s = par[2];
@@ -35,7 +35,7 @@ Double_t LowStep(Double_t *x, Double_t *par) {
   return A * (TMath::Erfc(y / (TMath::Sqrt(2) * s)) / 2);
 }
 
-Double_t HighStep(Double_t *x, Double_t *par) {
+Double_t FittingUtils::HighStep(Double_t *x, Double_t *par) {
   Double_t A = par[0];
   Double_t m = par[1];
   Double_t s = par[2];
@@ -43,14 +43,14 @@ Double_t HighStep(Double_t *x, Double_t *par) {
   return A * (TMath::Erfc(y / (TMath::Sqrt(2) * s)) / 2);
 }
 
-Double_t GaussianLowTailLowStep(Double_t *x, Double_t *par) {
+Double_t FittingUtils::GaussianLowTailLowStep(Double_t *x, Double_t *par) {
   Double_t gaus_par[3] = {par[0], par[1], par[2]};
   Double_t tail_par[4] = {par[4], par[1], par[2], par[3]};
   Double_t step_par[3] = {par[5], par[1], par[2]};
   return Gaus(x, gaus_par) + LowTail(x, tail_par) + LowStep(x, step_par);
 }
 
-Double_t GaussianHighTailHighStep(Double_t *x, Double_t *par) {
+Double_t FittingUtils::GaussianHighTailHighStep(Double_t *x, Double_t *par) {
   Double_t gaus_par[3] = {par[0], par[1], par[2]};
   Double_t tail_par[4] = {par[4], par[1], par[2], par[3]};
   Double_t step_par[3] = {par[5], par[1], par[2]};

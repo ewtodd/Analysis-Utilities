@@ -12,14 +12,6 @@
 #include <TSystem.h>
 #include <TTree.h>
 
-Double_t Gaus(Double_t *x, Double_t *par);
-Double_t LowTail(Double_t *x, Double_t *par);
-Double_t HighTail(Double_t *x, Double_t *par);
-Double_t LowStep(Double_t *x, Double_t *par);
-Double_t HighStep(Double_t *x, Double_t *par);
-Double_t GaussianLowTailLowStep(Double_t *x, Double_t *par);
-Double_t GaussianHighTailHighStep(Double_t *x, Double_t *par);
-
 struct FitResultGaussianLinear {
   Float_t mu;
   Float_t mu_error;
@@ -68,6 +60,14 @@ private:
                                        const TString peak_name);
 
 public:
+  static Double_t Gaus(Double_t *x, Double_t *par);
+  static Double_t LowTail(Double_t *x, Double_t *par);
+  static Double_t HighTail(Double_t *x, Double_t *par);
+  static Double_t LowStep(Double_t *x, Double_t *par);
+  static Double_t HighStep(Double_t *x, Double_t *par);
+  static Double_t GaussianLowTailLowStep(Double_t *x, Double_t *par);
+  static Double_t GaussianHighTailHighStep(Double_t *x, Double_t *par);
+
   FittingUtils(Bool_t isGaussianLinear, Bool_t isGaussianLowTailLowStep,
                Bool_t isGaussianHighTailHighStep);
   ~FittingUtils();
