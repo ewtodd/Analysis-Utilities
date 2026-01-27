@@ -11,7 +11,7 @@ SOURCES = $(wildcard $(SRCDIR)/*.cpp)
 OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 HEADERS = $(wildcard $(INCDIR)/*.hpp)
 
-LIBNAME = lib-nm-toolkit
+LIBNAME = lib-analysis-utils
 SHAREDLIB = $(LIBDIR)/$(LIBNAME).so
 STATICLIB = $(LIBDIR)/$(LIBNAME).a
 
