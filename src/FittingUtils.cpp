@@ -1,48 +1,65 @@
 #include "FittingUtils.hpp"
 
-Double_t FittingUtils::Gaussian(Double_t x, Double_t *par) {
+FittingUtils::FittingUtils(TH1 *working_hist, Bool_t isDetailed)
+    : fit_range_low_(0), fit_range_high_(1e6) {
+  isDetailed_ = isDetailed;
+  working_hist_ = working_hist;
+  if (!isDetailed_)
+    fit_function_ = new TF1("Standard", &FittingFunctions::Standard,
+                            fit_range_low_, fit_range_high_, 5);
+  else
+    fit_function_ = new TF1("Detailed", &FittingFunctions::Detailed,
+                            fit_range_low_, fit_range_high_, 10);
+}
+
+FittingUtils::~FittingUtils() {
+  fit_function_ = nullptr;
+  working_hist_ = nullptr;
+}
+
+Double_t FittingFunctions::Gaussian(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  Double_t z = (x - mu) / sigma;
+  Double_t z = (x[0] - mu) / sigma;
   Double_t gaus_amplitude = par[2];
   return gaus_amplitude * TMath::Exp(-0.5 * z * z);
 }
 
-Double_t FittingUtils::LinearBackground(Double_t x, Double_t *par) {
+Double_t FittingFunctions::LinearBackground(Double_t *x, Double_t *par) {
   Double_t bkg_const = par[0];
   Double_t bkg_slope = par[1];
-  return bkg_slope * x + bkg_const;
+  return bkg_slope * x[0] + bkg_const;
 }
 
-Double_t FittingUtils::LowTail(Double_t x, Double_t *par) {
+Double_t FittingFunctions::LowTail(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  Double_t z = (x - mu) / sigma;
+  Double_t z = (x[0] - mu) / sigma;
   Double_t low_tail_amplitude = par[2];
   Double_t low_tail_range = par[3];
   return low_tail_amplitude * TMath::Exp(low_tail_range * z) /
          TMath::Power(1 + TMath::Exp(z), 4);
 }
 
-Double_t FittingUtils::HighTail(Double_t x, Double_t *par) {
+Double_t FittingFunctions::HighTail(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  Double_t z = (x - mu) / sigma;
+  Double_t z = (x[0] - mu) / sigma;
   Double_t high_tail_amplitude = par[2];
   Double_t high_tail_range = par[3];
   return high_tail_amplitude * TMath::Exp(high_tail_range * z) /
          TMath::Power(1 + TMath::Exp(-z), 4);
 }
 
-Double_t FittingUtils::Step(Double_t x, Double_t *par) {
+Double_t FittingFunctions::Step(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  Double_t z = (x - mu) / sigma;
+  Double_t z = (x[0] - mu) / sigma;
   Double_t step_amplitude = par[2];
   return step_amplitude / TMath::Power(1 + TMath::Exp(z), 2);
 }
 
-Double_t FittingUtils::Standard(Double_t x, Double_t *par) {
+Double_t FittingFunctions::Standard(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
   Double_t gaus_amplitude = par[2];
@@ -54,7 +71,7 @@ Double_t FittingUtils::Standard(Double_t x, Double_t *par) {
   return Gaussian(x, gaus_par) + LinearBackground(x, bkg_par);
 }
 
-Double_t FittingUtils::Detailed(Double_t x, Double_t *par) {
+Double_t FittingFunctions::Detailed(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
   Double_t gaus_amplitude = par[2];
@@ -75,23 +92,6 @@ Double_t FittingUtils::Detailed(Double_t x, Double_t *par) {
   return Gaussian(x, gaus_par) + LinearBackground(x, bkg_par) +
          Step(x, step_par) + LowTail(x, low_tail_par) +
          HighTail(x, high_tail_par);
-}
-
-FittingUtils::FittingUtils(TH1 *working_hist, Bool_t isDetailed)
-    : fit_range_low_(0), fit_range_high_(1e6) {
-  isDetailed_ = isDetailed;
-  working_hist_ = working_hist;
-  if (!isDetailed_)
-    fit_function_ =
-        new TF1("Standard", Standard, fit_range_low_, fit_range_high_, 5);
-  else
-    fit_function_ =
-        new TF1("Detailed", Detailed, fit_range_low_, fit_range_high_, 10);
-}
-
-FittingUtils::~FittingUtils() {
-  fit_function_ = nullptr;
-  working_hist_ = nullptr;
 }
 
 void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
@@ -120,15 +120,16 @@ void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
   pad1->SetTickx(0);
   fit_function_->Draw("same");
   fit_function_->SetLineColor(kAzure);
-  TF1 *peak = new TF1("gaussian", Gaussian, fit_range_low_, fit_range_high_, 3);
+  TF1 *peak = new TF1("gaussian", FittingFunctions::Gaussian, fit_range_low_,
+                      fit_range_high_, 3);
   peak->SetParameter(0, fit_function_->GetParameter(0));
   peak->SetParameter(1, fit_function_->GetParameter(1));
   peak->SetParameter(2, fit_function_->GetParameter(2));
   peak->SetLineColor(kBlack);
   peak->Draw("same");
 
-  TF1 *background = new TF1("background", LinearBackground, fit_range_low_,
-                            fit_range_high_, 2);
+  TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
+                            fit_range_low_, fit_range_high_, 2);
   background->SetParameter(0, fit_function_->GetParameter(3));
   background->SetParameter(1, fit_function_->GetParameter(4));
   background->SetLineColor(kGreen);
@@ -208,29 +209,31 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
   fit_function_->Draw("same");
   fit_function_->SetLineColor(kAzure);
 
-  TF1 *peak = new TF1("gaussian", Gaussian, fit_range_low_, fit_range_high_, 3);
+  TF1 *peak = new TF1("gaussian", FittingFunctions::Gaussian, fit_range_low_,
+                      fit_range_high_, 3);
   peak->SetParameter(0, fit_function_->GetParameter(0));
   peak->SetParameter(1, fit_function_->GetParameter(1));
   peak->SetParameter(2, fit_function_->GetParameter(2));
   peak->SetLineColor(kBlack);
   peak->Draw("same");
 
-  TF1 *background = new TF1("background", LinearBackground, fit_range_low_,
-                            fit_range_high_, 2);
+  TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
+                            fit_range_low_, fit_range_high_, 2);
   background->SetParameter(0, fit_function_->GetParameter(3));
   background->SetParameter(1, fit_function_->GetParameter(4));
   background->SetLineColor(kGreen);
   background->Draw("same");
 
-  TF1 *step = new TF1("step", Step, fit_range_low_, fit_range_high_, 3);
+  TF1 *step = new TF1("step", FittingFunctions::Step, fit_range_low_,
+                      fit_range_high_, 3);
   step->SetParameter(0, fit_function_->GetParameter(0));
   step->SetParameter(1, fit_function_->GetParameter(1));
   step->SetParameter(2, fit_function_->GetParameter(5));
   step->SetLineColor(kMagenta);
   step->Draw("same");
 
-  TF1 *low_tail =
-      new TF1("lowtail", LowTail, fit_range_low_, fit_range_high_, 4);
+  TF1 *low_tail = new TF1("lowtail", FittingFunctions::LowTail, fit_range_low_,
+                          fit_range_high_, 4);
   low_tail->SetParameter(0, fit_function_->GetParameter(0));
   low_tail->SetParameter(1, fit_function_->GetParameter(1));
   low_tail->SetParameter(2, fit_function_->GetParameter(6));
@@ -238,8 +241,8 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
   low_tail->SetLineColor(kRed);
   low_tail->Draw("same");
 
-  TF1 *high_tail =
-      new TF1("hightail", HighTail, fit_range_low_, fit_range_high_, 4);
+  TF1 *high_tail = new TF1("hightail", FittingFunctions::HighTail,
+                           fit_range_low_, fit_range_high_, 4);
   high_tail->SetParameter(0, fit_function_->GetParameter(0));
   high_tail->SetParameter(1, fit_function_->GetParameter(1));
   high_tail->SetParameter(2, fit_function_->GetParameter(8));
@@ -386,11 +389,13 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
 }
 
 void FittingUtils::RegisterCustomFunctions() {
-  TF1 *f_standard = new TF1("Standard", Standard, 0, 1000, 5);
+  TF1 *f_standard =
+      new TF1("Standard", &FittingFunctions::Standard, 0, 1000, 5);
   f_standard->SetParNames("Mu", "Sigma", "GausAmp", "BkgConst", "BkgSlope");
   gROOT->GetListOfFunctions()->Add(f_standard);
 
-  TF1 *f_detailed = new TF1("Detailed", Detailed, 0, 1000, 10);
+  TF1 *f_detailed =
+      new TF1("Detailed", &FittingFunctions::Detailed, 0, 1000, 10);
   f_detailed->SetParNames("Mu", "Sigma", "GausAmp", "BkgConst", "BkgSlope",
                           "StepAmp", "LowTailAmp", "LowTailRange",
                           "HighTailAmp", "HighTailRange");

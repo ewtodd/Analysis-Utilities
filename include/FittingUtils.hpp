@@ -12,6 +12,16 @@
 #include <TSystem.h>
 #include <TTree.h>
 
+namespace FittingFunctions {
+Double_t Gaussian(Double_t *x, Double_t *par);
+Double_t LinearBackground(Double_t *x, Double_t *par);
+Double_t Step(Double_t *x, Double_t *par);
+Double_t LowTail(Double_t *x, Double_t *par);
+Double_t HighTail(Double_t *x, Double_t *par);
+Double_t Standard(Double_t *x, Double_t *par);
+Double_t Detailed(Double_t *x, Double_t *par);
+} // namespace FittingFunctions
+
 struct FitResultStandard {
   Float_t gaus_amplitude;
   Float_t gaus_amplitude_error;
@@ -60,14 +70,6 @@ private:
   void PlotFitDetailed(TCanvas *canvas, Int_t color, const TString peak_name);
 
 public:
-  static Double_t Gaussian(Double_t x, Double_t *par);
-  static Double_t LinearBackground(Double_t x, Double_t *par);
-  static Double_t Step(Double_t x, Double_t *par);
-  static Double_t LowTail(Double_t x, Double_t *par);
-  static Double_t HighTail(Double_t x, Double_t *par);
-  static Double_t Standard(Double_t x, Double_t *par);
-  static Double_t Detailed(Double_t x, Double_t *par);
-
   FittingUtils(TH1 *working_hist, Bool_t isDetailed);
   ~FittingUtils();
 
