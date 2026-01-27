@@ -3,13 +3,52 @@
 FittingUtils::FittingUtils(TH1 *working_hist, Bool_t isDetailed)
     : fit_range_low_(0), fit_range_high_(1e6) {
   isDetailed_ = isDetailed;
-  working_hist_ = working_hist;
-  if (!isDetailed_)
+  working_hist_ = static_cast<TH1F *>(working_hist->Clone());
+
+  ROOT::Math::MinimizerOptions::SetDefaultMaxFunctionCalls(Int_t(1e10));
+  ROOT::Math::MinimizerOptions::SetDefaultMaxIterations(Int_t(1e6));
+  ROOT::Math::MinimizerOptions::SetDefaultTolerance(1e-6);
+  ROOT::Math::MinimizerOptions::SetDefaultStrategy(2);
+
+  if (!isDetailed_) {
     fit_function_ = new TF1("Standard", &FittingFunctions::Standard,
                             fit_range_low_, fit_range_high_, 5);
-  else
+
+    fit_function_->SetParName(0, "Mu");
+    fit_function_->SetParName(1, "Sigma");
+    fit_function_->SetParName(2, "GausAmplitude");
+    fit_function_->SetParName(3, "BkgConst");
+    fit_function_->SetParName(4, "BkgSlope");
+
+    fit_function_->SetParLimits(0, 0, 1e7);
+    fit_function_->SetParLimits(1, 0, 1e7);
+    fit_function_->SetParLimits(2, 0, 1e7);
+    fit_function_->SetParLimits(3, 0, 1e6);
+    fit_function_->SetParLimits(4, -1e3, 1e3);
+
+  } else {
     fit_function_ = new TF1("Detailed", &FittingFunctions::Detailed,
                             fit_range_low_, fit_range_high_, 10);
+    fit_function_->SetParName(0, "Mu");
+    fit_function_->SetParName(1, "Sigma");
+    fit_function_->SetParName(2, "GausAmplitude");
+    fit_function_->SetParName(3, "BkgConst");
+    fit_function_->SetParName(4, "BkgSlope");
+    fit_function_->SetParName(5, "StepAmplitude");
+    fit_function_->SetParName(6, "LowTailAmplitude");
+    fit_function_->SetParName(7, "LowTailRange");
+    fit_function_->SetParName(8, "HighTailAmplitude");
+    fit_function_->SetParName(9, "HighTailRange");
+
+    fit_function_->SetParLimits(0, 0, 1e7);
+    fit_function_->SetParLimits(1, 0, 1e7);
+    fit_function_->SetParLimits(2, -1e-6, 1e7);
+    fit_function_->SetParLimits(5, -1e-6, 1e7);
+    fit_function_->SetParLimits(6, -1e-6, 1e7);
+    fit_function_->SetParLimits(7, 0, 1e7);
+    fit_function_->SetParLimits(8, -1e-6, 1e7);
+    fit_function_->SetParLimits(9, 0, 1e7);
+  }
 }
 
 FittingUtils::~FittingUtils() {
@@ -37,7 +76,7 @@ Double_t FittingFunctions::LowTail(Double_t *x, Double_t *par) {
   Double_t z = (x[0] - mu) / sigma;
   Double_t low_tail_amplitude = par[2];
   Double_t low_tail_range = par[3];
-  return low_tail_amplitude * TMath::Exp(low_tail_range * z) /
+  return low_tail_amplitude * TMath::Exp(-low_tail_range * z) /
          TMath::Power(1 + TMath::Exp(z), 4);
 }
 
@@ -99,11 +138,11 @@ void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
   canvas->Clear();
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
-  pad1->SetBottomMargin(0.02);
+  pad1->SetBottomMargin(0.04);
   pad1->SetGridx(1);
   pad1->SetGridy(1);
   pad1->SetTopMargin(0.12);
-  pad2->SetTopMargin(0.02);
+  pad2->SetTopMargin(0.04);
   pad2->SetBottomMargin(0.35);
   pad2->SetGridx(1);
   pad2->SetGridy(1);
@@ -115,11 +154,16 @@ void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
   Float_t max_hist_value = 1.1 * fit_range_high_;
 
   working_hist_->GetXaxis()->SetRangeUser(min_hist_value, max_hist_value);
+  working_hist_->GetXaxis()->SetLabelSize(0);
+  working_hist_->GetXaxis()->SetTitleSize(0);
+  working_hist_->SetLineColor(kViolet);
+  working_hist_->SetLineWidth(2);
   working_hist_->Draw();
 
   pad1->SetTickx(0);
   fit_function_->Draw("same");
   fit_function_->SetLineColor(kAzure);
+
   TF1 *peak = new TF1("gaussian", FittingFunctions::Gaussian, fit_range_low_,
                       fit_range_high_, 3);
   peak->SetParameter(0, fit_function_->GetParameter(0));
@@ -170,6 +214,7 @@ void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
   residuals->GetYaxis()->SetTitleOffset(0.3);
   residuals->GetYaxis()->SetNdivisions(505);
   residuals->GetXaxis()->SetNdivisions(510);
+  residuals->GetYaxis()->CenterTitle(kTRUE);
   residuals->Draw("AP");
 
   TF1 *zero_line = new TF1("zero_line", "0", min_hist_value, max_hist_value);
@@ -187,11 +232,11 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
   canvas->Clear();
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
-  pad1->SetBottomMargin(0.02);
+  pad1->SetBottomMargin(0.04);
   pad1->SetGridx(1);
   pad1->SetGridy(1);
   pad1->SetTopMargin(0.12);
-  pad2->SetTopMargin(0.02);
+  pad2->SetTopMargin(0.04);
   pad2->SetBottomMargin(0.35);
   pad2->SetGridx(1);
   pad2->SetGridy(1);
@@ -203,6 +248,10 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
   Float_t max_hist_value = 1.1 * fit_range_high_;
 
   working_hist_->GetXaxis()->SetRangeUser(min_hist_value, max_hist_value);
+  working_hist_->GetXaxis()->SetLabelSize(0);
+  working_hist_->GetXaxis()->SetTitleSize(0);
+  working_hist_->SetLineColor(kViolet);
+  working_hist_->SetLineWidth(2);
   working_hist_->Draw();
 
   pad1->SetTickx(0);
@@ -286,6 +335,7 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
   residuals->GetYaxis()->SetTitleOffset(0.3);
   residuals->GetYaxis()->SetNdivisions(505);
   residuals->GetXaxis()->SetNdivisions(510);
+  residuals->GetYaxis()->CenterTitle(kTRUE);
   residuals->Draw("AP");
 
   TF1 *zero_line = new TF1("zero_line", "0", min_hist_value, max_hist_value);
@@ -302,21 +352,7 @@ FitResultStandard FittingUtils::FitPeakStandard(TCanvas *canvas, Int_t color,
                                                 const TString peak_name) {
   FitResultStandard results;
 
-  fit_function_->SetParName(0, "Mu");
-  fit_function_->SetParName(1, "Sigma");
-  fit_function_->SetParName(2, "GausAmplitude");
-  fit_function_->SetParName(3, "BkgConst");
-  fit_function_->SetParName(4, "BkgSlope");
-
-  Float_t min_hist_value = 0.9 * fit_range_low_;
-  Float_t max_hist_value = 1.1 * fit_range_high_;
-
-  fit_function_->SetParLimits(0, min_hist_value, max_hist_value);
-  fit_function_->SetParLimits(1, 0, 0.1 * max_hist_value);
-  fit_function_->SetParLimits(2, 0, 1e6);
-  fit_function_->SetParLimits(3, 0, 1e6);
-
-  TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSRN+");
+  TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMEN+");
   if (fit_result.Get() && fit_result->IsValid()) {
     PlotFitStandard(canvas, color, peak_name);
     results.mu = fit_function_->GetParameter(0);
@@ -337,31 +373,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
                                                 const TString peak_name) {
   FitResultDetailed results;
 
-  fit_function_->SetParName(0, "Mu");
-  fit_function_->SetParName(1, "Sigma");
-  fit_function_->SetParName(2, "GausAmplitude");
-  fit_function_->SetParName(3, "BkgConst");
-  fit_function_->SetParName(4, "BkgSlope");
-  fit_function_->SetParName(5, "StepAmplitude");
-  fit_function_->SetParName(6, "LowTailAmplitude");
-  fit_function_->SetParName(7, "LowTailRange");
-  fit_function_->SetParName(8, "HighTailAmplitude");
-  fit_function_->SetParName(9, "HighTailRange");
-
-  Float_t min_hist_value = 0.9 * fit_range_low_;
-  Float_t max_hist_value = 1.1 * fit_range_high_;
-
-  fit_function_->SetParLimits(0, min_hist_value, max_hist_value);
-  fit_function_->SetParLimits(1, 0, 0.1 * max_hist_value);
-  fit_function_->SetParLimits(2, 0, 1e6);
-  fit_function_->SetParLimits(3, 0, 1e6);
-  fit_function_->SetParLimits(5, 0, 1e6);
-  fit_function_->SetParLimits(6, 0, 1e6);
-  fit_function_->SetParLimits(7, -10, 10);
-  fit_function_->SetParLimits(8, 0, 1e6);
-  fit_function_->SetParLimits(9, -10, 10);
-
-  TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSRN+");
+  TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMEN+");
   if (fit_result.Get() && fit_result->IsValid()) {
     PlotFitDetailed(canvas, color, peak_name);
     results.mu = fit_function_->GetParameter(0);

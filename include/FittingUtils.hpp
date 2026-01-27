@@ -2,6 +2,7 @@
 #define FITTINGUTILS_H
 
 #include "PlottingUtils.hpp"
+#include <RooMinimizer.h>
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TFile.h>
@@ -73,43 +74,43 @@ public:
   FittingUtils(TH1 *working_hist, Bool_t isDetailed);
   ~FittingUtils();
 
-  void SetExpectedMu(Double_t expected_mu) {
+  void SetMu(Double_t expected_mu) {
     fit_function_->SetParameter(0, expected_mu);
   }
 
-  void SetExpectedSigma(Double_t expected_sigma) {
+  void SetSigma(Double_t expected_sigma) {
     fit_function_->SetParameter(1, expected_sigma);
   }
 
-  void SetExpectedGausAmplitude(Double_t expected_amplitude) {
+  void SetGausAmplitude(Double_t expected_amplitude) {
     fit_function_->SetParameter(2, expected_amplitude);
   }
 
-  void SetExpectedBkgConst(Double_t expected_bkg_const) {
+  void SetBkgConst(Double_t expected_bkg_const) {
     fit_function_->SetParameter(3, expected_bkg_const);
   }
 
-  void SetExpectedBkgSlope(Double_t expected_bkg_slope) {
+  void SetBkgSlope(Double_t expected_bkg_slope) {
     fit_function_->SetParameter(4, expected_bkg_slope);
   }
 
-  void SetExpectedStepAmplitude(Double_t expected_step_amplitude) {
+  void SetStepAmplitude(Double_t expected_step_amplitude) {
     fit_function_->SetParameter(5, expected_step_amplitude);
   }
 
-  void SetExpectedLowTailAmplitude(Double_t expected_low_tail_amplitude) {
+  void SetLowTailAmplitude(Double_t expected_low_tail_amplitude) {
     fit_function_->SetParameter(6, expected_low_tail_amplitude);
   }
 
-  void SetExpectedLowTailRange(Double_t expected_low_tail_range) {
+  void SetLowTailRange(Double_t expected_low_tail_range) {
     fit_function_->SetParameter(7, expected_low_tail_range);
   }
 
-  void SetExpectedHighTailAmplitude(Double_t expected_high_tail_amplitude) {
+  void SetHighTailAmplitude(Double_t expected_high_tail_amplitude) {
     fit_function_->SetParameter(8, expected_high_tail_amplitude);
   }
 
-  void SetExpectedHighTailRange(Double_t expected_high_tail_range) {
+  void SetHighTailRange(Double_t expected_high_tail_range) {
     fit_function_->SetParameter(9, expected_high_tail_range);
   }
 
@@ -117,6 +118,85 @@ public:
     fit_function_->SetRange(fit_range_low, fit_range_high);
     fit_range_low_ = fit_range_low;
     fit_range_high_ = fit_range_high;
+  }
+
+  void FixMu(Double_t value) { fit_function_->FixParameter(0, value); }
+
+  void ReleaseMu() { fit_function_->ReleaseParameter(0); }
+
+  void FixSigma(Double_t value) { fit_function_->FixParameter(1, value); }
+
+  void ReleaseSigma() { fit_function_->ReleaseParameter(1); }
+
+  void FixGausAmplitude(Double_t value) {
+    fit_function_->FixParameter(2, value);
+  }
+
+  void ReleaseGausAmplitude() { fit_function_->ReleaseParameter(2); }
+
+  void FixBkgConst(Double_t value) { fit_function_->FixParameter(3, value); }
+
+  void ReleaseBkgConst() { fit_function_->ReleaseParameter(3); }
+
+  void FixBkgSlope(Double_t value) { fit_function_->FixParameter(4, value); }
+
+  void ReleaseBkgSlope() { fit_function_->ReleaseParameter(4); }
+
+  void FixStepAmplitude(Double_t value) {
+    if (isDetailed_)
+      fit_function_->FixParameter(5, value);
+  }
+
+  void ReleaseStepAmplitude() {
+    if (isDetailed_)
+      fit_function_->ReleaseParameter(5);
+  }
+
+  void FixLowTailAmplitude(Double_t value) {
+    if (isDetailed_)
+      fit_function_->FixParameter(6, value);
+  }
+
+  void ReleaseLowTailAmplitude() {
+    if (isDetailed_)
+      fit_function_->ReleaseParameter(6);
+  }
+
+  void FixLowTailRange(Double_t value) {
+    if (isDetailed_)
+      fit_function_->FixParameter(7, value);
+  }
+
+  void ReleaseLowTailRange() {
+    if (isDetailed_)
+      fit_function_->ReleaseParameter(7);
+  }
+
+  void FixHighTailAmplitude(Double_t value) {
+    if (isDetailed_)
+      fit_function_->FixParameter(8, value);
+  }
+
+  void ReleaseHighTailAmplitude() {
+    if (isDetailed_)
+      fit_function_->ReleaseParameter(8);
+  }
+
+  void FixHighTailRange(Double_t value) {
+    if (isDetailed_)
+      fit_function_->FixParameter(9, value);
+  }
+
+  void ReleaseHighTailRange() {
+    if (isDetailed_)
+      fit_function_->ReleaseParameter(9);
+  }
+
+  void ReleaseAllParameters() {
+    Int_t npar = isDetailed_ ? 10 : 5;
+    for (Int_t i = 0; i < npar; i++) {
+      fit_function_->ReleaseParameter(i);
+    }
   }
 
   TF1 *GetFitFunction() { return fit_function_; }
