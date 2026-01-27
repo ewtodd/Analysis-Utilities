@@ -506,3 +506,40 @@ FitResultGaussianTailStep FittingUtils::FitPeakGaussianHighTailHighStep(
   }
   return results;
 }
+
+void FittingUtils::RegisterCustomFunctions() {
+  TF1 *f_gaus = new TF1("CustomGaus", Gaus, 0, 1000, 3);
+  f_gaus->SetParNames("Amplitude", "Mean", "Sigma");
+  gROOT->GetListOfFunctions()->Add(f_gaus);
+
+  TF1 *f_gltls =
+      new TF1("GausLowTailLowStep", GaussianLowTailLowStep, 0, 1000, 6);
+  f_gltls->SetParNames("Amplitude", "Mean", "Sigma", "Tau", "TailAmp",
+                       "StepAmp");
+  gROOT->GetListOfFunctions()->Add(f_gltls);
+
+  TF1 *f_ghths =
+      new TF1("GausHighTailHighStep", GaussianHighTailHighStep, 0, 1000, 6);
+  f_ghths->SetParNames("Amplitude", "Mean", "Sigma", "Tau", "TailAmp",
+                       "StepAmp");
+  gROOT->GetListOfFunctions()->Add(f_ghths);
+
+  TF1 *f_lowtail = new TF1("LowTail", LowTail, 0, 1000, 4);
+  f_lowtail->SetParNames("Amplitude", "Mean", "Sigma", "Tau");
+  gROOT->GetListOfFunctions()->Add(f_lowtail);
+
+  TF1 *f_hightail = new TF1("HighTail", HighTail, 0, 1000, 4);
+  f_hightail->SetParNames("Amplitude", "Mean", "Sigma", "Tau");
+  gROOT->GetListOfFunctions()->Add(f_hightail);
+
+  TF1 *f_lowstep = new TF1("LowStep", LowStep, 0, 1000, 3);
+  f_lowstep->SetParNames("Amplitude", "Mean", "Sigma");
+  gROOT->GetListOfFunctions()->Add(f_lowstep);
+
+  TF1 *f_highstep = new TF1("HighStep", HighStep, 0, 1000, 3);
+  f_highstep->SetParNames("Amplitude", "Mean", "Sigma");
+  gROOT->GetListOfFunctions()->Add(f_highstep);
+
+  std::cout << "Custom fitting functions registered and available in FitPanel!"
+            << std::endl;
+}

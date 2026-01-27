@@ -124,6 +124,8 @@ public:
 
   Bool_t LoadProcessed(const TString input_name, const TString branch_name,
                        const TString tree_name = "features");
+
+  static void RegisterCustomFunctions();
 };
 
 #endif
