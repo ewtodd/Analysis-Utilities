@@ -81,7 +81,7 @@ public:
     fit_function_->SetParameter(1, expected_sigma);
   }
 
-  void SetExpectedAmplitude(Double_t expected_amplitude) {
+  void SetExpectedGausAmplitude(Double_t expected_amplitude) {
     fit_function_->SetParameter(2, expected_amplitude);
   }
 
