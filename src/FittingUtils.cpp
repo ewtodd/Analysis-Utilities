@@ -529,6 +529,44 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
   std::cout << "Peak height: " << peak_height << std::endl;
   std::cout << "Gaussian amplitude: " << gaus_amp << std::endl;
 
+  if (use_step_) {
+    std::cout << "Testing step function..." << std::endl;
+
+    fit_function_->ReleaseParameter(5);
+    fit_function_->SetParameter(5, gaus_amp * 0.05);
+
+    TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
+
+    if (step_fit.Get() && step_fit->IsValid()) {
+      Double_t chi2_with_step = step_fit->Chi2() / step_fit->Ndf();
+      std::cout << "Chi2/ndf: " << chi2_with_step << " vs " << best_chi2
+                << std::endl;
+
+      if (chi2_with_step < best_chi2) {
+        std::cout << "Step ACCEPTED" << std::endl;
+        best_chi2 = chi2_with_step;
+        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        std::cout << "Step REJECTED" << std::endl;
+        fit_function_->FixParameter(5, 0);
+        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+    } else {
+      std::cout << "Step fit FAILED" << std::endl;
+      fit_function_->FixParameter(5, 0);
+      for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
+      }
+    }
+  }
+
   if (use_low_tail_) {
     std::cout << "Testing low tail..." << std::endl;
 
@@ -538,31 +576,15 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(6, tail_amp_init);
     fit_function_->SetParameter(7, 0.3);
-    fit_function_->SetParLimits(6, 0, peak_height * 0.30);
-    fit_function_->SetParLimits(7, 0.01, 2.0);
 
     TFitResultPtr tail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
     if (tail_fit.Get() && tail_fit->IsValid()) {
       Double_t chi2_with_tail = tail_fit->Chi2() / tail_fit->Ndf();
-      Double_t improvement = (best_chi2 - chi2_with_tail) / best_chi2;
-
-      Double_t fitted_amp = fit_function_->GetParameter(6);
-      Double_t fitted_slope = fit_function_->GetParameter(7);
-
-      std::cout << "Fitted tail amplitude: " << fitted_amp << std::endl;
-      std::cout << "Fitted tail slope: " << fitted_slope << std::endl;
       std::cout << "Chi2/ndf: " << chi2_with_tail << " vs " << best_chi2
                 << std::endl;
-      std::cout << "Improvement: " << improvement * 100 << " percent"
-                << std::endl;
 
-      Bool_t amp_ok = (fitted_amp > 1e-6 && fitted_amp <= peak_height * 0.30);
-      Bool_t slope_ok = (fitted_slope > 0.01 && fitted_slope < 2.0);
-      Bool_t chi2_ok = (chi2_with_tail < best_chi2);
-      Bool_t improvement_ok = (improvement > 0.002);
-
-      if (amp_ok && slope_ok && chi2_ok && improvement_ok) {
+      if (chi2_with_tail < best_chi2) {
         std::cout << "Low tail ACCEPTED" << std::endl;
         best_chi2 = chi2_with_tail;
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
@@ -598,31 +620,15 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(8, tail_amp_init);
     fit_function_->SetParameter(9, 0.3);
-    fit_function_->SetParLimits(8, 0, peak_height * 0.30);
-    fit_function_->SetParLimits(9, 0.01, 2.0);
 
     TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
     if (htail_fit.Get() && htail_fit->IsValid()) {
       Double_t chi2_with_htail = htail_fit->Chi2() / htail_fit->Ndf();
-      Double_t improvement = (best_chi2 - chi2_with_htail) / best_chi2;
-
-      Double_t fitted_amp = fit_function_->GetParameter(8);
-      Double_t fitted_slope = fit_function_->GetParameter(9);
-
-      std::cout << "Fitted tail amplitude: " << fitted_amp << std::endl;
-      std::cout << "Fitted tail slope: " << fitted_slope << std::endl;
       std::cout << "Chi2/ndf: " << chi2_with_htail << " vs " << best_chi2
                 << std::endl;
-      std::cout << "Improvement: " << improvement * 100 << " percent"
-                << std::endl;
 
-      Bool_t amp_ok = (fitted_amp > 1e-6 && fitted_amp <= peak_height * 0.30);
-      Bool_t slope_ok = (fitted_slope > 0.01 && fitted_slope < 2.0);
-      Bool_t chi2_ok = (chi2_with_htail < best_chi2);
-      Bool_t improvement_ok = (improvement > 0.002);
-
-      if (amp_ok && slope_ok && chi2_ok && improvement_ok) {
+      if (chi2_with_htail < best_chi2) {
         std::cout << "High tail ACCEPTED" << std::endl;
         best_chi2 = chi2_with_htail;
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
@@ -649,48 +655,6 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     }
   }
 
-  if (use_step_) {
-    std::cout << "Testing step function..." << std::endl;
-
-    fit_function_->ReleaseParameter(5);
-    fit_function_->SetParameter(5, gaus_amp * 0.05);
-
-    TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
-
-    if (step_fit.Get() && step_fit->IsValid()) {
-      Double_t chi2_with_step = step_fit->Chi2() / step_fit->Ndf();
-      Double_t improvement = (best_chi2 - chi2_with_step) / best_chi2;
-
-      std::cout << "Chi2/ndf: " << chi2_with_step << " vs " << best_chi2
-                << std::endl;
-      std::cout << "Improvement: " << improvement * 100 << " percent"
-                << std::endl;
-
-      if (improvement > 0.002 && chi2_with_step < best_chi2) {
-        std::cout << "Step ACCEPTED" << std::endl;
-        best_chi2 = chi2_with_step;
-        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
-          best_params[i] = fit_function_->GetParameter(i);
-          best_errors[i] = fit_function_->GetParError(i);
-        }
-      } else {
-        std::cout << "Step REJECTED" << std::endl;
-        fit_function_->FixParameter(5, 0);
-        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
-          fit_function_->SetParameter(i, best_params[i]);
-          fit_function_->SetParError(i, best_errors[i]);
-        }
-      }
-    } else {
-      std::cout << "Step fit FAILED" << std::endl;
-      fit_function_->FixParameter(5, 0);
-      for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-  }
-
   std::cout << "Final fit with selected components..." << std::endl;
   for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
     fit_function_->SetParameter(i, best_params[i]);
@@ -705,11 +669,11 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
 
     std::cout << "Gaussian: YES" << std::endl;
     std::cout << "Background: YES" << std::endl;
-    std::cout << "Low tail: "
-              << (fit_function_->GetParameter(6) > 1e-6 ? "YES" : "NO")
-              << std::endl;
     std::cout << "Step: "
               << (fit_function_->GetParameter(5) > 1e-6 ? "YES" : "NO")
+              << std::endl;
+    std::cout << "Low tail: "
+              << (fit_function_->GetParameter(6) > 1e-6 ? "YES" : "NO")
               << std::endl;
     std::cout << "High tail: "
               << (fit_function_->GetParameter(8) > 1e-6 ? "YES" : "NO")
@@ -744,6 +708,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
 
   return results;
 }
+
 void FittingUtils::RegisterCustomFunctions() {
   TF1 *f_standard =
       new TF1("Standard", &FittingFunctions::Standard, 0, 1000, 5);
