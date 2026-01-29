@@ -2,7 +2,9 @@
 #define FITTINGUTILS_H
 
 #include "PlottingUtils.hpp"
-#include <RooMinimizer.h>
+#include <Math/Factory.h>
+#include <Math/Functor.h>
+#include <Math/Minimizer.h>
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TFile.h>
@@ -61,143 +63,34 @@ struct FitResultDetailed {
 
 class FittingUtils {
 private:
-  Bool_t isDetailed_;
   TF1 *fit_function_;
   TH1 *working_hist_;
   Float_t fit_range_low_;
   Float_t fit_range_high_;
+  Bool_t isDetailed_;
+  Bool_t use_step_;
+  Bool_t use_low_tail_;
+  Bool_t use_high_tail_;
 
   void PlotFitStandard(TCanvas *canvas, Int_t color, const TString peak_name);
   void PlotFitDetailed(TCanvas *canvas, Int_t color, const TString peak_name);
+  Double_t EstimateBackground();
+  Double_t ClampToBounds(Int_t param_index, Double_t value);
+
+  static Double_t CustomLikelihood(const Double_t *par);
+  static TH1 *static_hist_;
+  static TF1 *static_func_;
+  static Double_t lambda_skewness_;
 
 public:
-  FittingUtils(TH1 *working_hist, Bool_t isDetailed);
+  FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
+               Bool_t isDetailed, Bool_t use_step = kTRUE,
+               Bool_t use_low_tail = kTRUE, Bool_t use_high_tail = kTRUE);
   ~FittingUtils();
 
-  void SetMu(Double_t expected_mu) {
-    fit_function_->SetParameter(0, expected_mu);
-  }
-
-  void SetSigma(Double_t expected_sigma) {
-    fit_function_->SetParameter(1, expected_sigma);
-  }
-
-  void SetGausAmplitude(Double_t expected_amplitude) {
-    fit_function_->SetParameter(2, expected_amplitude);
-  }
-
-  void SetBkgConst(Double_t expected_bkg_const) {
-    fit_function_->SetParameter(3, expected_bkg_const);
-  }
-
-  void SetBkgSlope(Double_t expected_bkg_slope) {
-    fit_function_->SetParameter(4, expected_bkg_slope);
-  }
-
-  void SetStepAmplitude(Double_t expected_step_amplitude) {
-    fit_function_->SetParameter(5, expected_step_amplitude);
-  }
-
-  void SetLowTailAmplitude(Double_t expected_low_tail_amplitude) {
-    fit_function_->SetParameter(6, expected_low_tail_amplitude);
-  }
-
-  void SetLowTailRange(Double_t expected_low_tail_range) {
-    fit_function_->SetParameter(7, expected_low_tail_range);
-  }
-
-  void SetHighTailAmplitude(Double_t expected_high_tail_amplitude) {
-    fit_function_->SetParameter(8, expected_high_tail_amplitude);
-  }
-
-  void SetHighTailRange(Double_t expected_high_tail_range) {
-    fit_function_->SetParameter(9, expected_high_tail_range);
-  }
-
-  void SetFitRange(Double_t fit_range_low, Double_t fit_range_high) {
-    fit_function_->SetRange(fit_range_low, fit_range_high);
-    fit_range_low_ = fit_range_low;
-    fit_range_high_ = fit_range_high;
-  }
-
-  void FixMu(Double_t value) { fit_function_->FixParameter(0, value); }
-
-  void ReleaseMu() { fit_function_->ReleaseParameter(0); }
-
-  void FixSigma(Double_t value) { fit_function_->FixParameter(1, value); }
-
-  void ReleaseSigma() { fit_function_->ReleaseParameter(1); }
-
-  void FixGausAmplitude(Double_t value) {
-    fit_function_->FixParameter(2, value);
-  }
-
-  void ReleaseGausAmplitude() { fit_function_->ReleaseParameter(2); }
-
-  void FixBkgConst(Double_t value) { fit_function_->FixParameter(3, value); }
-
-  void ReleaseBkgConst() { fit_function_->ReleaseParameter(3); }
-
-  void FixBkgSlope(Double_t value) { fit_function_->FixParameter(4, value); }
-
-  void ReleaseBkgSlope() { fit_function_->ReleaseParameter(4); }
-
-  void FixStepAmplitude(Double_t value) {
-    if (isDetailed_)
-      fit_function_->FixParameter(5, value);
-  }
-
-  void ReleaseStepAmplitude() {
-    if (isDetailed_)
-      fit_function_->ReleaseParameter(5);
-  }
-
-  void FixLowTailAmplitude(Double_t value) {
-    if (isDetailed_)
-      fit_function_->FixParameter(6, value);
-  }
-
-  void ReleaseLowTailAmplitude() {
-    if (isDetailed_)
-      fit_function_->ReleaseParameter(6);
-  }
-
-  void FixLowTailRange(Double_t value) {
-    if (isDetailed_)
-      fit_function_->FixParameter(7, value);
-  }
-
-  void ReleaseLowTailRange() {
-    if (isDetailed_)
-      fit_function_->ReleaseParameter(7);
-  }
-
-  void FixHighTailAmplitude(Double_t value) {
-    if (isDetailed_)
-      fit_function_->FixParameter(8, value);
-  }
-
-  void ReleaseHighTailAmplitude() {
-    if (isDetailed_)
-      fit_function_->ReleaseParameter(8);
-  }
-
-  void FixHighTailRange(Double_t value) {
-    if (isDetailed_)
-      fit_function_->FixParameter(9, value);
-  }
-
-  void ReleaseHighTailRange() {
-    if (isDetailed_)
-      fit_function_->ReleaseParameter(9);
-  }
-
-  void ReleaseAllParameters() {
-    Int_t npar = isDetailed_ ? 10 : 5;
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->ReleaseParameter(i);
-    }
-  }
+  void UseStep(Bool_t use = kTRUE) { use_step_ = use; }
+  void UseLowTail(Bool_t use = kTRUE) { use_low_tail_ = use; }
+  void UseHighTail(Bool_t use = kTRUE) { use_high_tail_ = use; }
 
   TF1 *GetFitFunction() { return fit_function_; }
 
@@ -207,6 +100,7 @@ public:
   FitResultDetailed FitPeakDetailed(TCanvas *canvas, Int_t color,
                                     const TString peak_name);
 
+  void SetSkewnessPenalty(Double_t lambda) { lambda_skewness_ = lambda; }
   static void RegisterCustomFunctions();
 };
 
