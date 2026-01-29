@@ -1,75 +1,5 @@
 #include "FittingUtils.hpp"
 
-TH1 *FittingUtils::static_hist_ = nullptr;
-TF1 *FittingUtils::static_func_ = nullptr;
-Double_t FittingUtils::lambda_skewness_ = 0.1;
-
-Double_t FittingUtils::CustomLikelihood(const Double_t *par) {
-  for (Int_t i = 0; i < static_func_->GetNpar(); i++) {
-    static_func_->SetParameter(i, par[i]);
-  }
-
-  Double_t nll = 0.0;
-  Double_t sum_residuals = 0.0;
-  Double_t sum_sq_residuals = 0.0;
-  Double_t sum_cube_residuals = 0.0;
-  Int_t n_points = 0;
-
-  Int_t nbins = static_hist_->GetNbinsX();
-  for (Int_t i = 1; i <= nbins; i++) {
-    Double_t x = static_hist_->GetBinCenter(i);
-
-    if (x < static_func_->GetXmin() || x > static_func_->GetXmax())
-      continue;
-
-    Double_t observed = static_hist_->GetBinContent(i);
-    Double_t error = static_hist_->GetBinError(i);
-
-    if (error <= 0 || error != error)
-      continue;
-
-    Double_t expected = static_func_->Eval(x);
-
-    if (expected < 0 || expected != expected) {
-      return 1e10;
-    }
-
-    Double_t residual = observed - expected;
-    Double_t chi2_term = (residual * residual) / (error * error);
-    nll += chi2_term;
-
-    Double_t pull = residual / error;
-
-    sum_residuals += pull;
-    sum_sq_residuals += pull * pull;
-    sum_cube_residuals += pull * pull * pull;
-    n_points++;
-  }
-
-  if (n_points < 5) {
-    return 1e10;
-  }
-
-  Double_t mean_pull = sum_residuals / n_points;
-  Double_t variance = (sum_sq_residuals / n_points) - (mean_pull * mean_pull);
-
-  if (variance <= 0) {
-    variance = 1.0;
-  }
-
-  Double_t std_dev = TMath::Sqrt(variance);
-
-  Double_t m3 = (sum_cube_residuals / n_points) -
-                3.0 * mean_pull * sum_sq_residuals / n_points +
-                2.0 * mean_pull * mean_pull * mean_pull;
-
-  Double_t skewness = m3 / (std_dev * std_dev * std_dev);
-
-  Double_t skewness_penalty = lambda_skewness_ * skewness * skewness;
-
-  return 0.5 * nll + skewness_penalty;
-}
-
 FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
                            Float_t fit_range_high, Bool_t isDetailed,
                            Bool_t use_step, Bool_t use_low_tail,
@@ -150,12 +80,12 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParLimits(5, 0, peak_height * 0.3);
     fit_function_->SetParameter(5, 0);
 
-    fit_function_->SetParLimits(6, 0, peak_height * 0.5);
+    fit_function_->SetParLimits(6, 0, peak_height);
     fit_function_->SetParLimits(7, 0, 100);
     fit_function_->SetParameter(6, peak_height * 0.10);
     fit_function_->SetParameter(7, 0.2);
 
-    fit_function_->SetParLimits(8, 0, peak_height * 0.5);
+    fit_function_->SetParLimits(8, 0, peak_height);
     fit_function_->SetParLimits(9, 0, 100);
     fit_function_->SetParameter(8, peak_height * 0.10);
     fit_function_->SetParameter(9, 0.2);
@@ -218,9 +148,9 @@ Double_t FittingFunctions::HighTail(Double_t *x, Double_t *par) {
 
   Double_t dx = (mu - x[0]) / (TMath::Sqrt(2) * sigma);
 
-  Double_t exp_arg = -tail_slope * dx;
+  Double_t exp_arg = (mu - x[0]) / tail_slope;
 
-  Double_t transition = 0.5 * (1.0 + TMath::Erf(dx));
+  Double_t transition = 0.5 * (1.0 - TMath::Erf(dx));
 
   return tail_amplitude * TMath::Exp(exp_arg) * transition;
 }
@@ -233,11 +163,6 @@ Double_t FittingFunctions::Step(Double_t *x, Double_t *par) {
 
   Double_t z = (x[0] - mu) / sigma;
   Double_t step_amplitude = par[2];
-
-  if (z > 100)
-    return 0;
-  if (z < -100)
-    return step_amplitude;
 
   Double_t denominator = TMath::Power(1 + TMath::Exp(z), 2);
   if (denominator < 1e-100)
@@ -281,9 +206,10 @@ Double_t FittingFunctions::Detailed(Double_t *x, Double_t *par) {
          HighTail(x, high_tail_par);
 }
 
-void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
-                                   const TString peak_name) {
-  canvas->Clear();
+void FittingUtils::PlotFitStandard(const TString peak_name) {
+  TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
+  PlottingUtils::ConfigureCanvas(canvas, kFALSE);
+
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
   pad1->SetBottomMargin(0.04);
@@ -348,10 +274,14 @@ void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
 
   residuals->SetMarkerStyle(20);
   residuals->SetMarkerSize(0.8);
-  residuals->SetMarkerColor(color);
-  residuals->SetLineColor(color);
+  residuals->SetMarkerColor(kAzure);
+  residuals->SetLineColor(kAzure);
   residuals->SetTitle("");
-  residuals->GetXaxis()->SetLimits(min_hist_value, max_hist_value);
+  Double_t actual_min = working_hist_->GetXaxis()->GetBinLowEdge(
+      working_hist_->GetXaxis()->GetFirst());
+  Double_t actual_max = working_hist_->GetXaxis()->GetBinUpEdge(
+      working_hist_->GetXaxis()->GetLast());
+  residuals->GetXaxis()->SetLimits(actual_min, actual_max);
   residuals->GetYaxis()->SetTitle("#delta/#sigma");
   residuals->GetXaxis()->SetTitle(working_hist_->GetXaxis()->GetTitle());
   residuals->GetXaxis()->SetTitleSize(0.13);
@@ -365,20 +295,23 @@ void FittingUtils::PlotFitStandard(TCanvas *canvas, Int_t color,
   residuals->GetYaxis()->CenterTitle(kTRUE);
   residuals->Draw("AP");
 
-  TF1 *zero_line = new TF1("zero_line", "0", min_hist_value, max_hist_value);
+  TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
   zero_line->SetLineColor(kBlack);
   zero_line->SetLineStyle(2);
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
   canvas->cd();
-  PlottingUtils::SaveFigure(canvas, peak_name + ".png", kTRUE);
+  PlottingUtils::SaveFigure(canvas, peak_name + ".png", kFALSE);
+  pad1->cd();
+  pad1->SetLogy(kTRUE);
+  PlottingUtils::SaveFigure(canvas, "log_" + peak_name + ".png", kFALSE);
 }
 
-void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
-                                   const TString peak_name) {
-  TFile *output = new TFile("test.root", "UPDATE");
-  canvas->Clear();
+void FittingUtils::PlotFitDetailed(const TString peak_name) {
+  TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
+  PlottingUtils::ConfigureCanvas(canvas, kFALSE);
+
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
   pad1->SetBottomMargin(0.04);
@@ -470,10 +403,14 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
 
   residuals->SetMarkerStyle(20);
   residuals->SetMarkerSize(0.8);
-  residuals->SetMarkerColor(color);
-  residuals->SetLineColor(color);
+  residuals->SetMarkerColor(kAzure);
+  residuals->SetLineColor(kAzure);
   residuals->SetTitle("");
-  residuals->GetXaxis()->SetLimits(min_hist_value, max_hist_value);
+  Double_t actual_min = working_hist_->GetXaxis()->GetBinLowEdge(
+      working_hist_->GetXaxis()->GetFirst());
+  Double_t actual_max = working_hist_->GetXaxis()->GetBinUpEdge(
+      working_hist_->GetXaxis()->GetLast());
+  residuals->GetXaxis()->SetLimits(actual_min, actual_max);
   residuals->GetYaxis()->SetTitle("#delta/#sigma");
   residuals->GetXaxis()->SetTitle(working_hist_->GetXaxis()->GetTitle());
   residuals->GetXaxis()->SetTitleSize(0.13);
@@ -487,19 +424,16 @@ void FittingUtils::PlotFitDetailed(TCanvas *canvas, Int_t color,
   residuals->GetYaxis()->CenterTitle(kTRUE);
   residuals->Draw("AP");
 
-  TF1 *zero_line = new TF1("zero_line", "0", min_hist_value, max_hist_value);
+  TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
   zero_line->SetLineColor(kBlack);
   zero_line->SetLineStyle(2);
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  canvas->cd();
-  canvas->Write("peak_name", TObject::kOverwrite);
-  output->Write();
-  output->Close();
-
-  PlottingUtils::SaveFigure(canvas, peak_name + ".png", kTRUE);
-  delete output;
+  PlottingUtils::SaveFigure(canvas, peak_name + ".png", kFALSE);
+  pad1->cd();
+  pad1->SetLogy(kTRUE);
+  PlottingUtils::SaveFigure(canvas, "log_" + peak_name + ".png", kFALSE);
 }
 
 Double_t FittingUtils::EstimateBackground() {
@@ -527,8 +461,7 @@ Double_t FittingUtils::ClampToBounds(Int_t param_index, Double_t value) {
   return value;
 }
 
-FitResultStandard FittingUtils::FitPeakStandard(TCanvas *canvas, Int_t color,
-                                                const TString peak_name) {
+FitResultStandard FittingUtils::FitPeakStandard(const TString peak_name) {
   FitResultStandard results;
 
   TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
@@ -546,7 +479,7 @@ FitResultStandard FittingUtils::FitPeakStandard(TCanvas *canvas, Int_t color,
   TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMEN+");
 
   if (fit_result.Get() && fit_result->IsValid()) {
-    PlotFitStandard(canvas, color, peak_name);
+    PlotFitStandard(peak_name);
     results.mu = fit_function_->GetParameter(0);
     results.mu_error = fit_function_->GetParError(0);
     results.sigma = fit_function_->GetParameter(1);
@@ -561,25 +494,8 @@ FitResultStandard FittingUtils::FitPeakStandard(TCanvas *canvas, Int_t color,
   return results;
 }
 
-FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
-                                                const TString peak_name) {
+FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
   FitResultDetailed results;
-
-  TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
-                          fit_range_low_, fit_range_high_, 2);
-
-  Double_t exclude_low =
-      fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
-  Double_t exclude_high =
-      fit_function_->GetParameter(0) + 3 * fit_function_->GetParameter(1);
-
-  working_hist_->Fit(bkg_only, "QN0+", "", fit_range_low_, exclude_low);
-
-  fit_function_->SetParameter(3, ClampToBounds(3, bkg_only->GetParameter(0)));
-  fit_function_->SetParameter(4, ClampToBounds(4, bkg_only->GetParameter(1)));
-  delete bkg_only;
-
-  std::cout << "Step 1: Background fit complete" << std::endl;
 
   fit_function_->FixParameter(5, 0);
   fit_function_->FixParameter(6, 0);
@@ -587,18 +503,16 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
   fit_function_->FixParameter(8, 0);
   fit_function_->FixParameter(9, 0.5);
 
-  std::cout << "Step 2: Initial standard fit for parameter estimation..."
-            << std::endl;
-  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "SMNQ0+");
+  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
   if (!initial_fit.Get() || !initial_fit->IsValid()) {
-    std::cout << "ERROR: Initial fit failed!" << std::endl;
+    std::cout << "ERROR: Initial fit failed" << std::endl;
     results.mu_error = -1;
     return results;
   }
 
   Double_t chi2_standard = initial_fit->Chi2() / initial_fit->Ndf();
-  std::cout << "  Standard chi2/ndf = " << chi2_standard << std::endl;
+  std::cout << "Initial chi2/ndf = " << chi2_standard << std::endl;
 
   Double_t gaus_amp = TMath::Abs(fit_function_->GetParameter(2));
   Double_t peak_height =
@@ -610,29 +524,24 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
     best_params[i] = fit_function_->GetParameter(i);
     best_errors[i] = fit_function_->GetParError(i);
   }
-
   Double_t best_chi2 = chi2_standard;
 
-  std::cout << "Step 3: Testing additional components..." << std::endl;
-  std::cout << "  Peak height: " << peak_height << std::endl;
-  std::cout << "  Gaussian amplitude: " << gaus_amp << std::endl;
+  std::cout << "Peak height: " << peak_height << std::endl;
+  std::cout << "Gaussian amplitude: " << gaus_amp << std::endl;
 
   if (use_low_tail_) {
-    std::cout << "\n  Testing low tail..." << std::endl;
+    std::cout << "Testing low tail..." << std::endl;
+
     fit_function_->ReleaseParameter(6);
     fit_function_->ReleaseParameter(7);
 
-    Double_t tail_amp_init = TMath::Min(gaus_amp * 0.10, peak_height * 0.20);
+    Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(6, tail_amp_init);
-    fit_function_->SetParameter(7, 0.5);
-    fit_function_->SetParLimits(6, 0, peak_height * 0.20);
-    fit_function_->SetParLimits(7, 0.05, 0.99);
+    fit_function_->SetParameter(7, 0.3);
+    fit_function_->SetParLimits(6, 0, peak_height * 0.30);
+    fit_function_->SetParLimits(7, 0.01, 2.0);
 
-    std::cout << "    Initial tail amplitude: " << tail_amp_init
-              << " (max allowed: " << peak_height * 0.20 << ")" << std::endl;
-    std::cout << "    Initial tail slope: 0.5 (max allowed: 0.99)" << std::endl;
-
-    TFitResultPtr tail_fit = working_hist_->Fit(fit_function_, "SMNQ0+");
+    TFitResultPtr tail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
     if (tail_fit.Get() && tail_fit->IsValid()) {
       Double_t chi2_with_tail = tail_fit->Chi2() / tail_fit->Ndf();
@@ -641,47 +550,27 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
       Double_t fitted_amp = fit_function_->GetParameter(6);
       Double_t fitted_slope = fit_function_->GetParameter(7);
 
-      std::cout << "    Fitted tail amplitude: " << fitted_amp << " ("
-                << (fitted_amp / peak_height) * 100 << "% of peak)"
+      std::cout << "Fitted tail amplitude: " << fitted_amp << std::endl;
+      std::cout << "Fitted tail slope: " << fitted_slope << std::endl;
+      std::cout << "Chi2/ndf: " << chi2_with_tail << " vs " << best_chi2
                 << std::endl;
-      std::cout << "    Fitted tail slope: " << fitted_slope << std::endl;
-      std::cout << "    Chi2/ndf: " << chi2_with_tail << " vs " << best_chi2
+      std::cout << "Improvement: " << improvement * 100 << " percent"
                 << std::endl;
-      std::cout << "    Improvement: " << improvement * 100 << "%" << std::endl;
 
-      Bool_t amp_ok = (fitted_amp >= 0 && fitted_amp <= peak_height * 0.20);
-      Bool_t slope_ok = (fitted_slope >= 0.05 && fitted_slope < 1.0);
+      Bool_t amp_ok = (fitted_amp > 1e-6 && fitted_amp <= peak_height * 0.30);
+      Bool_t slope_ok = (fitted_slope > 0.01 && fitted_slope < 2.0);
       Bool_t chi2_ok = (chi2_with_tail < best_chi2);
-      Bool_t improvement_ok = (improvement > 0.005);
-
-      std::cout << "    Amplitude constraint OK: " << (amp_ok ? "YES" : "NO")
-                << std::endl;
-      std::cout << "    Slope constraint OK: " << (slope_ok ? "YES" : "NO")
-                << std::endl;
-      std::cout << "    Chi2 improved: " << (chi2_ok ? "YES" : "NO")
-                << std::endl;
-      std::cout << "    Sufficient improvement: "
-                << (improvement_ok ? "YES" : "NO") << std::endl;
+      Bool_t improvement_ok = (improvement > 0.002);
 
       if (amp_ok && slope_ok && chi2_ok && improvement_ok) {
-        std::cout << "    ✓ Low tail ACCEPTED" << std::endl;
+        std::cout << "Low tail ACCEPTED" << std::endl;
         best_chi2 = chi2_with_tail;
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
           best_params[i] = fit_function_->GetParameter(i);
           best_errors[i] = fit_function_->GetParError(i);
         }
       } else {
-        std::cout << "    ✗ Low tail REJECTED" << std::endl;
-        if (!amp_ok)
-          std::cout << "      Reason: Amplitude outside constraints"
-                    << std::endl;
-        if (!slope_ok)
-          std::cout << "      Reason: Slope outside constraints" << std::endl;
-        if (!chi2_ok)
-          std::cout << "      Reason: Chi2 did not improve" << std::endl;
-        if (!improvement_ok)
-          std::cout << "      Reason: Improvement too small" << std::endl;
-
+        std::cout << "Low tail REJECTED" << std::endl;
         fit_function_->FixParameter(6, 0);
         fit_function_->FixParameter(7, 0.5);
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
@@ -690,64 +579,29 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
         }
       }
     } else {
-      std::cout << "    ✗ Low tail fit FAILED" << std::endl;
+      std::cout << "Low tail fit FAILED" << std::endl;
       fit_function_->FixParameter(6, 0);
       fit_function_->FixParameter(7, 0.5);
-    }
-  } else {
-    std::cout << "  Low tail DISABLED by user" << std::endl;
-  }
-
-  if (use_step_) {
-    std::cout << "\n  Testing step function..." << std::endl;
-    fit_function_->ReleaseParameter(5);
-    fit_function_->SetParameter(5, gaus_amp * 0.03);
-
-    TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "SMNQ0+");
-
-    if (step_fit.Get() && step_fit->IsValid()) {
-      Double_t chi2_with_step = step_fit->Chi2() / step_fit->Ndf();
-      Double_t improvement = (best_chi2 - chi2_with_step) / best_chi2;
-
-      std::cout << "    Chi2/ndf: " << chi2_with_step << " vs " << best_chi2
-                << std::endl;
-      std::cout << "    Improvement: " << improvement * 100 << "%" << std::endl;
-
-      if (improvement > 0.005 && chi2_with_step < best_chi2) {
-        std::cout << "    ✓ Step ACCEPTED" << std::endl;
-        best_chi2 = chi2_with_step;
-        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
-          best_params[i] = fit_function_->GetParameter(i);
-          best_errors[i] = fit_function_->GetParError(i);
-        }
-      } else {
-        std::cout << "    ✗ Step REJECTED" << std::endl;
-        fit_function_->FixParameter(5, 0);
-        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
-          fit_function_->SetParameter(i, best_params[i]);
-          fit_function_->SetParError(i, best_errors[i]);
-        }
+      for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
       }
-    } else {
-      std::cout << "    ✗ Step fit FAILED" << std::endl;
-      fit_function_->FixParameter(5, 0);
     }
-  } else {
-    std::cout << "  Step function DISABLED by user" << std::endl;
   }
 
   if (use_high_tail_) {
-    std::cout << "\n  Testing high tail..." << std::endl;
+    std::cout << "Testing high tail..." << std::endl;
+
     fit_function_->ReleaseParameter(8);
     fit_function_->ReleaseParameter(9);
 
-    Double_t tail_amp_init = TMath::Min(gaus_amp * 0.10, peak_height * 0.20);
+    Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(8, tail_amp_init);
-    fit_function_->SetParameter(9, 0.5);
-    fit_function_->SetParLimits(8, 0, peak_height * 0.20);
-    fit_function_->SetParLimits(9, 0.05, 0.99);
+    fit_function_->SetParameter(9, 0.3);
+    fit_function_->SetParLimits(8, 0, peak_height * 0.30);
+    fit_function_->SetParLimits(9, 0.01, 2.0);
 
-    TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "SMNQ0+");
+    TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
     if (htail_fit.Get() && htail_fit->IsValid()) {
       Double_t chi2_with_htail = htail_fit->Chi2() / htail_fit->Ndf();
@@ -756,28 +610,27 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
       Double_t fitted_amp = fit_function_->GetParameter(8);
       Double_t fitted_slope = fit_function_->GetParameter(9);
 
-      std::cout << "    Fitted tail amplitude: " << fitted_amp << " ("
-                << (fitted_amp / peak_height) * 100 << "% of peak)"
+      std::cout << "Fitted tail amplitude: " << fitted_amp << std::endl;
+      std::cout << "Fitted tail slope: " << fitted_slope << std::endl;
+      std::cout << "Chi2/ndf: " << chi2_with_htail << " vs " << best_chi2
                 << std::endl;
-      std::cout << "    Fitted tail slope: " << fitted_slope << std::endl;
-      std::cout << "    Chi2/ndf: " << chi2_with_htail << " vs " << best_chi2
+      std::cout << "Improvement: " << improvement * 100 << " percent"
                 << std::endl;
-      std::cout << "    Improvement: " << improvement * 100 << "%" << std::endl;
 
-      Bool_t amp_ok = (fitted_amp >= 0 && fitted_amp <= peak_height * 0.20);
-      Bool_t slope_ok = (fitted_slope >= 0.05 && fitted_slope < 1.0);
+      Bool_t amp_ok = (fitted_amp > 1e-6 && fitted_amp <= peak_height * 0.30);
+      Bool_t slope_ok = (fitted_slope > 0.01 && fitted_slope < 2.0);
       Bool_t chi2_ok = (chi2_with_htail < best_chi2);
-      Bool_t improvement_ok = (improvement > 0.005);
+      Bool_t improvement_ok = (improvement > 0.002);
 
       if (amp_ok && slope_ok && chi2_ok && improvement_ok) {
-        std::cout << "    ✓ High tail ACCEPTED" << std::endl;
+        std::cout << "High tail ACCEPTED" << std::endl;
         best_chi2 = chi2_with_htail;
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
           best_params[i] = fit_function_->GetParameter(i);
           best_errors[i] = fit_function_->GetParError(i);
         }
       } else {
-        std::cout << "    ✗ High tail REJECTED" << std::endl;
+        std::cout << "High tail REJECTED" << std::endl;
         fit_function_->FixParameter(8, 0);
         fit_function_->FixParameter(9, 0.5);
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
@@ -786,40 +639,83 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
         }
       }
     } else {
-      std::cout << "    ✗ High tail fit FAILED" << std::endl;
+      std::cout << "High tail fit FAILED" << std::endl;
       fit_function_->FixParameter(8, 0);
       fit_function_->FixParameter(9, 0.5);
+      for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
+      }
     }
-  } else {
-    std::cout << "  High tail DISABLED by user" << std::endl;
   }
 
+  if (use_step_) {
+    std::cout << "Testing step function..." << std::endl;
+
+    fit_function_->ReleaseParameter(5);
+    fit_function_->SetParameter(5, gaus_amp * 0.05);
+
+    TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
+
+    if (step_fit.Get() && step_fit->IsValid()) {
+      Double_t chi2_with_step = step_fit->Chi2() / step_fit->Ndf();
+      Double_t improvement = (best_chi2 - chi2_with_step) / best_chi2;
+
+      std::cout << "Chi2/ndf: " << chi2_with_step << " vs " << best_chi2
+                << std::endl;
+      std::cout << "Improvement: " << improvement * 100 << " percent"
+                << std::endl;
+
+      if (improvement > 0.002 && chi2_with_step < best_chi2) {
+        std::cout << "Step ACCEPTED" << std::endl;
+        best_chi2 = chi2_with_step;
+        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        std::cout << "Step REJECTED" << std::endl;
+        fit_function_->FixParameter(5, 0);
+        for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+    } else {
+      std::cout << "Step fit FAILED" << std::endl;
+      fit_function_->FixParameter(5, 0);
+      for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
+      }
+    }
+  }
+
+  std::cout << "Final fit with selected components..." << std::endl;
   for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
     fit_function_->SetParameter(i, best_params[i]);
     fit_function_->SetParError(i, best_errors[i]);
   }
 
-  std::cout << "\nStep 4: Final fit with selected components..." << std::endl;
   TFitResultPtr final_fit = working_hist_->Fit(fit_function_, "LSMEN+");
 
   if (final_fit.Get() && final_fit->IsValid()) {
     Double_t final_chi2 = final_fit->Chi2() / final_fit->Ndf();
-    std::cout << "SUCCESS: Final chi2/ndf = " << final_chi2 << std::endl;
+    std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
 
-    std::cout << "\nActive components:" << std::endl;
-    std::cout << "  Gaussian: YES" << std::endl;
-    std::cout << "  Background: YES" << std::endl;
-    std::cout << "  Low tail: "
+    std::cout << "Gaussian: YES" << std::endl;
+    std::cout << "Background: YES" << std::endl;
+    std::cout << "Low tail: "
               << (fit_function_->GetParameter(6) > 1e-6 ? "YES" : "NO")
               << std::endl;
-    std::cout << "  Step: "
+    std::cout << "Step: "
               << (fit_function_->GetParameter(5) > 1e-6 ? "YES" : "NO")
               << std::endl;
-    std::cout << "  High tail: "
+    std::cout << "High tail: "
               << (fit_function_->GetParameter(8) > 1e-6 ? "YES" : "NO")
               << std::endl;
 
-    PlotFitDetailed(canvas, color, peak_name);
+    PlotFitDetailed(peak_name);
 
     results.mu = fit_function_->GetParameter(0);
     results.mu_error = fit_function_->GetParError(0);
@@ -842,13 +738,12 @@ FitResultDetailed FittingUtils::FitPeakDetailed(TCanvas *canvas, Int_t color,
     results.high_tail_range = fit_function_->GetParameter(9);
     results.high_tail_range_error = fit_function_->GetParError(9);
   } else {
-    std::cout << "ERROR: Final fit did not converge!" << std::endl;
+    std::cout << "ERROR: Final fit did not converge" << std::endl;
     results.mu_error = -1;
   }
 
   return results;
 }
-
 void FittingUtils::RegisterCustomFunctions() {
   TF1 *f_standard =
       new TF1("Standard", &FittingFunctions::Standard, 0, 1000, 5);

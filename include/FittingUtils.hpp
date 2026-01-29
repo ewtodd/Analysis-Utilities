@@ -2,9 +2,6 @@
 #define FITTINGUTILS_H
 
 #include "PlottingUtils.hpp"
-#include <Math/Factory.h>
-#include <Math/Functor.h>
-#include <Math/Minimizer.h>
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TFile.h>
@@ -72,15 +69,10 @@ private:
   Bool_t use_low_tail_;
   Bool_t use_high_tail_;
 
-  void PlotFitStandard(TCanvas *canvas, Int_t color, const TString peak_name);
-  void PlotFitDetailed(TCanvas *canvas, Int_t color, const TString peak_name);
+  void PlotFitStandard(const TString peak_name);
+  void PlotFitDetailed(const TString peak_name);
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
-
-  static Double_t CustomLikelihood(const Double_t *par);
-  static TH1 *static_hist_;
-  static TF1 *static_func_;
-  static Double_t lambda_skewness_;
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
@@ -94,13 +86,10 @@ public:
 
   TF1 *GetFitFunction() { return fit_function_; }
 
-  FitResultStandard FitPeakStandard(TCanvas *canvas, Int_t color,
-                                    const TString peak_name);
+  FitResultStandard FitPeakStandard(const TString peak_name);
 
-  FitResultDetailed FitPeakDetailed(TCanvas *canvas, Int_t color,
-                                    const TString peak_name);
+  FitResultDetailed FitPeakDetailed(const TString peak_name);
 
-  void SetSkewnessPenalty(Double_t lambda) { lambda_skewness_ = lambda; }
   static void RegisterCustomFunctions();
 };
 

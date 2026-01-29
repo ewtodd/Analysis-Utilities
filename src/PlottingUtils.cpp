@@ -123,13 +123,22 @@ void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
 
 void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename,
                                Bool_t log) {
+  canvas->SetLogy(kFALSE);
+  canvas->Modified();
+  canvas->Update();
   canvas->Print("plots/" + output_filename);
+
   if (log) {
     canvas->SetLogy(kTRUE);
+    canvas->Modified();
+    canvas->Update();
     canvas->Print("plots/log_" + output_filename);
+
+    canvas->SetLogy(kFALSE);
+    canvas->Modified();
+    canvas->Update();
   }
 }
-
 std::vector<Int_t> PlottingUtils::GetDefaultColors() {
   return {kRed + 1,   kBlue + 1,   kGreen + 2,  kOrange + 1,  kMagenta + 1,
           kCyan + 2,  kViolet + 1, kSpring - 1, kPink + 1,    kTeal + 2,
