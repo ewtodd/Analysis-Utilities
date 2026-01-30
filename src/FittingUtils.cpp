@@ -77,16 +77,16 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParameter(3, bkg_estimate);
     fit_function_->SetParameter(4, 0);
 
-    fit_function_->SetParLimits(5, 0, peak_height * 0.3);
+    fit_function_->SetParLimits(5, 0, peak_height * 0.5);
     fit_function_->SetParameter(5, 0);
 
     fit_function_->SetParLimits(6, 0, peak_height);
-    fit_function_->SetParLimits(7, 0, 100);
+    fit_function_->SetParLimits(7, 1, 10);
     fit_function_->SetParameter(6, peak_height * 0.10);
     fit_function_->SetParameter(7, 0.2);
 
     fit_function_->SetParLimits(8, 0, peak_height);
-    fit_function_->SetParLimits(9, 0, 100);
+    fit_function_->SetParLimits(9, 1, 10);
     fit_function_->SetParameter(8, peak_height * 0.10);
     fit_function_->SetParameter(9, 0.2);
 
@@ -244,6 +244,7 @@ void FittingUtils::PlotFitStandard(const TString peak_name) {
   peak->SetParameter(1, fit_function_->GetParameter(1));
   peak->SetParameter(2, fit_function_->GetParameter(2));
   peak->SetLineColor(kBlack);
+  peak->SetNpx(1000);
   peak->Draw("same");
 
   TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
@@ -251,6 +252,7 @@ void FittingUtils::PlotFitStandard(const TString peak_name) {
   background->SetParameter(0, fit_function_->GetParameter(3));
   background->SetParameter(1, fit_function_->GetParameter(4));
   background->SetLineColor(kGreen);
+  background->SetNpx(1000);
   background->Draw("same");
   pad2->cd();
 
@@ -346,6 +348,7 @@ void FittingUtils::PlotFitDetailed(const TString peak_name) {
   peak->SetParameter(1, fit_function_->GetParameter(1));
   peak->SetParameter(2, fit_function_->GetParameter(2));
   peak->SetLineColor(kBlack);
+  peak->SetNpx(1000);
   peak->Draw("same");
 
   TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
@@ -353,6 +356,7 @@ void FittingUtils::PlotFitDetailed(const TString peak_name) {
   background->SetParameter(0, fit_function_->GetParameter(3));
   background->SetParameter(1, fit_function_->GetParameter(4));
   background->SetLineColor(kGreen);
+  background->SetNpx(1000);
   background->Draw("same");
 
   TF1 *step = new TF1("step", FittingFunctions::Step, fit_range_low_,
@@ -360,7 +364,8 @@ void FittingUtils::PlotFitDetailed(const TString peak_name) {
   step->SetParameter(0, fit_function_->GetParameter(0));
   step->SetParameter(1, fit_function_->GetParameter(1));
   step->SetParameter(2, fit_function_->GetParameter(5));
-  step->SetLineColor(kMagenta);
+  step->SetLineColor(kGray);
+  step->SetNpx(1000);
   step->Draw("same");
 
   TF1 *low_tail = new TF1("lowtail", FittingFunctions::LowTail, fit_range_low_,
@@ -370,6 +375,7 @@ void FittingUtils::PlotFitDetailed(const TString peak_name) {
   low_tail->SetParameter(2, fit_function_->GetParameter(6));
   low_tail->SetParameter(3, fit_function_->GetParameter(7));
   low_tail->SetLineColor(kRed);
+  low_tail->SetNpx(1000);
   low_tail->Draw("same");
 
   TF1 *high_tail = new TF1("hightail", FittingFunctions::HighTail,
@@ -379,6 +385,7 @@ void FittingUtils::PlotFitDetailed(const TString peak_name) {
   high_tail->SetParameter(2, fit_function_->GetParameter(8));
   high_tail->SetParameter(3, fit_function_->GetParameter(9));
   high_tail->SetLineColor(kOrange);
+  high_tail->SetNpx(1000);
   high_tail->Draw("same");
 
   pad2->cd();
@@ -499,9 +506,9 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
 
   fit_function_->FixParameter(5, 0);
   fit_function_->FixParameter(6, 0);
-  fit_function_->FixParameter(7, 0.5);
+  fit_function_->FixParameter(7, 1);
   fit_function_->FixParameter(8, 0);
-  fit_function_->FixParameter(9, 0.5);
+  fit_function_->FixParameter(9, 1);
 
   TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
@@ -533,7 +540,8 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     std::cout << "Testing step function..." << std::endl;
 
     fit_function_->ReleaseParameter(5);
-    fit_function_->SetParameter(5, gaus_amp * 0.05);
+    fit_function_->SetParLimits(5, 0, peak_height);
+    fit_function_->SetParameter(5, gaus_amp);
 
     TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
@@ -572,10 +580,12 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
 
     fit_function_->ReleaseParameter(6);
     fit_function_->ReleaseParameter(7);
+    fit_function_->SetParLimits(6, 0, peak_height * 1.2);
+    fit_function_->SetParLimits(7, 1, 10);
 
     Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(6, tail_amp_init);
-    fit_function_->SetParameter(7, 0.3);
+    fit_function_->SetParameter(7, 1);
 
     TFitResultPtr tail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
@@ -594,7 +604,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
       } else {
         std::cout << "Low tail REJECTED" << std::endl;
         fit_function_->FixParameter(6, 0);
-        fit_function_->FixParameter(7, 0.5);
+        fit_function_->FixParameter(7, 1);
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -603,7 +613,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     } else {
       std::cout << "Low tail fit FAILED" << std::endl;
       fit_function_->FixParameter(6, 0);
-      fit_function_->FixParameter(7, 0.5);
+      fit_function_->FixParameter(7, 1);
       for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
@@ -616,10 +626,12 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
 
     fit_function_->ReleaseParameter(8);
     fit_function_->ReleaseParameter(9);
+    fit_function_->SetParLimits(8, 0, peak_height * 1.2);
+    fit_function_->SetParLimits(9, 1, 10);
 
     Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(8, tail_amp_init);
-    fit_function_->SetParameter(9, 0.3);
+    fit_function_->SetParameter(9, 1);
 
     TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
@@ -638,7 +650,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
       } else {
         std::cout << "High tail REJECTED" << std::endl;
         fit_function_->FixParameter(8, 0);
-        fit_function_->FixParameter(9, 0.5);
+        fit_function_->FixParameter(9, 1);
         for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -647,7 +659,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     } else {
       std::cout << "High tail fit FAILED" << std::endl;
       fit_function_->FixParameter(8, 0);
-      fit_function_->FixParameter(9, 0.5);
+      fit_function_->FixParameter(9, 1);
       for (Int_t i = 0; i < fit_function_->GetNpar(); i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
@@ -739,11 +751,11 @@ void FittingUtils::RegisterCustomFunctions() {
 
   f_detailed->SetParLimits(0, 0, 1e7);
   f_detailed->SetParLimits(1, 0, 1e7);
-  f_detailed->SetParLimits(2, -1e-6, 1e7);
-  f_detailed->SetParLimits(5, -1e-6, 1e7);
-  f_detailed->SetParLimits(6, -1e-6, 1e7);
+  f_detailed->SetParLimits(2, 0, 1e7);
+  f_detailed->SetParLimits(5, 0, 1e7);
+  f_detailed->SetParLimits(6, 0, 1e7);
   f_detailed->SetParLimits(7, 0, 1e7);
-  f_detailed->SetParLimits(8, -1e-6, 1e7);
+  f_detailed->SetParLimits(8, 0, 1e7);
   f_detailed->SetParLimits(9, 0, 1e7);
 
   std::cout << "Custom fitting functions registered and available in FitPanel!"
