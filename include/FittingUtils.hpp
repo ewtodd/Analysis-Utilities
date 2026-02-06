@@ -64,31 +64,39 @@ private:
   TH1 *working_hist_;
   Float_t fit_range_low_;
   Float_t fit_range_high_;
+  Bool_t use_flat_background_;
   Bool_t isDetailed_;
   Bool_t use_step_;
   Bool_t use_low_tail_;
   Bool_t use_high_tail_;
 
-  void PlotFitStandard(const TString peak_name);
-  void PlotFitDetailed(const TString peak_name);
+  void PlotFitStandard(const TString input_name, const TString peak_name);
+  void PlotFitDetailed(const TString input_name, const TString peak_name);
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
-               Bool_t isDetailed, Bool_t use_step = kTRUE,
-               Bool_t use_low_tail = kTRUE, Bool_t use_high_tail = kTRUE);
+               Bool_t use_flat_background, Bool_t isDetailed,
+               Bool_t use_step = kTRUE, Bool_t use_low_tail = kTRUE,
+               Bool_t use_high_tail = kTRUE);
   ~FittingUtils();
 
-  void UseStep(Bool_t use = kTRUE) { use_step_ = use; }
-  void UseLowTail(Bool_t use = kTRUE) { use_low_tail_ = use; }
-  void UseHighTail(Bool_t use = kTRUE) { use_high_tail_ = use; }
+  void UseFlatBackground(Bool_t use_flat_background = kTRUE) {
+    use_flat_background_ = use_flat_background;
+  }
+  void UseStep(Bool_t use_step = kTRUE) { use_step_ = use_step; }
+  void UseLowTail(Bool_t use_low_tail = kTRUE) { use_low_tail_ = use_low_tail; }
+  void UseHighTail(Bool_t use_high_tail = kTRUE) {
+    use_high_tail_ = use_high_tail;
+  }
 
   TF1 *GetFitFunction() { return fit_function_; }
 
-  FitResultStandard FitPeakStandard(const TString peak_name);
-
-  FitResultDetailed FitPeakDetailed(const TString peak_name);
+  FitResultStandard FitPeakStandard(const TString input_name,
+                                    const TString peak_name);
+  FitResultDetailed FitPeakDetailed(const TString input_name,
+                                    const TString peak_name);
 
   static void RegisterCustomFunctions();
 };
