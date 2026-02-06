@@ -18,7 +18,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
-          version = "30.01.2026";
+          version = "06.02.2026";
 
           src = ./.;
 
@@ -94,7 +94,7 @@
           ];
 
           shellHook = ''
-            export SHELL="/run/current-system/sw/bin/bash"
+            export SHELL="/run/current-system/sw/bin/zsh"
             echo "Development environment for working on the analysis utilities source"
 
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"

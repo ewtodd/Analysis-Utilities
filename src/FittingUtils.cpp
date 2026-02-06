@@ -1,12 +1,14 @@
 #include "FittingUtils.hpp"
 
 FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
-                           Float_t fit_range_high, Bool_t isDetailed,
-                           Bool_t use_step, Bool_t use_low_tail,
-                           Bool_t use_high_tail) {
+                           Float_t fit_range_high, Bool_t use_flat_background,
+                           Bool_t isDetailed, Bool_t use_step,
+                           Bool_t use_low_tail, Bool_t use_high_tail) {
+
   working_hist_ = static_cast<TH1F *>(working_hist->Clone());
   fit_range_low_ = fit_range_low;
   fit_range_high_ = fit_range_high;
+  use_flat_background_ = use_flat_background;
   isDetailed_ = isDetailed;
   use_step_ = use_step;
   use_low_tail_ = use_low_tail;
@@ -34,8 +36,11 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
     fit_function_->SetParLimits(2, 0, peak_height * 1.5);
     fit_function_->SetParLimits(3, 0, peak_height * 0.5);
-    fit_function_->SetParLimits(4, -0.1 * bkg_estimate / range_width,
-                                0.1 * bkg_estimate / range_width);
+    if (!use_flat_background_) {
+      fit_function_->SetParLimits(4, -0.1 * bkg_estimate / range_width,
+                                  0.1 * bkg_estimate / range_width);
+    } else
+      fit_function_->SetParLimits(4, 0, 0);
 
     fit_function_->SetParameter(0, mu_init);
     fit_function_->SetParameter(1, sigma_init);
@@ -68,8 +73,11 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
     fit_function_->SetParLimits(2, 0, peak_height * 1.5);
     fit_function_->SetParLimits(3, 0, peak_height * 0.5);
-    fit_function_->SetParLimits(4, -0.1 * bkg_estimate / range_width,
-                                0.1 * bkg_estimate / range_width);
+    if (!use_flat_background_) {
+      fit_function_->SetParLimits(4, -0.1 * bkg_estimate / range_width,
+                                  0.1 * bkg_estimate / range_width);
+    } else
+      fit_function_->SetParLimits(4, 0, 0);
 
     fit_function_->SetParameter(0, mu_init);
     fit_function_->SetParameter(1, sigma_init);
@@ -206,7 +214,8 @@ Double_t FittingFunctions::Detailed(Double_t *x, Double_t *par) {
          HighTail(x, high_tail_par);
 }
 
-void FittingUtils::PlotFitStandard(const TString peak_name) {
+void FittingUtils::PlotFitStandard(const TString input_name,
+                                   const TString peak_name) {
   TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
   PlottingUtils::ConfigureCanvas(canvas, kFALSE);
 
@@ -304,13 +313,16 @@ void FittingUtils::PlotFitStandard(const TString peak_name) {
   zero_line->Draw("same");
 
   canvas->cd();
-  PlottingUtils::SaveFigure(canvas, peak_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, "log_" + peak_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(
+      canvas, "log_" + peak_name + "_" + input_name + ".png", kFALSE);
 }
 
-void FittingUtils::PlotFitDetailed(const TString peak_name) {
+void FittingUtils::PlotFitDetailed(const TString input_name,
+                                   const TString peak_name) {
   TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
   PlottingUtils::ConfigureCanvas(canvas, kFALSE);
 
@@ -437,10 +449,12 @@ void FittingUtils::PlotFitDetailed(const TString peak_name) {
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  PlottingUtils::SaveFigure(canvas, peak_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, "log_" + peak_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(
+      canvas, "log_" + peak_name + "_" + input_name + ".png", kFALSE);
 }
 
 Double_t FittingUtils::EstimateBackground() {
@@ -468,25 +482,34 @@ Double_t FittingUtils::ClampToBounds(Int_t param_index, Double_t value) {
   return value;
 }
 
-FitResultStandard FittingUtils::FitPeakStandard(const TString peak_name) {
+FitResultStandard FittingUtils::FitPeakStandard(const TString input_name,
+                                                const TString peak_name) {
   FitResultStandard results;
 
-  TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
-                          fit_range_low_, fit_range_high_, 2);
+  // Only fit background if not using flat background
+  if (!use_flat_background_) {
+    TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
+                            fit_range_low_, fit_range_high_, 2);
 
-  Double_t exclude_low =
-      fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
-  Double_t exclude_high =
-      fit_function_->GetParameter(0) + 3 * fit_function_->GetParameter(1);
-  working_hist_->Fit(bkg_only, "QN0+", "", fit_range_low_, exclude_low);
+    Double_t exclude_low =
+        fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
+    Double_t exclude_high =
+        fit_function_->GetParameter(0) + 3 * fit_function_->GetParameter(1);
+    working_hist_->Fit(bkg_only, "QN0+", "", fit_range_low_, exclude_low);
 
-  fit_function_->SetParameter(3, ClampToBounds(3, bkg_only->GetParameter(0)));
-  fit_function_->SetParameter(4, ClampToBounds(4, bkg_only->GetParameter(1)));
+    fit_function_->SetParameter(3, ClampToBounds(3, bkg_only->GetParameter(0)));
+    fit_function_->SetParameter(4, ClampToBounds(4, bkg_only->GetParameter(1)));
+
+    delete bkg_only;
+  } else {
+    // For flat background, keep slope at 0 (already set in constructor)
+    fit_function_->FixParameter(4, 0);
+  }
 
   TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMEN+");
 
   if (fit_result.Get() && fit_result->IsValid()) {
-    PlotFitStandard(peak_name);
+    PlotFitStandard(input_name, peak_name);
     results.mu = fit_function_->GetParameter(0);
     results.mu_error = fit_function_->GetParError(0);
     results.sigma = fit_function_->GetParameter(1);
@@ -501,14 +524,21 @@ FitResultStandard FittingUtils::FitPeakStandard(const TString peak_name) {
   return results;
 }
 
-FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
+FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
+                                                const TString peak_name) {
   FitResultDetailed results;
 
+  // Fix components that won't be used initially
   fit_function_->FixParameter(5, 0);
   fit_function_->FixParameter(6, 0);
   fit_function_->FixParameter(7, 1);
   fit_function_->FixParameter(8, 0);
   fit_function_->FixParameter(9, 1);
+
+  // Fix slope parameter if using flat background
+  if (use_flat_background_) {
+    fit_function_->FixParameter(4, 0);
+  }
 
   TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
 
@@ -535,6 +565,8 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
 
   std::cout << "Peak height: " << peak_height << std::endl;
   std::cout << "Gaussian amplitude: " << gaus_amp << std::endl;
+  std::cout << "Background mode: " << (use_flat_background_ ? "FLAT" : "LINEAR")
+            << std::endl;
 
   if (use_step_) {
     std::cout << "Testing step function..." << std::endl;
@@ -673,6 +705,11 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     fit_function_->SetParError(i, best_errors[i]);
   }
 
+  // Ensure slope is still fixed if using flat background
+  if (use_flat_background_) {
+    fit_function_->FixParameter(4, 0);
+  }
+
   TFitResultPtr final_fit = working_hist_->Fit(fit_function_, "LSMEN+");
 
   if (final_fit.Get() && final_fit->IsValid()) {
@@ -680,7 +717,8 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
 
     std::cout << "Gaussian: YES" << std::endl;
-    std::cout << "Background: YES" << std::endl;
+    std::cout << "Background: " << (use_flat_background_ ? "FLAT" : "LINEAR")
+              << std::endl;
     std::cout << "Step: "
               << (fit_function_->GetParameter(5) > 1e-6 ? "YES" : "NO")
               << std::endl;
@@ -691,7 +729,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString peak_name) {
               << (fit_function_->GetParameter(8) > 1e-6 ? "YES" : "NO")
               << std::endl;
 
-    PlotFitDetailed(peak_name);
+    PlotFitDetailed(input_name, peak_name);
 
     results.mu = fit_function_->GetParameter(0);
     results.mu_error = fit_function_->GetParError(0);
