@@ -20,6 +20,10 @@ Double_t LowTail(Double_t *x, Double_t *par);
 Double_t HighTail(Double_t *x, Double_t *par);
 Double_t Standard(Double_t *x, Double_t *par);
 Double_t Detailed(Double_t *x, Double_t *par);
+Double_t DoublePeakStandard(Double_t *x, Double_t *par);
+Double_t DoublePeakDetailed(Double_t *x, Double_t *par);
+Double_t TriplePeakStandard(Double_t *x, Double_t *par);
+Double_t TriplePeakDetailed(Double_t *x, Double_t *par);
 } // namespace FittingFunctions
 
 struct FitResultStandard {
@@ -58,6 +62,28 @@ struct FitResultDetailed {
   Float_t high_tail_range_error;
 };
 
+struct FitResultDoublePeakStandard {
+  FitResultStandard peak1;
+  FitResultStandard peak2;
+};
+
+struct FitResultDoublePeakDetailed {
+  FitResultDetailed peak1;
+  FitResultDetailed peak2;
+};
+
+struct FitResultTriplePeakStandard {
+  FitResultStandard peak1;
+  FitResultStandard peak2;
+  FitResultStandard peak3;
+};
+
+struct FitResultTriplePeakDetailed {
+  FitResultDetailed peak1;
+  FitResultDetailed peak2;
+  FitResultDetailed peak3;
+};
+
 class FittingUtils {
 private:
   TF1 *fit_function_;
@@ -74,6 +100,14 @@ private:
 
   void PlotFitStandard(const TString input_name, const TString peak_name);
   void PlotFitDetailed(const TString input_name, const TString peak_name);
+  void PlotFitDoublePeakStandard(const TString input_name,
+                                 const TString peak_name);
+  void PlotFitDoublePeakDetailed(const TString input_name,
+                                 const TString peak_name);
+  void PlotFitTriplePeakStandard(const TString input_name,
+                                 const TString peak_name);
+  void PlotFitTriplePeakDetailed(const TString input_name,
+                                 const TString peak_name);
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
 
@@ -106,6 +140,24 @@ public:
                                     const TString peak_name);
   FitResultDetailed FitPeakDetailed(const TString input_name,
                                     const TString peak_name);
+
+  FitResultDoublePeakStandard FitDoublePeakStandard(const TString input_name,
+                                                    const TString peak_name,
+                                                    Double_t mu1_init,
+                                                    Double_t mu2_init);
+  FitResultDoublePeakDetailed FitDoublePeakDetailed(const TString input_name,
+                                                    const TString peak_name,
+                                                    Double_t mu1_init,
+                                                    Double_t mu2_init);
+
+  FitResultTriplePeakStandard
+  FitTriplePeakStandard(const TString input_name, const TString peak_name,
+                        const FitResultDoublePeakStandard &constrained_peaks,
+                        Double_t mu3_init);
+  FitResultTriplePeakDetailed
+  FitTriplePeakDetailed(const TString input_name, const TString peak_name,
+                        const FitResultDoublePeakDetailed &constrained_peaks,
+                        Double_t mu3_init);
 
   static void RegisterCustomFunctions();
 };
