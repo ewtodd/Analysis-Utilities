@@ -13,6 +13,7 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   use_step_ = use_step;
   use_low_tail_ = use_low_tail;
   use_high_tail_ = use_high_tail;
+  use_manual_init_ = kFALSE;
 
   if (!isDetailed_) {
     fit_function_ = new TF1("Standard", &FittingFunctions::Standard,
@@ -212,6 +213,48 @@ Double_t FittingFunctions::Detailed(Double_t *x, Double_t *par) {
   return Gaussian(x, gaus_par) + LinearBackground(x, bkg_par) +
          Step(x, step_par) + LowTail(x, low_tail_par) +
          HighTail(x, high_tail_par);
+}
+
+void FittingUtils::SetManualParameters(const std::vector<Double_t> &params) {
+  if (params.size() != (size_t)fit_function_->GetNpar()) {
+    std::cerr << "ERROR: Manual parameters size (" << params.size()
+              << ") doesn't match number of fit parameters ("
+              << fit_function_->GetNpar() << ")" << std::endl;
+    return;
+  }
+
+  manual_params_ = params;
+  use_manual_init_ = kTRUE;
+
+  // Apply the parameters immediately
+  for (size_t i = 0; i < params.size(); i++) {
+    fit_function_->SetParameter(i, params[i]);
+  }
+
+  std::cout << "Manual parameters set:" << std::endl;
+  for (size_t i = 0; i < params.size(); i++) {
+    std::cout << "  Par[" << i << "] " << fit_function_->GetParName(i) << " = "
+              << params[i] << std::endl;
+  }
+}
+
+void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
+  if (index < 0 || index >= fit_function_->GetNpar()) {
+    std::cerr << "ERROR: Parameter index " << index << " out of range [0, "
+              << fit_function_->GetNpar() - 1 << "]" << std::endl;
+    return;
+  }
+
+  if (!use_manual_init_) {
+    manual_params_.resize(fit_function_->GetNpar(), 0.0);
+    use_manual_init_ = kTRUE;
+  }
+
+  manual_params_[index] = value;
+  fit_function_->SetParameter(index, value);
+
+  std::cout << "Set Par[" << index << "] " << fit_function_->GetParName(index)
+            << " = " << value << std::endl;
 }
 
 void FittingUtils::PlotFitStandard(const TString input_name,
@@ -486,30 +529,50 @@ FitResultStandard FittingUtils::FitPeakStandard(const TString input_name,
                                                 const TString peak_name) {
   FitResultStandard results;
 
-  // Only fit background if not using flat background
-  if (!use_flat_background_) {
-    TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
-                            fit_range_low_, fit_range_high_, 2);
+  if (!use_manual_init_) {
+    if (!use_flat_background_) {
+      TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
+                              fit_range_low_, fit_range_high_, 2);
 
-    Double_t exclude_low =
-        fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
-    Double_t exclude_high =
-        fit_function_->GetParameter(0) + 3 * fit_function_->GetParameter(1);
-    working_hist_->Fit(bkg_only, "QN0+", "", fit_range_low_, exclude_low);
+      Double_t exclude_low =
+          fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
+      Double_t exclude_high =
+          fit_function_->GetParameter(0) + 3 * fit_function_->GetParameter(1);
+      working_hist_->Fit(bkg_only, "QN0R", "", fit_range_low_, exclude_low);
 
-    fit_function_->SetParameter(3, ClampToBounds(3, bkg_only->GetParameter(0)));
-    fit_function_->SetParameter(4, ClampToBounds(4, bkg_only->GetParameter(1)));
+      fit_function_->SetParameter(3,
+                                  ClampToBounds(3, bkg_only->GetParameter(0)));
+      fit_function_->SetParameter(4,
+                                  ClampToBounds(4, bkg_only->GetParameter(1)));
 
-    delete bkg_only;
+      delete bkg_only;
+    } else {
+      fit_function_->FixParameter(4, 0);
+    }
   } else {
-    // For flat background, keep slope at 0 (already set in constructor)
-    fit_function_->FixParameter(4, 0);
+    std::cout << "Using manually initialized parameters for Standard fit"
+              << std::endl;
+    for (size_t i = 0; i < manual_params_.size(); i++) {
+      fit_function_->SetParameter(i, manual_params_[i]);
+      std::cout << "  Par[" << i << "] " << fit_function_->GetParName(i)
+                << " = " << manual_params_[i] << std::endl;
+    }
+
+    if (use_flat_background_) {
+      fit_function_->FixParameter(4, 0);
+      std::cout << "  Fixing BkgSlope to 0 (flat background mode)" << std::endl;
+    }
   }
 
-  TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMEN+");
+  TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMENR+");
 
   if (fit_result.Get() && fit_result->IsValid()) {
+    std::cout << "Standard fit converged successfully" << std::endl;
+    std::cout << "Chi2/ndf = " << fit_result->Chi2() / fit_result->Ndf()
+              << std::endl;
+
     PlotFitStandard(input_name, peak_name);
+
     results.mu = fit_function_->GetParameter(0);
     results.mu_error = fit_function_->GetParError(0);
     results.sigma = fit_function_->GetParameter(1);
@@ -520,7 +583,12 @@ FitResultStandard FittingUtils::FitPeakStandard(const TString input_name,
     results.bkg_const_error = fit_function_->GetParError(3);
     results.bkg_slope = fit_function_->GetParameter(4);
     results.bkg_slope_error = fit_function_->GetParError(4);
+  } else {
+    std::cout << "ERROR: Standard fit failed to converge" << std::endl;
+    std::cout << "Fit status: " << fit_result->Status() << std::endl;
+    results.mu_error = -1;
   }
+
   return results;
 }
 
@@ -528,28 +596,36 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
                                                 const TString peak_name) {
   FitResultDetailed results;
 
-  // Fix components that won't be used initially
   fit_function_->FixParameter(5, 0);
   fit_function_->FixParameter(6, 0);
   fit_function_->FixParameter(7, 1);
   fit_function_->FixParameter(8, 0);
   fit_function_->FixParameter(9, 1);
 
-  // Fix slope parameter if using flat background
   if (use_flat_background_) {
     fit_function_->FixParameter(4, 0);
   }
 
-  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
+  if (use_manual_init_) {
+    std::cout << "Using manually initialized parameters" << std::endl;
+    for (size_t i = 0; i < manual_params_.size(); i++) {
+      fit_function_->SetParameter(i, manual_params_[i]);
+    }
 
-  if (!initial_fit.Get() || !initial_fit->IsValid()) {
-    std::cout << "ERROR: Initial fit failed" << std::endl;
-    results.mu_error = -1;
-    return results;
+    std::cout << "Skipping auto-initialization, using provided values"
+              << std::endl;
+  } else {
+    TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+
+    if (!initial_fit.Get() || !initial_fit->IsValid()) {
+      std::cout << "ERROR: Initial fit failed" << std::endl;
+      results.mu_error = -1;
+      return results;
+    }
+
+    Double_t chi2_standard = initial_fit->Chi2() / initial_fit->Ndf();
+    std::cout << "Initial chi2/ndf = " << chi2_standard << std::endl;
   }
-
-  Double_t chi2_standard = initial_fit->Chi2() / initial_fit->Ndf();
-  std::cout << "Initial chi2/ndf = " << chi2_standard << std::endl;
 
   Double_t gaus_amp = TMath::Abs(fit_function_->GetParameter(2));
   Double_t peak_height =
@@ -561,8 +637,14 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
     best_params[i] = fit_function_->GetParameter(i);
     best_errors[i] = fit_function_->GetParError(i);
   }
-  Double_t best_chi2 = chi2_standard;
 
+  TFitResultPtr current_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+
+  Double_t best_chi2 = (current_fit.Get() && current_fit->IsValid())
+                           ? current_fit->Chi2() / current_fit->Ndf()
+                           : 1e9;
+
+  std::cout << "Starting chi2/ndf = " << best_chi2 << std::endl;
   std::cout << "Peak height: " << peak_height << std::endl;
   std::cout << "Gaussian amplitude: " << gaus_amp << std::endl;
   std::cout << "Background mode: " << (use_flat_background_ ? "FLAT" : "LINEAR")
@@ -573,9 +655,12 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
 
     fit_function_->ReleaseParameter(5);
     fit_function_->SetParLimits(5, 0, peak_height);
-    fit_function_->SetParameter(5, gaus_amp);
 
-    TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
+    if (!use_manual_init_) {
+      fit_function_->SetParameter(5, gaus_amp);
+    }
+
+    TFitResultPtr step_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
     if (step_fit.Get() && step_fit->IsValid()) {
       Double_t chi2_with_step = step_fit->Chi2() / step_fit->Ndf();
@@ -615,11 +700,13 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
     fit_function_->SetParLimits(6, 0, peak_height * 1.2);
     fit_function_->SetParLimits(7, 1, 10);
 
-    Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
-    fit_function_->SetParameter(6, tail_amp_init);
-    fit_function_->SetParameter(7, 1);
+    if (!use_manual_init_) {
+      Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
+      fit_function_->SetParameter(6, tail_amp_init);
+      fit_function_->SetParameter(7, 1);
+    }
 
-    TFitResultPtr tail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
+    TFitResultPtr tail_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
     if (tail_fit.Get() && tail_fit->IsValid()) {
       Double_t chi2_with_tail = tail_fit->Chi2() / tail_fit->Ndf();
@@ -661,11 +748,13 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
     fit_function_->SetParLimits(8, 0, peak_height * 1.2);
     fit_function_->SetParLimits(9, 1, 10);
 
-    Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
-    fit_function_->SetParameter(8, tail_amp_init);
-    fit_function_->SetParameter(9, 1);
+    if (!use_manual_init_) {
+      Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
+      fit_function_->SetParameter(8, tail_amp_init);
+      fit_function_->SetParameter(9, 1);
+    }
 
-    TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "LSMNQ0+");
+    TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
     if (htail_fit.Get() && htail_fit->IsValid()) {
       Double_t chi2_with_htail = htail_fit->Chi2() / htail_fit->Ndf();
@@ -705,12 +794,11 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
     fit_function_->SetParError(i, best_errors[i]);
   }
 
-  // Ensure slope is still fixed if using flat background
   if (use_flat_background_) {
     fit_function_->FixParameter(4, 0);
   }
 
-  TFitResultPtr final_fit = working_hist_->Fit(fit_function_, "LSMEN+");
+  TFitResultPtr final_fit = working_hist_->Fit(fit_function_, "LSMRBENR+");
 
   if (final_fit.Get() && final_fit->IsValid()) {
     Double_t final_chi2 = final_fit->Chi2() / final_fit->Ndf();
@@ -758,7 +846,6 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
 
   return results;
 }
-
 void FittingUtils::RegisterCustomFunctions() {
   TF1 *f_standard =
       new TF1("Standard", &FittingFunctions::Standard, 0, 1000, 5);

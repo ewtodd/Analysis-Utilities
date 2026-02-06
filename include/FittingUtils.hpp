@@ -69,6 +69,8 @@ private:
   Bool_t use_step_;
   Bool_t use_low_tail_;
   Bool_t use_high_tail_;
+  Bool_t use_manual_init_;
+  std::vector<Double_t> manual_params_;
 
   void PlotFitStandard(const TString input_name, const TString peak_name);
   void PlotFitDetailed(const TString input_name, const TString peak_name);
@@ -89,6 +91,13 @@ public:
   void UseLowTail(Bool_t use_low_tail = kTRUE) { use_low_tail_ = use_low_tail; }
   void UseHighTail(Bool_t use_high_tail = kTRUE) {
     use_high_tail_ = use_high_tail;
+  }
+
+  void SetManualParameters(const std::vector<Double_t> &params);
+  void SetManualParameter(Int_t index, Double_t value);
+  void ClearManualParameters() {
+    use_manual_init_ = kFALSE;
+    manual_params_.clear();
   }
 
   TF1 *GetFitFunction() { return fit_function_; }
