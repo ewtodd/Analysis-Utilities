@@ -363,6 +363,52 @@ Double_t FittingFunctions::TriplePeakDetailed(Double_t *x, Double_t *par) {
          LinearBackground(x, bkg_par);
 }
 
+void FittingUtils::SwapDoublePeakStandardParameters() {
+  std::cout << "Swapping double peak standard parameters to enforce mu1 < mu2"
+            << std::endl;
+
+  Double_t temp_mu = fit_function_->GetParameter(0);
+  Double_t temp_mu_err = fit_function_->GetParError(0);
+  fit_function_->SetParameter(0, fit_function_->GetParameter(3));
+  fit_function_->SetParError(0, fit_function_->GetParError(3));
+  fit_function_->SetParameter(3, temp_mu);
+  fit_function_->SetParError(3, temp_mu_err);
+
+  Double_t temp_sigma = fit_function_->GetParameter(1);
+  Double_t temp_sigma_err = fit_function_->GetParError(1);
+  fit_function_->SetParameter(1, fit_function_->GetParameter(4));
+  fit_function_->SetParError(1, fit_function_->GetParError(4));
+  fit_function_->SetParameter(4, temp_sigma);
+  fit_function_->SetParError(4, temp_sigma_err);
+
+  Double_t temp_amp = fit_function_->GetParameter(2);
+  Double_t temp_amp_err = fit_function_->GetParError(2);
+  fit_function_->SetParameter(2, fit_function_->GetParameter(5));
+  fit_function_->SetParError(2, fit_function_->GetParError(5));
+  fit_function_->SetParameter(5, temp_amp);
+  fit_function_->SetParError(5, temp_amp_err);
+}
+
+void FittingUtils::SwapDoublePeakDetailedParameters() {
+  std::cout << "Swapping double peak detailed parameters to enforce mu1 < mu2"
+            << std::endl;
+
+  for (Int_t i = 0; i < 8; i++) {
+    Double_t temp_val = fit_function_->GetParameter(i);
+    Double_t temp_err = fit_function_->GetParError(i);
+
+    fit_function_->SetParameter(i, fit_function_->GetParameter(8 + i));
+    fit_function_->SetParError(i, fit_function_->GetParError(8 + i));
+
+    fit_function_->SetParameter(8 + i, temp_val);
+    fit_function_->SetParError(8 + i, temp_err);
+  }
+
+  std::cout << "  Swapped: Mu, Sigma, GausAmp, StepAmp, LowTailAmp, "
+               "LowTailSlope, HighTailAmp, HighTailSlope"
+            << std::endl;
+}
+
 void FittingUtils::SetManualParameters(const std::vector<Double_t> &params) {
   if (params.size() != (size_t)fit_function_->GetNpar()) {
     std::cerr << "ERROR: Manual parameters size (" << params.size()
@@ -503,9 +549,6 @@ void FittingUtils::PlotFitStandard(const TString input_name,
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  canvas->cd();
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
-                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(
@@ -640,8 +683,6 @@ void FittingUtils::PlotFitDetailed(const TString input_name,
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
-                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(
@@ -695,7 +736,7 @@ void FittingUtils::PlotFitDoublePeakStandard(const TString input_name,
   peak2->SetParameter(0, fit_function_->GetParameter(3));
   peak2->SetParameter(1, fit_function_->GetParameter(4));
   peak2->SetParameter(2, fit_function_->GetParameter(5));
-  peak2->SetLineColor(kRed);
+  peak2->SetLineColor(kBlack);
   peak2->SetNpx(1000);
   peak2->Draw("same");
 
@@ -755,9 +796,6 @@ void FittingUtils::PlotFitDoublePeakStandard(const TString input_name,
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  canvas->cd();
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
-                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(
@@ -811,7 +849,7 @@ void FittingUtils::PlotFitDoublePeakDetailed(const TString input_name,
   peak2->SetParameter(0, fit_function_->GetParameter(8));
   peak2->SetParameter(1, fit_function_->GetParameter(9));
   peak2->SetParameter(2, fit_function_->GetParameter(10));
-  peak2->SetLineColor(kRed);
+  peak2->SetLineColor(kBlack);
   peak2->SetNpx(1000);
   peak2->Draw("same");
 
@@ -822,6 +860,64 @@ void FittingUtils::PlotFitDoublePeakDetailed(const TString input_name,
   background->SetLineColor(kGreen);
   background->SetNpx(1000);
   background->Draw("same");
+
+  TF1 *step1 = new TF1("step1", FittingFunctions::Step, fit_range_low_,
+                       fit_range_high_, 3);
+  step1->SetParameter(0, fit_function_->GetParameter(0));
+  step1->SetParameter(1, fit_function_->GetParameter(1));
+  step1->SetParameter(2, fit_function_->GetParameter(3));
+  step1->SetLineColor(kGray);
+  step1->SetNpx(1000);
+  step1->Draw("same");
+
+  TF1 *low_tail1 = new TF1("lowtail1", FittingFunctions::LowTail,
+                           fit_range_low_, fit_range_high_, 4);
+  low_tail1->SetParameter(0, fit_function_->GetParameter(0));
+  low_tail1->SetParameter(1, fit_function_->GetParameter(1));
+  low_tail1->SetParameter(2, fit_function_->GetParameter(4));
+  low_tail1->SetParameter(3, fit_function_->GetParameter(5));
+  low_tail1->SetLineColor(kRed);
+  low_tail1->SetNpx(1000);
+  low_tail1->Draw("same");
+
+  TF1 *high_tail1 = new TF1("hightail1", FittingFunctions::HighTail,
+                            fit_range_low_, fit_range_high_, 4);
+  high_tail1->SetParameter(0, fit_function_->GetParameter(0));
+  high_tail1->SetParameter(1, fit_function_->GetParameter(1));
+  high_tail1->SetParameter(2, fit_function_->GetParameter(6));
+  high_tail1->SetParameter(3, fit_function_->GetParameter(7));
+  high_tail1->SetLineColor(kOrange);
+  high_tail1->SetNpx(1000);
+  high_tail1->Draw("same");
+
+  TF1 *step2 = new TF1("step2", FittingFunctions::Step, fit_range_low_,
+                       fit_range_high_, 3);
+  step2->SetParameter(0, fit_function_->GetParameter(8));
+  step2->SetParameter(1, fit_function_->GetParameter(9));
+  step2->SetParameter(2, fit_function_->GetParameter(11));
+  step2->SetLineColor(kGray);
+  step2->SetNpx(1000);
+  step2->Draw("same");
+
+  TF1 *low_tail2 = new TF1("lowtail2", FittingFunctions::LowTail,
+                           fit_range_low_, fit_range_high_, 4);
+  low_tail2->SetParameter(0, fit_function_->GetParameter(8));
+  low_tail2->SetParameter(1, fit_function_->GetParameter(9));
+  low_tail2->SetParameter(2, fit_function_->GetParameter(12));
+  low_tail2->SetParameter(3, fit_function_->GetParameter(13));
+  low_tail2->SetLineColor(kRed);
+  low_tail2->SetNpx(1000);
+  low_tail2->Draw("same");
+
+  TF1 *high_tail2 = new TF1("hightail2", FittingFunctions::HighTail,
+                            fit_range_low_, fit_range_high_, 4);
+  high_tail2->SetParameter(0, fit_function_->GetParameter(8));
+  high_tail2->SetParameter(1, fit_function_->GetParameter(9));
+  high_tail2->SetParameter(2, fit_function_->GetParameter(14));
+  high_tail2->SetParameter(3, fit_function_->GetParameter(15));
+  high_tail2->SetLineColor(kOrange);
+  high_tail2->SetNpx(1000);
+  high_tail2->Draw("same");
 
   pad2->cd();
 
@@ -872,8 +968,6 @@ void FittingUtils::PlotFitDoublePeakDetailed(const TString input_name,
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
-                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(
@@ -927,7 +1021,7 @@ void FittingUtils::PlotFitTriplePeakStandard(const TString input_name,
   peak2->SetParameter(0, fit_function_->GetParameter(3));
   peak2->SetParameter(1, fit_function_->GetParameter(4));
   peak2->SetParameter(2, fit_function_->GetParameter(5));
-  peak2->SetLineColor(kRed);
+  peak2->SetLineColor(kBlack);
   peak2->SetNpx(1000);
   peak2->Draw("same");
 
@@ -996,9 +1090,6 @@ void FittingUtils::PlotFitTriplePeakStandard(const TString input_name,
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  canvas->cd();
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
-                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(
@@ -1052,7 +1143,7 @@ void FittingUtils::PlotFitTriplePeakDetailed(const TString input_name,
   peak2->SetParameter(0, fit_function_->GetParameter(8));
   peak2->SetParameter(1, fit_function_->GetParameter(9));
   peak2->SetParameter(2, fit_function_->GetParameter(10));
-  peak2->SetLineColor(kRed);
+  peak2->SetLineColor(kBlack);
   peak2->SetNpx(1000);
   peak2->Draw("same");
 
@@ -1072,6 +1163,93 @@ void FittingUtils::PlotFitTriplePeakDetailed(const TString input_name,
   background->SetLineColor(kGreen);
   background->SetNpx(1000);
   background->Draw("same");
+
+  TF1 *step1 = new TF1("step1", FittingFunctions::Step, fit_range_low_,
+                       fit_range_high_, 3);
+  step1->SetParameter(0, fit_function_->GetParameter(0));
+  step1->SetParameter(1, fit_function_->GetParameter(1));
+  step1->SetParameter(2, fit_function_->GetParameter(3));
+  step1->SetLineColor(kGray);
+  step1->SetNpx(1000);
+  step1->Draw("same");
+
+  TF1 *low_tail1 = new TF1("lowtail1", FittingFunctions::LowTail,
+                           fit_range_low_, fit_range_high_, 4);
+  low_tail1->SetParameter(0, fit_function_->GetParameter(0));
+  low_tail1->SetParameter(1, fit_function_->GetParameter(1));
+  low_tail1->SetParameter(2, fit_function_->GetParameter(4));
+  low_tail1->SetParameter(3, fit_function_->GetParameter(5));
+  low_tail1->SetLineColor(kRed);
+  low_tail1->SetNpx(1000);
+  low_tail1->Draw("same");
+
+  TF1 *high_tail1 = new TF1("hightail1", FittingFunctions::HighTail,
+                            fit_range_low_, fit_range_high_, 4);
+  high_tail1->SetParameter(0, fit_function_->GetParameter(0));
+  high_tail1->SetParameter(1, fit_function_->GetParameter(1));
+  high_tail1->SetParameter(2, fit_function_->GetParameter(6));
+  high_tail1->SetParameter(3, fit_function_->GetParameter(7));
+  high_tail1->SetLineColor(kOrange);
+  high_tail1->SetNpx(1000);
+  high_tail1->Draw("same");
+
+  TF1 *step2 = new TF1("step2", FittingFunctions::Step, fit_range_low_,
+                       fit_range_high_, 3);
+  step2->SetParameter(0, fit_function_->GetParameter(8));
+  step2->SetParameter(1, fit_function_->GetParameter(9));
+  step2->SetParameter(2, fit_function_->GetParameter(11));
+  step2->SetLineColor(kGray);
+  step2->SetNpx(1000);
+  step2->Draw("same");
+
+  TF1 *low_tail2 = new TF1("lowtail2", FittingFunctions::LowTail,
+                           fit_range_low_, fit_range_high_, 4);
+  low_tail2->SetParameter(0, fit_function_->GetParameter(8));
+  low_tail2->SetParameter(1, fit_function_->GetParameter(9));
+  low_tail2->SetParameter(2, fit_function_->GetParameter(12));
+  low_tail2->SetParameter(3, fit_function_->GetParameter(13));
+  low_tail2->SetLineColor(kRed);
+  low_tail2->SetNpx(1000);
+  low_tail2->Draw("same");
+
+  TF1 *high_tail2 = new TF1("hightail2", FittingFunctions::HighTail,
+                            fit_range_low_, fit_range_high_, 4);
+  high_tail2->SetParameter(0, fit_function_->GetParameter(8));
+  high_tail2->SetParameter(1, fit_function_->GetParameter(9));
+  high_tail2->SetParameter(2, fit_function_->GetParameter(14));
+  high_tail2->SetParameter(3, fit_function_->GetParameter(15));
+  high_tail2->SetLineColor(kOrange);
+  high_tail2->SetNpx(1000);
+  high_tail2->Draw("same");
+
+  TF1 *step3 = new TF1("step3", FittingFunctions::Step, fit_range_low_,
+                       fit_range_high_, 3);
+  step3->SetParameter(0, fit_function_->GetParameter(16));
+  step3->SetParameter(1, fit_function_->GetParameter(17));
+  step3->SetParameter(2, fit_function_->GetParameter(19));
+  step3->SetLineColor(kGray);
+  step3->SetNpx(1000);
+  step3->Draw("same");
+
+  TF1 *low_tail3 = new TF1("lowtail3", FittingFunctions::LowTail,
+                           fit_range_low_, fit_range_high_, 4);
+  low_tail3->SetParameter(0, fit_function_->GetParameter(16));
+  low_tail3->SetParameter(1, fit_function_->GetParameter(17));
+  low_tail3->SetParameter(2, fit_function_->GetParameter(20));
+  low_tail3->SetParameter(3, fit_function_->GetParameter(21));
+  low_tail3->SetLineColor(kRed);
+  low_tail3->SetNpx(1000);
+  low_tail3->Draw("same");
+
+  TF1 *high_tail3 = new TF1("hightail3", FittingFunctions::HighTail,
+                            fit_range_low_, fit_range_high_, 4);
+  high_tail3->SetParameter(0, fit_function_->GetParameter(16));
+  high_tail3->SetParameter(1, fit_function_->GetParameter(17));
+  high_tail3->SetParameter(2, fit_function_->GetParameter(22));
+  high_tail3->SetParameter(3, fit_function_->GetParameter(23));
+  high_tail3->SetLineColor(kOrange);
+  high_tail3->SetNpx(1000);
+  high_tail3->Draw("same");
 
   pad2->cd();
 
@@ -1483,6 +1661,14 @@ FittingUtils::FitDoublePeakStandard(const TString input_name,
                                     Double_t mu2_init) {
   FitResultDoublePeakStandard results;
 
+  if (mu1_init > mu2_init) {
+    std::cout << "Warning: mu1_init > mu2_init, swapping initial values"
+              << std::endl;
+    Double_t temp = mu1_init;
+    mu1_init = mu2_init;
+    mu2_init = temp;
+  }
+
   fit_function_ =
       new TF1("DoublePeakStandard", &FittingFunctions::DoublePeakStandard,
               fit_range_low_, fit_range_high_, 8);
@@ -1532,6 +1718,15 @@ FittingUtils::FitDoublePeakStandard(const TString input_name,
   TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMENR+");
 
   if (fit_result.Get() && fit_result->IsValid()) {
+    Double_t fitted_mu1 = fit_function_->GetParameter(0);
+    Double_t fitted_mu2 = fit_function_->GetParameter(3);
+
+    if (fitted_mu1 > fitted_mu2) {
+      std::cout << "Warning: Fitted mu1 (" << fitted_mu1 << ") > mu2 ("
+                << fitted_mu2 << "), swapping peaks" << std::endl;
+      SwapDoublePeakStandardParameters();
+    }
+
     std::cout << "Double peak standard fit converged successfully" << std::endl;
     std::cout << "Chi2/ndf = " << fit_result->Chi2() / fit_result->Ndf()
               << std::endl;
@@ -1575,6 +1770,14 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
                                     const TString peak_name, Double_t mu1_init,
                                     Double_t mu2_init) {
   FitResultDoublePeakDetailed results;
+
+  if (mu1_init > mu2_init) {
+    std::cout << "Warning: mu1_init > mu2_init, swapping initial values"
+              << std::endl;
+    Double_t temp = mu1_init;
+    mu1_init = mu2_init;
+    mu2_init = temp;
+  }
 
   fit_function_ =
       new TF1("DoublePeakDetailed", &FittingFunctions::DoublePeakDetailed,
@@ -1947,6 +2150,17 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
   TFitResultPtr fit_result = working_hist_->Fit(fit_function_, "LSMRBENR+");
 
   if (fit_result.Get() && fit_result->IsValid()) {
+    Double_t fitted_mu1 = fit_function_->GetParameter(0);
+    Double_t fitted_mu2 = fit_function_->GetParameter(8);
+
+    if (fitted_mu1 > fitted_mu2) {
+      std::cout << "Warning: Fitted mu1 (" << fitted_mu1 << ") > mu2 ("
+                << fitted_mu2
+                << "), swapping ALL peak parameters including tails and steps"
+                << std::endl;
+      SwapDoublePeakDetailedParameters();
+    }
+
     Double_t final_chi2 = fit_result->Chi2() / fit_result->Ndf();
     std::cout << "Double peak detailed fit converged successfully" << std::endl;
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;

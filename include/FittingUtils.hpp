@@ -111,6 +111,9 @@ private:
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
 
+  void SwapDoublePeakStandardParameters();
+  void SwapDoublePeakDetailedParameters();
+
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
                Bool_t use_flat_background, Bool_t isDetailed,
