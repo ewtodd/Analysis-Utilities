@@ -1395,6 +1395,7 @@ FitResultStandard FittingUtils::FitPeakStandard(const TString input_name,
     results.bkg_const_error = fit_function_->GetParError(3);
     results.bkg_slope = fit_function_->GetParameter(4);
     results.bkg_slope_error = fit_function_->GetParError(4);
+    results.reduced_chi2 = fit_result->Chi2() / fit_result->Ndf();
   } else {
     std::cout << "ERROR: Standard fit failed to converge" << std::endl;
     std::cout << "Fit status: " << fit_result->Status() << std::endl;
@@ -1651,6 +1652,7 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
     results.high_tail_amplitude_error = fit_function_->GetParError(8);
     results.high_tail_range = fit_function_->GetParameter(9);
     results.high_tail_range_error = fit_function_->GetParError(9);
+    results.reduced_chi2 = final_chi2;
   } else {
     std::cout << "ERROR: Final fit did not converge" << std::endl;
     results.mu_error = -1;
@@ -1747,6 +1749,7 @@ FittingUtils::FitDoublePeakStandard(const TString input_name,
     results.peak1.bkg_const_error = fit_function_->GetParError(6);
     results.peak1.bkg_slope = fit_function_->GetParameter(7);
     results.peak1.bkg_slope_error = fit_function_->GetParError(7);
+    results.peak1.reduced_chi2 = -1;
 
     results.peak2.mu = fit_function_->GetParameter(3);
     results.peak2.mu_error = fit_function_->GetParError(3);
@@ -1758,6 +1761,9 @@ FittingUtils::FitDoublePeakStandard(const TString input_name,
     results.peak2.bkg_const_error = fit_function_->GetParError(6);
     results.peak2.bkg_slope = fit_function_->GetParameter(7);
     results.peak2.bkg_slope_error = fit_function_->GetParError(7);
+    results.peak2.reduced_chi2 = -1;
+
+    results.reduced_chi2 = fit_result->Chi2() / fit_result->Ndf();
   } else {
     std::cout << "ERROR: Double peak standard fit failed to converge"
               << std::endl;
@@ -2191,6 +2197,7 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     results.peak1.bkg_const_error = fit_function_->GetParError(16);
     results.peak1.bkg_slope = fit_function_->GetParameter(17);
     results.peak1.bkg_slope_error = fit_function_->GetParError(17);
+    results.peak1.reduced_chi2 = -1;
 
     results.peak2.mu = fit_function_->GetParameter(8);
     results.peak2.mu_error = fit_function_->GetParError(8);
@@ -2212,6 +2219,9 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     results.peak2.bkg_const_error = fit_function_->GetParError(16);
     results.peak2.bkg_slope = fit_function_->GetParameter(17);
     results.peak2.bkg_slope_error = fit_function_->GetParError(17);
+    results.peak2.reduced_chi2 = -1;
+
+    results.reduced_chi2 = final_chi2;
   } else {
     std::cout << "ERROR: Double peak detailed fit failed to converge"
               << std::endl;
@@ -2294,6 +2304,7 @@ FitResultDoublePeakStandard FittingUtils::FitDoublePeakStandard(
     results.peak1.bkg_const_error = fit_function_->GetParError(6);
     results.peak1.bkg_slope = fit_function_->GetParameter(7);
     results.peak1.bkg_slope_error = fit_function_->GetParError(7);
+    results.peak1.reduced_chi2 = -1;
 
     results.peak2.mu = fit_function_->GetParameter(3);
     results.peak2.mu_error = fit_function_->GetParError(3);
@@ -2305,6 +2316,9 @@ FitResultDoublePeakStandard FittingUtils::FitDoublePeakStandard(
     results.peak2.bkg_const_error = fit_function_->GetParError(6);
     results.peak2.bkg_slope = fit_function_->GetParameter(7);
     results.peak2.bkg_slope_error = fit_function_->GetParError(7);
+    results.peak2.reduced_chi2 = -1;
+
+    results.reduced_chi2 = fit_result->Chi2() / fit_result->Ndf();
   } else {
     std::cout << "ERROR: Double peak standard fit (with constrained peak1) "
                  "failed to converge"
@@ -2595,6 +2609,7 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
     results.peak1.bkg_const_error = fit_function_->GetParError(16);
     results.peak1.bkg_slope = fit_function_->GetParameter(17);
     results.peak1.bkg_slope_error = fit_function_->GetParError(17);
+    results.peak1.reduced_chi2 = -1;
 
     results.peak2.mu = fit_function_->GetParameter(8);
     results.peak2.mu_error = fit_function_->GetParError(8);
@@ -2616,6 +2631,9 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
     results.peak2.bkg_const_error = fit_function_->GetParError(16);
     results.peak2.bkg_slope = fit_function_->GetParameter(17);
     results.peak2.bkg_slope_error = fit_function_->GetParError(17);
+    results.peak2.reduced_chi2 = -1;
+
+    results.reduced_chi2 = final_chi2;
   } else {
     std::cout << "ERROR: Double peak detailed fit (with constrained peak1) "
                  "failed to converge"
@@ -2705,6 +2723,7 @@ FitResultTriplePeakStandard FittingUtils::FitTriplePeakStandard(
     results.peak1.bkg_const_error = fit_function_->GetParError(9);
     results.peak1.bkg_slope = fit_function_->GetParameter(10);
     results.peak1.bkg_slope_error = fit_function_->GetParError(10);
+    results.peak1.reduced_chi2 = -1;
 
     results.peak2.mu = fit_function_->GetParameter(3);
     results.peak2.mu_error = fit_function_->GetParError(3);
@@ -2716,6 +2735,7 @@ FitResultTriplePeakStandard FittingUtils::FitTriplePeakStandard(
     results.peak2.bkg_const_error = fit_function_->GetParError(9);
     results.peak2.bkg_slope = fit_function_->GetParameter(10);
     results.peak2.bkg_slope_error = fit_function_->GetParError(10);
+    results.peak2.reduced_chi2 = -1;
 
     results.peak3.mu = fit_function_->GetParameter(6);
     results.peak3.mu_error = fit_function_->GetParError(6);
@@ -2727,6 +2747,10 @@ FitResultTriplePeakStandard FittingUtils::FitTriplePeakStandard(
     results.peak3.bkg_const_error = fit_function_->GetParError(9);
     results.peak3.bkg_slope = fit_function_->GetParameter(10);
     results.peak3.bkg_slope_error = fit_function_->GetParError(10);
+    results.peak3.reduced_chi2 = -1;
+
+    results.reduced_chi2 = fit_result->Chi2() / fit_result->Ndf();
+
   } else {
     std::cout << "ERROR: Triple peak standard fit failed to converge"
               << std::endl;
@@ -3033,6 +3057,7 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     results.peak1.bkg_const_error = fit_function_->GetParError(24);
     results.peak1.bkg_slope = fit_function_->GetParameter(25);
     results.peak1.bkg_slope_error = fit_function_->GetParError(25);
+    results.peak1.reduced_chi2 = -1;
 
     results.peak2.mu = fit_function_->GetParameter(8);
     results.peak2.mu_error = fit_function_->GetParError(8);
@@ -3054,6 +3079,7 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     results.peak2.bkg_const_error = fit_function_->GetParError(24);
     results.peak2.bkg_slope = fit_function_->GetParameter(25);
     results.peak2.bkg_slope_error = fit_function_->GetParError(25);
+    results.peak2.reduced_chi2 = -1;
 
     results.peak3.mu = fit_function_->GetParameter(16);
     results.peak3.mu_error = fit_function_->GetParError(16);
@@ -3075,6 +3101,9 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     results.peak3.bkg_const_error = fit_function_->GetParError(24);
     results.peak3.bkg_slope = fit_function_->GetParameter(25);
     results.peak3.bkg_slope_error = fit_function_->GetParError(25);
+    results.peak3.reduced_chi2 = -1;
+
+    results.reduced_chi2 = final_chi2;
   } else {
     std::cout << "ERROR: Triple peak detailed fit failed to converge"
               << std::endl;
