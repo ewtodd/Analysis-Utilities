@@ -148,10 +148,18 @@ public:
                                                     const TString peak_name,
                                                     Double_t mu1_init,
                                                     Double_t mu2_init);
+  FitResultDoublePeakStandard
+  FitDoublePeakStandard(const TString input_name, const TString peak_name,
+                        const FitResultStandard &constrained_peak,
+                        Double_t mu2_init);
   FitResultDoublePeakDetailed FitDoublePeakDetailed(const TString input_name,
                                                     const TString peak_name,
                                                     Double_t mu1_init,
                                                     Double_t mu2_init);
+  FitResultDoublePeakDetailed
+  FitDoublePeakDetailed(const TString input_name, const TString peak_name,
+                        const FitResultDetailed &constrained_peak,
+                        Double_t mu2_init);
 
   FitResultTriplePeakStandard
   FitTriplePeakStandard(const TString input_name, const TString peak_name,
