@@ -1300,8 +1300,6 @@ void FittingUtils::PlotFitTriplePeakDetailed(const TString input_name,
   zero_line->SetLineWidth(1);
   zero_line->Draw("same");
 
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
-                            kFALSE);
   pad1->cd();
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(
