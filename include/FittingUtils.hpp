@@ -37,6 +37,7 @@ struct FitResultStandard {
   Float_t bkg_const_error;
   Float_t bkg_slope;
   Float_t bkg_slope_error;
+  Float_t reduced_chi2;
 };
 
 struct FitResultDetailed {
@@ -60,28 +61,33 @@ struct FitResultDetailed {
   Float_t high_tail_amplitude_error;
   Float_t high_tail_range;
   Float_t high_tail_range_error;
+  Float_t reduced_chi2;
 };
 
 struct FitResultDoublePeakStandard {
   FitResultStandard peak1;
   FitResultStandard peak2;
+  Float_t reduced_chi2;
 };
 
 struct FitResultDoublePeakDetailed {
   FitResultDetailed peak1;
   FitResultDetailed peak2;
+  Float_t reduced_chi2;
 };
 
 struct FitResultTriplePeakStandard {
   FitResultStandard peak1;
   FitResultStandard peak2;
   FitResultStandard peak3;
+  Float_t reduced_chi2;
 };
 
 struct FitResultTriplePeakDetailed {
   FitResultDetailed peak1;
   FitResultDetailed peak2;
   FitResultDetailed peak3;
+  Float_t reduced_chi2;
 };
 
 class FittingUtils {
