@@ -18,7 +18,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
-          version = "07.02.2026";
+          version = "08.02.2026";
 
           src = ./.;
 
