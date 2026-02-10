@@ -36,10 +36,10 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
     fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
     fit_function_->SetParLimits(2, 0, peak_height * 1.5);
-    fit_function_->SetParLimits(3, 0, peak_height * 0.5);
+    fit_function_->SetParLimits(3, 0, peak_height * 1.5);
     if (!use_flat_background_) {
-      fit_function_->SetParLimits(4, -0.1 * bkg_estimate / range_width,
-                                  0.1 * bkg_estimate / range_width);
+      fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
+                                  0.5 * bkg_estimate / range_width);
     } else
       fit_function_->SetParLimits(4, 0, 0);
 
@@ -73,10 +73,10 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
     fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
     fit_function_->SetParLimits(2, 0, peak_height * 1.5);
-    fit_function_->SetParLimits(3, 0, peak_height * 0.5);
+    fit_function_->SetParLimits(3, 0, peak_height * 1.5);
     if (!use_flat_background_) {
-      fit_function_->SetParLimits(4, -0.1 * bkg_estimate / range_width,
-                                  0.1 * bkg_estimate / range_width);
+      fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
+                                  0.5 * bkg_estimate / range_width);
     } else
       fit_function_->SetParLimits(4, 0, 0);
 
