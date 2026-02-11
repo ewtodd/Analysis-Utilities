@@ -2,6 +2,7 @@
 <!---->
 C++ utilities for analysis of nuclear measurement data, built on [ROOT](https://root.cern/).
 Supports CAEN digitizers via CoMPASS and WaveDump acquisition software.
+Warning: Currently in active development; breaking changes are all but guaranteed...
 <!---->
 ## Installation
 <!---->
@@ -35,7 +36,8 @@ Read binary data files from CAEN acquisition software.
 Process raw waveforms and extract physical parameters.
 <!---->
 - **Baseline subtraction** - Configurable number of pre-trigger samples
-- **Trigger finding** - Threshold-based with configurable polarity
+- **Trigger finding** - Fraction-of-peak threshold with configurable polarity
+- **Digital CFD** - Optional constant fraction discrimination with sub-sample interpolation for amplitude-independent timing (`SetUseCFD()`, `SetCFDParameters()`)
 - **Waveform cropping** - Extract region of interest around trigger
 - **Feature extraction** - Pulse height, peak position, short/long integrals, PSD ratio
 - **Quality cuts** - Reject clipped signals, baseline issues, negative integrals
@@ -99,7 +101,7 @@ Initialization and file conversion utilities.
 <!---->
 ## Roadmap
 <!---->
-- [ ] Implement "true" digital constant fraction discrimination for triggering
+- [x] Implement "true" digital constant fraction discrimination for triggering
 - [x] Implement support for converting CoMPASS binary files to ROOT
 - [ ] Implement support for converting WaveDump binary files to ROOT (742 family digitizers only) - implemented, but as of now untested.
 - [ ] Implement support for converting CoMPASS CSV files to ROOT
