@@ -52,6 +52,7 @@ Fit spectral peaks with configurable models.
 **Detailed model** (10 parameters):
 Includes standard:
 - Gaussian peak + linear background
+<!---->
 Details based on
 L.C.
 Longoria, A.H.
@@ -67,6 +68,7 @@ ISSN 0168-9002,
 https://doi.org/10.1016/0168-9002(90)90797-A.
 Quotes refer to the aforementioned article.
 Reading the article reveals that the models discussed are not specific to Ge detectors!
+<!---->
 - Step function ("When part of the photon energy escapes from the
 active volume of the detector, an event is recorded in the left-hand side of the peak, creating a tail with a steplike shape. It is assumed that if the detector had no tailing and an extremely narrow resolution, then a step-like distribution would result, with a cutoff at the centroid." In practice of course this means smearing a step by the resolution of the detector as determined by other parameters from the fit.)
 - Low-energy tail (incomplete charge collection, instability, etc.)
