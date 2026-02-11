@@ -177,12 +177,11 @@ void WaveformProcessingUtils::SaveSampleWaveform(
   }
 
   TGraph *graph = new TGraph(n, x.data(), y.data());
-  TCanvas *canvas = new TCanvas("c_wf", "Waveform", 800, 600);
+  TCanvas *canvas = new TCanvas("c_wf", "Waveform", 1200, 800);
 
   PlottingUtils::SetStylePreferences();
   PlottingUtils::ConfigureCanvas(canvas);
-  PlottingUtils::ConfigureGraph(graph, kBlue + 1,
-                                ";Sample;Amplitude [ADC counts]");
+  PlottingUtils::ConfigureGraph(graph, kBlue + 1, ";Sample;Amplitude [ADC]");
   graph->Draw("AL");
 
   TString filename = Form("plots/samplewaveforms/%s_waveform_%04d.png",
@@ -220,8 +219,8 @@ WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
   return processed;
 }
 
-Float_t WaveformProcessingUtils::FindTrigger(
-    const std::vector<Float_t> &waveform) {
+Float_t
+WaveformProcessingUtils::FindTrigger(const std::vector<Float_t> &waveform) {
 
   Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
   Float_t trigger_level = peak_value * trigger_threshold_;
