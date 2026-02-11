@@ -1,6 +1,7 @@
 #ifndef WAVEFORMPROCESSOR_H
 #define WAVEFORMPROCESSOR_H
 
+#include "PlottingUtils.hpp"
 #include <TArrayS.h>
 #include <TFile.h>
 #include <TROOT.h>
@@ -44,9 +45,9 @@ private:
   Int_t max_events_;
   Bool_t verbose_;
 
-  Bool_t use_cfd_;
-  Double_t cfd_fraction_;
-  Int_t cfd_delay_;
+  Int_t sample_waveforms_to_save_;
+  Int_t sample_waveforms_saved_;
+  TString current_output_name_;
 
   ProcessingStats stats_;
 
@@ -80,11 +81,7 @@ public:
   void SetMaxEvents(Int_t max_events) { max_events_ = max_events; }
   void SetVerbose(Bool_t verbose) { verbose_ = verbose; }
   void SetStoreWaveforms(Bool_t store = kTRUE) { store_waveforms_ = store; }
-  void SetUseCFD(Bool_t use_cfd = kTRUE) { use_cfd_ = use_cfd; }
-  void SetCFDParameters(Double_t fraction, Int_t delay) {
-    cfd_fraction_ = fraction;
-    cfd_delay_ = delay;
-  }
+  void SetSaveSampleWaveforms(Int_t count) { sample_waveforms_to_save_ = count; }
 
   Bool_t ProcessFile(const TString filepath, const TString output_name);
 
@@ -92,11 +89,11 @@ public:
 
   std::vector<Float_t> SubtractBaseline(const std::vector<Short_t> &samples);
   Float_t FindTrigger(const std::vector<Float_t> &waveform);
-  Float_t FindTriggerCFD(const std::vector<Float_t> &waveform);
   std::vector<Float_t> CropWaveform(const std::vector<Float_t> &waveform,
                                     Float_t trigger_pos);
   WaveformFeatures ExtractFeatures(const std::vector<Float_t> &cropped_wf);
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
+  void SaveSampleWaveform(const std::vector<Float_t> &waveform);
 
   void PrintAllStatistics() const;
   ProcessingStats GetStats() const { return stats_; };

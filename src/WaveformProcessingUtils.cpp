@@ -3,7 +3,7 @@
 WaveformProcessingUtils::WaveformProcessingUtils()
     : polarity_(1), trigger_threshold_(0.15), num_samples_baseline_(10),
       pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
-      use_cfd_(kFALSE), cfd_fraction_(0.3), cfd_delay_(5),
+      sample_waveforms_to_save_(0), sample_waveforms_saved_(0),
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
       current_waveform_(nullptr) {}
 
@@ -19,6 +19,9 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
 
 Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                                             const TString output_name) {
+  current_output_name_ = output_name;
+  sample_waveforms_saved_ = 0;
+
   if (gSystem->AccessPathName("root_files")) {
     gSystem->mkdir("root_files", kTRUE);
   }
@@ -148,11 +151,48 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
     }
   }
 
+  if (sample_waveforms_saved_ < sample_waveforms_to_save_) {
+    SaveSampleWaveform(cropped_wf);
+  }
+
   current_features_ = features;
   output_tree_->Fill();
 
   stats_.accepted++;
   return kTRUE;
+}
+
+void WaveformProcessingUtils::SaveSampleWaveform(
+    const std::vector<Float_t> &waveform) {
+
+  if (gSystem->AccessPathName("plots/samplewaveforms")) {
+    gSystem->mkdir("plots/samplewaveforms", kTRUE);
+  }
+
+  Int_t n = waveform.size();
+  std::vector<Double_t> x(n), y(n);
+  for (Int_t i = 0; i < n; ++i) {
+    x[i] = i;
+    y[i] = waveform[i];
+  }
+
+  TGraph *graph = new TGraph(n, x.data(), y.data());
+  TCanvas *canvas = new TCanvas("c_wf", "Waveform", 800, 600);
+
+  PlottingUtils::SetStylePreferences();
+  PlottingUtils::ConfigureCanvas(canvas);
+  PlottingUtils::ConfigureGraph(graph, kBlue + 1,
+                                ";Sample;Amplitude [ADC counts]");
+  graph->Draw("AL");
+
+  TString filename = Form("plots/samplewaveforms/%s_waveform_%04d.png",
+                          current_output_name_.Data(), sample_waveforms_saved_);
+  canvas->SaveAs(filename);
+
+  delete graph;
+  delete canvas;
+
+  sample_waveforms_saved_++;
 }
 
 std::vector<Float_t>
@@ -183,10 +223,6 @@ WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
 Float_t WaveformProcessingUtils::FindTrigger(
     const std::vector<Float_t> &waveform) {
 
-  if (use_cfd_) {
-    return FindTriggerCFD(waveform);
-  }
-
   Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
   Float_t trigger_level = peak_value * trigger_threshold_;
 
@@ -197,52 +233,6 @@ Float_t WaveformProcessingUtils::FindTrigger(
   }
 
   return -1.0;
-}
-
-Float_t WaveformProcessingUtils::FindTriggerCFD(
-    const std::vector<Float_t> &waveform) {
-
-  Int_t n_samples = waveform.size();
-  if (n_samples <= cfd_delay_) {
-    return -1.0;
-  }
-
-  // First find approximate trigger using threshold (to locate the pulse)
-  Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
-  Float_t trigger_level = peak_value * trigger_threshold_;
-
-  Int_t pulse_start = -1;
-  for (Int_t i = 0; i < n_samples; ++i) {
-    if (waveform[i] >= trigger_level) {
-      pulse_start = i;
-      break;
-    }
-  }
-
-  if (pulse_start < 0) {
-    return -1.0;
-  }
-
-  // Search backward from pulse_start for CFD zero-crossing
-  Int_t search_start = TMath::Max(1, pulse_start - cfd_delay_ * 2);
-
-  for (Int_t i = pulse_start; i >= search_start; --i) {
-    if (i + cfd_delay_ >= n_samples)
-      continue;
-
-    Float_t cfd_curr = waveform[i + cfd_delay_] - cfd_fraction_ * waveform[i];
-    Float_t cfd_prev =
-        waveform[i - 1 + cfd_delay_] - cfd_fraction_ * waveform[i - 1];
-
-    // Zero-crossing: previous negative, current positive
-    if (cfd_prev < 0 && cfd_curr >= 0) {
-      Float_t frac = -cfd_prev / (cfd_curr - cfd_prev);
-      return Float_t(i - 1) + frac;
-    }
-  }
-
-  // Fallback to threshold position if no CFD crossing found
-  return Float_t(pulse_start);
 }
 
 std::vector<Float_t>
