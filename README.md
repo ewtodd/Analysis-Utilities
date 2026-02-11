@@ -37,7 +37,6 @@ Process raw waveforms and extract physical parameters.
 <!---->
 - **Baseline subtraction** - Configurable number of pre-trigger samples
 - **Trigger finding** - Fraction-of-peak threshold with configurable polarity
-- **Digital CFD** - Optional constant fraction discrimination with sub-sample interpolation for amplitude-independent timing (`SetUseCFD()`, `SetCFDParameters()`)
 - **Waveform cropping** - Extract region of interest around trigger
 - **Feature extraction** - Pulse height, peak position, short/long integrals, PSD ratio
 - **Quality cuts** - Reject clipped signals, baseline issues, negative integrals
@@ -101,7 +100,6 @@ Initialization and file conversion utilities.
 <!---->
 ## Roadmap
 <!---->
-- [x] Implement "true" digital constant fraction discrimination for triggering
 - [x] Implement support for converting CoMPASS binary files to ROOT
 - [ ] Implement support for converting WaveDump binary files to ROOT (742 family digitizers only) - implemented, but as of now untested.
 - [ ] Implement support for converting CoMPASS CSV files to ROOT
