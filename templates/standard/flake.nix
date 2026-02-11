@@ -28,10 +28,10 @@
           buildInputs = with pkgs; [
             analysis-utils
             root
-            zsh
+            bash
           ];
           shellHook = ''
-            export SHELL="${pkgs.zsh}/bin/zsh"
+            export SHELL="${pkgs.bash}/bin/bash"
             echo "ROOT version: $(root-config --version)"
             echo "Analysis-Utilities version: ${analysis-utils.version}"
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
@@ -43,7 +43,6 @@
             export ROOT_INCLUDE_PATH="$PWD/include:${analysis-utils}/include''${ROOT_INCLUDE_PATH:+:$ROOT_INCLUDE_PATH}"
             # Local lib first means linker will use it preferentially
             export LD_LIBRARY_PATH="$PWD/lib:${analysis-utils}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-            exec ${pkgs.zsh}/bin/zsh
           '';
         };
       }
