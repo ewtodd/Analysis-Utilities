@@ -91,11 +91,10 @@
             gnumake
             pkg-config
             clang-tools
-            zsh
           ];
 
           shellHook = ''
-            export SHELL="${pkgs.zsh}/bin/zsh"
+            export SHELL="${pkgs.bash}/bin/bash"
             echo "Development environment for working on the analysis utilities source"
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
             STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
@@ -103,7 +102,6 @@
             export CPLUS_INCLUDE_PATH="$STDLIB_PATH:$STDLIB_MACHINE_PATH:$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
             export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"
             export LD_LIBRARY_PATH="$PWD/lib:$LD_LIBRARY_PATH"
-            exec ${pkgs.zsh}/bin/zsh
           '';
         };
       }
