@@ -3,6 +3,7 @@
 WaveformProcessingUtils::WaveformProcessingUtils()
     : polarity_(1), trigger_threshold_(0.15), num_samples_baseline_(10),
       pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
+      use_cfd_(kFALSE), cfd_fraction_(0.3), cfd_delay_(5),
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
       current_waveform_(nullptr) {}
 
@@ -35,7 +36,7 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   output_tree_->Branch("pulse_height", &current_features_.pulse_height,
                        "pulse_height/F");
   output_tree_->Branch("trigger_position", &current_features_.trigger_position,
-                       "trigger_position/I");
+                       "trigger_position/F");
   output_tree_->Branch("short_integral", &current_features_.short_integral,
                        "short_integral/F");
   output_tree_->Branch("long_integral", &current_features_.long_integral,
@@ -113,14 +114,15 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
 
   std::vector<Float_t> processed_wf = SubtractBaseline(samples);
 
-  Int_t trigger_pos = FindTrigger(processed_wf);
+  Float_t trigger_pos = FindTrigger(processed_wf);
   if (trigger_pos < 0) {
     stats_.rejected_no_trigger++;
     return kFALSE;
   }
 
-  if (trigger_pos < pre_samples_ ||
-      (Int_t(processed_wf.size()) - trigger_pos) <= post_samples_) {
+  Int_t trigger_pos_int = Int_t(trigger_pos);
+  if (trigger_pos_int < pre_samples_ ||
+      (Int_t(processed_wf.size()) - trigger_pos_int) <= post_samples_) {
     stats_.rejected_insufficient_samples++;
     return kFALSE;
   }
@@ -129,6 +131,7 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
 
   WaveformFeatures features = ExtractFeatures(cropped_wf);
   features.raw_pulse_height = std::abs(raw_max);
+  features.trigger_position = trigger_pos;
   Bool_t passes_cuts = ApplyQualityCuts(features);
   features.passes_cuts = passes_cuts;
 
@@ -177,26 +180,77 @@ WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
   return processed;
 }
 
-Int_t WaveformProcessingUtils::FindTrigger(
+Float_t WaveformProcessingUtils::FindTrigger(
     const std::vector<Float_t> &waveform) {
+
+  if (use_cfd_) {
+    return FindTriggerCFD(waveform);
+  }
 
   Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
   Float_t trigger_level = peak_value * trigger_threshold_;
 
   for (size_t i = 0; i < waveform.size(); ++i) {
     if (waveform[i] >= trigger_level) {
-      return Int_t(i);
+      return Float_t(i);
     }
   }
 
-  return -1;
+  return -1.0;
+}
+
+Float_t WaveformProcessingUtils::FindTriggerCFD(
+    const std::vector<Float_t> &waveform) {
+
+  Int_t n_samples = waveform.size();
+  if (n_samples <= cfd_delay_) {
+    return -1.0;
+  }
+
+  // First find approximate trigger using threshold (to locate the pulse)
+  Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
+  Float_t trigger_level = peak_value * trigger_threshold_;
+
+  Int_t pulse_start = -1;
+  for (Int_t i = 0; i < n_samples; ++i) {
+    if (waveform[i] >= trigger_level) {
+      pulse_start = i;
+      break;
+    }
+  }
+
+  if (pulse_start < 0) {
+    return -1.0;
+  }
+
+  // Search backward from pulse_start for CFD zero-crossing
+  Int_t search_start = TMath::Max(1, pulse_start - cfd_delay_ * 2);
+
+  for (Int_t i = pulse_start; i >= search_start; --i) {
+    if (i + cfd_delay_ >= n_samples)
+      continue;
+
+    Float_t cfd_curr = waveform[i + cfd_delay_] - cfd_fraction_ * waveform[i];
+    Float_t cfd_prev =
+        waveform[i - 1 + cfd_delay_] - cfd_fraction_ * waveform[i - 1];
+
+    // Zero-crossing: previous negative, current positive
+    if (cfd_prev < 0 && cfd_curr >= 0) {
+      Float_t frac = -cfd_prev / (cfd_curr - cfd_prev);
+      return Float_t(i - 1) + frac;
+    }
+  }
+
+  // Fallback to threshold position if no CFD crossing found
+  return Float_t(pulse_start);
 }
 
 std::vector<Float_t>
 WaveformProcessingUtils::CropWaveform(const std::vector<Float_t> &waveform,
-                                      Int_t trigger_pos) {
-  Int_t start = trigger_pos - pre_samples_;
-  Int_t end = trigger_pos + post_samples_;
+                                      Float_t trigger_pos) {
+  Int_t trigger_pos_int = Int_t(trigger_pos);
+  Int_t start = trigger_pos_int - pre_samples_;
+  Int_t end = trigger_pos_int + post_samples_;
 
   std::vector<Float_t> cropped;
   cropped.reserve(pre_samples_ + post_samples_);
@@ -211,7 +265,7 @@ WaveformProcessingUtils::CropWaveform(const std::vector<Float_t> &waveform,
 WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
     const std::vector<Float_t> &cropped_wf) {
   WaveformFeatures features;
-  features.trigger_position = pre_samples_ - pre_gate_;
+  Int_t integration_start = pre_samples_ - pre_gate_;
 
   auto max_it = std::max_element(cropped_wf.begin(), cropped_wf.end());
   features.pulse_height = *max_it;
@@ -221,13 +275,12 @@ WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
   features.long_integral = 0;
 
   Int_t negative_samples = 0;
-  Int_t short_end = TMath::Min(features.trigger_position + short_gate_,
-                               Int_t(cropped_wf.size()));
+  Int_t short_end =
+      TMath::Min(integration_start + short_gate_, Int_t(cropped_wf.size()));
+  Int_t long_end =
+      TMath::Min(integration_start + long_gate_, Int_t(cropped_wf.size()));
 
-  Int_t long_end = TMath::Min(features.trigger_position + long_gate_,
-                              Int_t(cropped_wf.size()));
-
-  for (Int_t i = pre_samples_ - pre_gate_; i < long_end; ++i) {
+  for (Int_t i = integration_start; i < long_end; ++i) {
     Float_t sample_value = cropped_wf[i];
     features.long_integral += sample_value;
     if (i < short_end) {
@@ -240,7 +293,7 @@ WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
 
   features.passes_cuts = kTRUE;
   features.negative_fraction =
-      Float_t(negative_samples) / Float_t(long_end - pre_samples_);
+      Float_t(negative_samples) / Float_t(long_end - integration_start);
 
   return features;
 }

@@ -13,7 +13,7 @@ struct WaveformFeatures {
   Short_t raw_pulse_height;
   Float_t pulse_height;
   Int_t peak_position;
-  Int_t trigger_position;
+  Float_t trigger_position;
   Float_t short_integral;
   Float_t long_integral;
   Float_t negative_fraction;
@@ -43,6 +43,10 @@ private:
   Int_t long_gate_;
   Int_t max_events_;
   Bool_t verbose_;
+
+  Bool_t use_cfd_;
+  Double_t cfd_fraction_;
+  Int_t cfd_delay_;
 
   ProcessingStats stats_;
 
@@ -76,15 +80,21 @@ public:
   void SetMaxEvents(Int_t max_events) { max_events_ = max_events; }
   void SetVerbose(Bool_t verbose) { verbose_ = verbose; }
   void SetStoreWaveforms(Bool_t store = kTRUE) { store_waveforms_ = store; }
+  void SetUseCFD(Bool_t use_cfd = kTRUE) { use_cfd_ = use_cfd; }
+  void SetCFDParameters(Double_t fraction, Int_t delay) {
+    cfd_fraction_ = fraction;
+    cfd_delay_ = delay;
+  }
 
   Bool_t ProcessFile(const TString filepath, const TString output_name);
 
   Bool_t ProcessWaveform(const std::vector<Short_t> &samples);
 
   std::vector<Float_t> SubtractBaseline(const std::vector<Short_t> &samples);
-  Int_t FindTrigger(const std::vector<Float_t> &waveform);
+  Float_t FindTrigger(const std::vector<Float_t> &waveform);
+  Float_t FindTriggerCFD(const std::vector<Float_t> &waveform);
   std::vector<Float_t> CropWaveform(const std::vector<Float_t> &waveform,
-                                    Int_t trigger_pos);
+                                    Float_t trigger_pos);
   WaveformFeatures ExtractFeatures(const std::vector<Float_t> &cropped_wf);
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
 
