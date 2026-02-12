@@ -52,6 +52,7 @@ Process raw waveforms and extract physical parameters.
 - **Waveform cropping** - Extract region of interest around trigger
 - **Feature extraction** - Pulse height, peak position, short/long integrals, PSD ratio
 - **Quality cuts** - Reject clipped signals, baseline issues, negative integrals
+- **Parallel file processing** - Process multiple files concurrently using `std::async` with configurable worker count (defaults to 4). Files are dispatched in batches, with each worker getting its own `WaveformProcessingUtils` instance. Requires ROOT thread safety (`ROOT::EnableThreadSafety()`), which is handled automatically.
 <!---->
 Outputs processed data to ROOT TTrees with optional waveform storage.
 <!---->
