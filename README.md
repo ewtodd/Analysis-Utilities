@@ -8,12 +8,7 @@ Warning: Currently in active development; breaking changes are all but guarantee
 <!---->
 ### Prerequisites
 <!---->
-This project uses [Nix](https://nixos.org/) to manage dependencies. Install it with:
-<!---->
-```bash
-curl -L https://nixos.org/nix/install | sh
-```
-<!---->
+This project uses [Nix](https://nixos.org/) to manage dependencies. Install it by following the instructions [here](https://nixos.org/download/).
 Ensure [flakes are enabled](https://nixos.wiki/wiki/Flakes#Enable_flakes_permanently) in your Nix configuration.
 <!---->
 ### Setup
