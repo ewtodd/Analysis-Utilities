@@ -7,106 +7,30 @@ WaveformProcessingUtils::WaveformProcessingUtils()
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
       current_waveform_(nullptr) {}
 
+WaveformProcessingUtils::WaveformProcessingUtils(
+    const FileProcessingConfig &config)
+    : polarity_(config.polarity), trigger_threshold_(config.trigger_threshold),
+      num_samples_baseline_(config.num_samples_baseline),
+      pre_samples_(config.pre_samples), post_samples_(config.post_samples),
+      pre_gate_(config.pre_gate), short_gate_(config.short_gate),
+      long_gate_(config.long_gate), max_events_(config.max_events),
+      verbose_(config.verbose),
+      sample_waveforms_to_save_(config.sample_waveforms_to_save),
+      sample_waveforms_saved_(0), output_file_(nullptr), output_tree_(nullptr),
+      store_waveforms_(config.store_waveforms), current_waveform_(nullptr) {}
+
 WaveformProcessingUtils::~WaveformProcessingUtils() {
   if (current_waveform_) {
     delete current_waveform_;
+    current_waveform_ = nullptr;
   }
   if (output_file_) {
-    output_file_->Close();
+    if (output_file_->IsOpen()) {
+      output_file_->Close();
+    }
     delete output_file_;
+    output_file_ = nullptr;
   }
-}
-
-Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
-                                            const TString output_name) {
-  current_output_name_ = output_name;
-  sample_waveforms_saved_ = 0;
-
-  if (gSystem->AccessPathName("root_files")) {
-    gSystem->mkdir("root_files", kTRUE);
-  }
-
-  TString output_filename = "root_files/" + output_name + ".root";
-  output_file_ = new TFile(output_filename, "RECREATE");
-  if (!output_file_ || output_file_->IsZombie()) {
-    std::cout << "Error: Could not create output file " << output_filename
-              << std::endl;
-    return kFALSE;
-  }
-
-  output_tree_ = new TTree("features", "Waveform Features");
-
-  output_tree_->Branch("pulse_height", &current_features_.pulse_height,
-                       "pulse_height/F");
-  output_tree_->Branch("trigger_position", &current_features_.trigger_position,
-                       "trigger_position/F");
-  output_tree_->Branch("short_integral", &current_features_.short_integral,
-                       "short_integral/F");
-  output_tree_->Branch("long_integral", &current_features_.long_integral,
-                       "long_integral/F");
-  output_tree_->Branch("passes_cuts", &current_features_.passes_cuts,
-                       "passes_cuts/O");
-  output_tree_->Branch("timestamp", &current_features_.timestamp,
-                       "timestamp/l");
-
-  if (store_waveforms_) {
-    current_waveform_ = nullptr;
-    output_tree_->Branch("Samples", &current_waveform_);
-    std::cout << "Storing waveforms that pass cuts." << std::endl;
-  }
-
-  TFile *file = TFile::Open(filepath, "READ");
-  if (!file || file->IsZombie()) {
-    if (verbose_) {
-      std::cout << "Error opening file: " << filepath << std::endl;
-    }
-  }
-
-  TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
-  if (!tree) {
-    if (verbose_) {
-      std::cout << "Error: TTree 'Data_R' not found in " << filepath
-                << std::endl;
-    }
-    file->Close();
-  }
-
-  TArrayS *samples = new TArrayS();
-  tree->SetBranchAddress("Samples", &samples);
-  tree->SetBranchAddress("Timestamp", &current_timestamp_);
-
-  Long64_t n_entries = tree->GetEntries();
-  tree->GetEntry(0);
-
-  for (Long64_t entry = 0; entry < n_entries; ++entry) {
-    if (max_events_ > 0 && stats_.accepted >= max_events_) {
-      break;
-    }
-
-    if (tree->GetEntry(entry) <= 0)
-      continue;
-
-    std::vector<Short_t> waveform_data;
-    waveform_data.reserve(samples->GetSize());
-    for (Int_t i = 0; i < samples->GetSize(); ++i) {
-      waveform_data.push_back(samples->At(i));
-    }
-    stats_.total_processed++;
-    ProcessWaveform(waveform_data);
-  }
-
-  delete samples;
-  file->Close();
-
-  output_file_->cd();
-  output_tree_->Write("", TObject::kOverwrite);
-  output_file_->Close();
-
-  if (verbose_) {
-    PrintAllStatistics();
-  }
-
-  return kTRUE;
 }
 
 Bool_t
@@ -162,8 +86,12 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
   return kTRUE;
 }
 
+std::mutex WaveformProcessingUtils::canvas_mutex_;
+
 void WaveformProcessingUtils::SaveSampleWaveform(
     const std::vector<Float_t> &waveform) {
+
+  std::lock_guard<std::mutex> lock(canvas_mutex_);
 
   if (gSystem->AccessPathName("plots/samplewaveforms")) {
     gSystem->mkdir("plots/samplewaveforms", kTRUE);
@@ -177,8 +105,8 @@ void WaveformProcessingUtils::SaveSampleWaveform(
   }
 
   TGraph *graph = new TGraph(n, x.data(), y.data());
-  TCanvas *canvas = new TCanvas("c_wf", "Waveform", 1200, 800);
-
+  TCanvas *canvas =
+      new TCanvas(PlottingUtils::GetRandomName(), "Waveform", 1200, 800);
   PlottingUtils::SetStylePreferences();
   PlottingUtils::ConfigureCanvas(canvas);
   PlottingUtils::ConfigureGraph(graph, kBlue + 1, ";Sample;Amplitude [ADC]");
@@ -290,11 +218,6 @@ WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
 Bool_t
 WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
 
-  if (features.long_integral <= 0) {
-    stats_.rejected_negative_integral++;
-    return kFALSE;
-  }
-
   if (((features.raw_pulse_height == 16384) && (polarity_ == 1)) ||
       ((features.raw_pulse_height == 0) && (polarity_ == -1))) {
     stats_.rejected_clipped++;
@@ -310,6 +233,7 @@ WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
     stats_.rejected_negative_integral++;
     return kFALSE;
   }
+
   return kTRUE;
 }
 
@@ -337,4 +261,173 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
               << "%" << std::endl;
   }
   std::cout << std::endl;
+
+  std::ofstream stats_file(
+      "root_files/" + std::string(current_output_name_.Data()) + ".stats",
+      std::ios::app);
+  if (stats_file.is_open()) {
+    stats_file << "Waveform processing statistics..." << std::endl;
+    stats_file << "Total processed: " << stats_.total_processed << std::endl;
+    stats_file << std::endl;
+    stats_file << "Accepted: " << stats_.accepted << std::endl;
+    stats_file << std::endl;
+    stats_file << "Rejected no trigger: " << stats_.rejected_no_trigger
+               << std::endl;
+    stats_file << "Rejected clipped ADC: " << stats_.rejected_clipped
+               << std::endl;
+    stats_file << "Rejected insufficient samples: "
+               << stats_.rejected_insufficient_samples << std::endl;
+    stats_file << "Rejected negative integral: "
+               << stats_.rejected_negative_integral << std::endl;
+    stats_file << "Rejected bad baseline: " << stats_.rejected_baseline
+               << std::endl;
+    stats_file << std::endl;
+
+    if (stats_.total_processed > 0) {
+      stats_file << "Acceptance rate: "
+                 << 100 * Float_t(stats_.accepted) /
+                        Float_t(stats_.total_processed)
+                 << "%" << std::endl;
+    }
+    stats_file << std::endl;
+  }
+}
+
+Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
+                                            const TString output_name) {
+  current_output_name_ = output_name;
+  sample_waveforms_saved_ = 0;
+
+  if (gSystem->AccessPathName("root_files")) {
+    gSystem->mkdir("root_files", kTRUE);
+  }
+
+  // clear file
+  std::ofstream("root_files/" + std::string(output_name.Data()) + ".stats",
+                std::ios::trunc);
+
+  TString output_filename = "root_files/" + output_name + ".root";
+  output_file_ = new TFile(output_filename, "RECREATE");
+  if (!output_file_ || output_file_->IsZombie()) {
+    std::cout << "Error: Could not create output file " << output_filename
+              << std::endl;
+    return kFALSE;
+  }
+
+  output_tree_ = new TTree("features", "Waveform Features");
+
+  output_tree_->Branch("pulse_height", &current_features_.pulse_height,
+                       "pulse_height/F");
+  output_tree_->Branch("trigger_position", &current_features_.trigger_position,
+                       "trigger_position/F");
+  output_tree_->Branch("short_integral", &current_features_.short_integral,
+                       "short_integral/F");
+  output_tree_->Branch("long_integral", &current_features_.long_integral,
+                       "long_integral/F");
+  output_tree_->Branch("passes_cuts", &current_features_.passes_cuts,
+                       "passes_cuts/O");
+  output_tree_->Branch("timestamp", &current_features_.timestamp,
+                       "timestamp/l");
+
+  if (store_waveforms_) {
+    current_waveform_ = nullptr;
+    output_tree_->Branch("Samples", &current_waveform_);
+    std::cout << "Storing waveforms that pass cuts." << std::endl;
+  }
+
+  TFile *file = TFile::Open(filepath, "READ");
+  if (!file || file->IsZombie()) {
+    std::cout << "Error opening file: " << filepath << std::endl;
+    return kFALSE;
+  }
+
+  TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
+  if (!tree) {
+    std::cout << "Error: TTree 'Data_R' not found in " << filepath << std::endl;
+    file->Close();
+    return kFALSE;
+  }
+
+  TArrayS *samples = new TArrayS();
+  tree->SetBranchAddress("Samples", &samples);
+  tree->SetBranchAddress("Timestamp", &current_timestamp_);
+
+  Long64_t n_entries = tree->GetEntries();
+  tree->GetEntry(0);
+
+  for (Long64_t entry = 0; entry < n_entries; ++entry) {
+    if (max_events_ > 0 && stats_.accepted >= max_events_) {
+      break;
+    }
+
+    if (tree->GetEntry(entry) <= 0)
+      continue;
+
+    std::vector<Short_t> waveform_data;
+    waveform_data.reserve(samples->GetSize());
+    for (Int_t i = 0; i < samples->GetSize(); ++i) {
+      waveform_data.push_back(samples->At(i));
+    }
+    stats_.total_processed++;
+    ProcessWaveform(waveform_data);
+  }
+
+  delete samples;
+  file->Close();
+
+  output_file_->cd();
+  output_tree_->Write("", TObject::kOverwrite);
+  output_file_->Close();
+  delete output_file_;
+  output_file_ = nullptr;
+  output_tree_ = nullptr;
+  current_waveform_ = nullptr;
+
+  if (verbose_) {
+    PrintAllStatistics();
+  }
+
+  return kTRUE;
+}
+
+void WaveformProcessingUtils::ProcessFilesParallel(
+    const std::vector<TString> &filepaths,
+    const std::vector<TString> &output_names,
+    const FileProcessingConfig &config, Int_t max_workers) {
+
+  ROOT::EnableThreadSafety();
+
+  Int_t n_files = Int_t(filepaths.size());
+  Int_t n_workers = max_workers > 0
+                        ? max_workers
+                        : Int_t(std::thread::hardware_concurrency());
+  n_workers = TMath::Min(n_workers, n_files);
+
+  std::cout << "Processing " << n_files << " files with " << n_workers
+            << " workers." << std::endl;
+
+  std::function<Bool_t(const TString &, const TString &)> process_one =
+      [&config](const TString &filepath, const TString &output_name) -> Bool_t {
+    WaveformProcessingUtils *processor = new WaveformProcessingUtils(config);
+    Bool_t result = processor->ProcessFile(filepath, output_name);
+    delete processor;
+    return result;
+  };
+
+  for (Int_t i = 0; i < n_files; i += n_workers) {
+    std::vector<std::future<Bool_t>> futures;
+    Int_t batch_end = TMath::Min(i + n_workers, n_files);
+
+    for (Int_t j = i; j < batch_end; ++j) {
+      futures.push_back(std::async(std::launch::async, process_one,
+                                   std::cref(filepaths[j]),
+                                   std::cref(output_names[j])));
+    }
+
+    for (size_t j = 0; j < futures.size(); ++j) {
+      Bool_t result = futures[j].get();
+      std::cout << "Finished: " << output_names[i + j]
+                << (result ? " [OK]" : " [FAILED]") << std::endl;
+    }
+  }
 }

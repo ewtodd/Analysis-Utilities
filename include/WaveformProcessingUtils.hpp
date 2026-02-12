@@ -7,7 +7,11 @@
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TTree.h>
+#include <fstream>
+#include <future>
 #include <iostream>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 struct WaveformFeatures {
@@ -32,6 +36,21 @@ struct ProcessingStats {
   Int_t rejected_clipped = 0;
 };
 
+struct FileProcessingConfig {
+  Int_t polarity = -1;
+  Float_t trigger_threshold = 0.15;
+  Int_t num_samples_baseline = 10;
+  Int_t pre_samples = 17;
+  Int_t post_samples = 190;
+  Int_t pre_gate = 10;
+  Int_t short_gate = 10;
+  Int_t long_gate = 200;
+  Int_t sample_waveforms_to_save = 5;
+  Int_t max_events = -1;
+  Bool_t verbose = kTRUE;
+  Bool_t store_waveforms = kTRUE;
+};
+
 class WaveformProcessingUtils {
 private:
   Int_t polarity_;
@@ -45,6 +64,7 @@ private:
   Int_t max_events_;
   Bool_t verbose_;
 
+  static std::mutex canvas_mutex_;
   Int_t sample_waveforms_to_save_;
   Int_t sample_waveforms_saved_;
   TString current_output_name_;
@@ -60,6 +80,7 @@ private:
 
 public:
   WaveformProcessingUtils();
+  WaveformProcessingUtils(const FileProcessingConfig &config);
   ~WaveformProcessingUtils();
 
   void SetPolarity(const Int_t polarity) { polarity_ = polarity; }
@@ -81,9 +102,9 @@ public:
   void SetMaxEvents(Int_t max_events) { max_events_ = max_events; }
   void SetVerbose(Bool_t verbose) { verbose_ = verbose; }
   void SetStoreWaveforms(Bool_t store = kTRUE) { store_waveforms_ = store; }
-  void SetSaveSampleWaveforms(Int_t count) { sample_waveforms_to_save_ = count; }
-
-  Bool_t ProcessFile(const TString filepath, const TString output_name);
+  void SetSaveSampleWaveforms(Int_t count) {
+    sample_waveforms_to_save_ = count;
+  }
 
   Bool_t ProcessWaveform(const std::vector<Short_t> &samples);
 
@@ -97,6 +118,13 @@ public:
 
   void PrintAllStatistics() const;
   ProcessingStats GetStats() const { return stats_; };
+
+  Bool_t ProcessFile(const TString filepath, const TString output_name);
+
+  static void ProcessFilesParallel(const std::vector<TString> &filepaths,
+                                   const std::vector<TString> &output_names,
+                                   const FileProcessingConfig &config,
+                                   Int_t max_workers = 4);
 };
 
 #endif
