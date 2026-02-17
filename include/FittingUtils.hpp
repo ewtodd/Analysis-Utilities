@@ -55,12 +55,12 @@ struct FitResultDetailed {
   Float_t step_amplitude_error;
   Float_t low_tail_amplitude;
   Float_t low_tail_amplitude_error;
-  Float_t low_tail_range;
-  Float_t low_tail_range_error;
+  Float_t low_tail_slope;
+  Float_t low_tail_slope_error;
   Float_t high_tail_amplitude;
   Float_t high_tail_amplitude_error;
-  Float_t high_tail_range;
-  Float_t high_tail_range_error;
+  Float_t high_tail_slope;
+  Float_t high_tail_slope_error;
   Float_t reduced_chi2;
 };
 
