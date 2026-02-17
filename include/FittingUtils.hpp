@@ -12,82 +12,38 @@
 #include <TSystem.h>
 #include <TTree.h>
 
+enum class BackgroundModel { kFLAT, kLINEAR };
+
 namespace FittingFunctions {
 Double_t Gaussian(Double_t *x, Double_t *par);
 Double_t LinearBackground(Double_t *x, Double_t *par);
 Double_t Step(Double_t *x, Double_t *par);
 Double_t LowTail(Double_t *x, Double_t *par);
 Double_t HighTail(Double_t *x, Double_t *par);
-Double_t Standard(Double_t *x, Double_t *par);
-Double_t Detailed(Double_t *x, Double_t *par);
-Double_t DoublePeakStandard(Double_t *x, Double_t *par);
-Double_t DoublePeakDetailed(Double_t *x, Double_t *par);
-Double_t TriplePeakStandard(Double_t *x, Double_t *par);
-Double_t TriplePeakDetailed(Double_t *x, Double_t *par);
+Double_t PeakFunction(Double_t *x, Double_t *par);
+Double_t DoublePeakFunction(Double_t *x, Double_t *par);
+Double_t TriplePeakFunction(Double_t *x, Double_t *par);
 } // namespace FittingFunctions
 
-struct FitResultStandard {
-  Float_t gaus_amplitude;
-  Float_t gaus_amplitude_error;
-  Float_t mu;
-  Float_t mu_error;
-  Float_t sigma;
-  Float_t sigma_error;
-  Float_t bkg_const;
-  Float_t bkg_const_error;
-  Float_t bkg_slope;
-  Float_t bkg_slope_error;
-  Float_t reduced_chi2;
+struct PeakFitResult {
+  Float_t mu, mu_error;
+  Float_t sigma, sigma_error;
+  Float_t gaus_amplitude, gaus_amplitude_error;
+  Float_t step_amplitude, step_amplitude_error;
+  Float_t low_exp_tail_amplitude, low_exp_tail_amplitude_error;
+  Float_t low_exp_tail_decay, low_exp_tail_decay_error;
+  Float_t low_lin_tail_amplitude, low_lin_tail_amplitude_error;
+  Float_t low_lin_tail_slope, low_lin_tail_slope_error;
+  Float_t high_exp_tail_amplitude, high_exp_tail_amplitude_error;
+  Float_t high_exp_tail_decay, high_exp_tail_decay_error;
 };
 
-struct FitResultDetailed {
-  Float_t gaus_amplitude;
-  Float_t gaus_amplitude_error;
-  Float_t mu;
-  Float_t mu_error;
-  Float_t sigma;
-  Float_t sigma_error;
-  Float_t bkg_const;
-  Float_t bkg_const_error;
-  Float_t bkg_slope;
-  Float_t bkg_slope_error;
-  Float_t step_amplitude;
-  Float_t step_amplitude_error;
-  Float_t low_tail_amplitude;
-  Float_t low_tail_amplitude_error;
-  Float_t low_tail_slope;
-  Float_t low_tail_slope_error;
-  Float_t high_tail_amplitude;
-  Float_t high_tail_amplitude_error;
-  Float_t high_tail_slope;
-  Float_t high_tail_slope_error;
+struct FitResult {
+  std::vector<PeakFitResult> peaks; // 1, 2, or 3 entries
+  Float_t bkg_constant, bkg_constant_error;
+  Float_t lin_bkg_slope, lin_bkg_slope_error;
   Float_t reduced_chi2;
-};
-
-struct FitResultDoublePeakStandard {
-  FitResultStandard peak1;
-  FitResultStandard peak2;
-  Float_t reduced_chi2;
-};
-
-struct FitResultDoublePeakDetailed {
-  FitResultDetailed peak1;
-  FitResultDetailed peak2;
-  Float_t reduced_chi2;
-};
-
-struct FitResultTriplePeakStandard {
-  FitResultStandard peak1;
-  FitResultStandard peak2;
-  FitResultStandard peak3;
-  Float_t reduced_chi2;
-};
-
-struct FitResultTriplePeakDetailed {
-  FitResultDetailed peak1;
-  FitResultDetailed peak2;
-  FitResultDetailed peak3;
-  Float_t reduced_chi2;
+  Bool_t valid;
 };
 
 class FittingUtils {
@@ -96,44 +52,43 @@ private:
   TH1 *working_hist_;
   Float_t fit_range_low_;
   Float_t fit_range_high_;
-  Bool_t use_flat_background_;
-  Bool_t isDetailed_;
+
+  BackgroundModel bkg_model_;
   Bool_t use_step_;
-  Bool_t use_low_tail_;
-  Bool_t use_high_tail_;
+  Bool_t use_low_exp_tail_;
+  Bool_t use_low_lin_tail_;
+  Bool_t use_high_exp_tail_;
+
   Bool_t use_manual_init_;
   std::vector<Double_t> manual_params_;
 
-  void PlotFitStandard(const TString input_name, const TString peak_name);
-  void PlotFitDetailed(const TString input_name, const TString peak_name);
-  void PlotFitDoublePeakStandard(const TString input_name,
-                                 const TString peak_name);
-  void PlotFitDoublePeakDetailed(const TString input_name,
-                                 const TString peak_name);
-  void PlotFitTriplePeakStandard(const TString input_name,
-                                 const TString peak_name);
-  void PlotFitTriplePeakDetailed(const TString input_name,
-                                 const TString peak_name);
+  void PlotFit(const TString input_name, const TString peak_name);
+  void PlotFitDoublePeak(const TString input_name, const TString peak_name);
+  void PlotFitTriplePeak(const TString input_name, const TString peak_name);
+
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
 
-  void SwapDoublePeakStandardParameters();
-  void SwapDoublePeakDetailedParameters();
+  void SwapDoublePeakParameters();
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
-               Bool_t use_flat_background, Bool_t isDetailed,
-               Bool_t use_step = kTRUE, Bool_t use_low_tail = kTRUE,
-               Bool_t use_high_tail = kTRUE);
+               BackgroundModel bkg_model = BackgroundModel::kLINEAR,
+               Bool_t use_step = kFALSE, Bool_t use_low_exp_tail = kFALSE,
+               Bool_t use_low_lin_tail = kFALSE,
+               Bool_t use_high_exp_tail = kFALSE);
   ~FittingUtils();
 
-  void UseFlatBackground(Bool_t use_flat_background = kTRUE) {
-    use_flat_background_ = use_flat_background;
+  void SetBackgroundModel(BackgroundModel bkg_model) { bkg_model_ = bkg_model; }
+  void SetStep(Bool_t use_step = kTRUE) { use_step_ = use_step; }
+  void SetLowExpTail(Bool_t use_low_exp_tail = kTRUE) {
+    use_low_exp_tail_ = use_low_exp_tail;
   }
-  void UseStep(Bool_t use_step = kTRUE) { use_step_ = use_step; }
-  void UseLowTail(Bool_t use_low_tail = kTRUE) { use_low_tail_ = use_low_tail; }
-  void UseHighTail(Bool_t use_high_tail = kTRUE) {
-    use_high_tail_ = use_high_tail;
+  void SetLowLinTail(Bool_t use_low_lin_tail = kTRUE) {
+    use_low_lin_tail_ = use_low_lin_tail;
+  }
+  void SetHighExpTail(Bool_t use_high_exp_tail = kTRUE) {
+    use_high_exp_tail_ = use_high_exp_tail;
   }
 
   void SetManualParameters(const std::vector<Double_t> &params);
@@ -145,38 +100,15 @@ public:
 
   TF1 *GetFitFunction() { return fit_function_; }
 
-  FitResultStandard FitPeakStandard(const TString input_name,
-                                    const TString peak_name);
-  FitResultDetailed FitPeakDetailed(const TString input_name,
-                                    const TString peak_name);
-
-  FitResultDoublePeakStandard FitDoublePeakStandard(const TString input_name,
-                                                    const TString peak_name,
-                                                    Double_t mu1_init,
-                                                    Double_t mu2_init);
-  FitResultDoublePeakStandard
-  FitDoublePeakStandard(const TString input_name, const TString peak_name,
-                        const FitResultStandard &constrained_peak,
-                        Double_t mu2_init);
-  FitResultDoublePeakDetailed FitDoublePeakDetailed(const TString input_name,
-                                                    const TString peak_name,
-                                                    Double_t mu1_init,
-                                                    Double_t mu2_init);
-  FitResultDoublePeakDetailed
-  FitDoublePeakDetailed(const TString input_name, const TString peak_name,
-                        const FitResultDetailed &constrained_peak,
-                        Double_t mu2_init);
-
-  FitResultTriplePeakStandard
-  FitTriplePeakStandard(const TString input_name, const TString peak_name,
-                        const FitResultDoublePeakStandard &constrained_peaks,
-                        Double_t mu3_init);
-  FitResultTriplePeakDetailed
-  FitTriplePeakDetailed(const TString input_name, const TString peak_name,
-                        const FitResultDoublePeakDetailed &constrained_peaks,
-                        Double_t mu3_init);
-
-  static void RegisterCustomFunctions();
+  FitResult FitPeak(const TString input_name, const TString peak_name);
+  FitResult FitDoublePeak(const TString input_name, const TString peak_name,
+                          Double_t mu1_init, Double_t mu2_init);
+  FitResult FitDoublePeak(const TString input_name, const TString peak_name,
+                          const PeakFitResult &constrained_peak,
+                          Double_t mu2_init);
+  FitResult FitTriplePeak(const TString input_name, const TString peak_name,
+                          const FitResult &constrained_peaks,
+                          Double_t mu3_init);
 };
 
 #endif
