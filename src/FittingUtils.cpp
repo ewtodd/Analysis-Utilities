@@ -1,112 +1,80 @@
 #include "FittingUtils.hpp"
 
 FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
-                           Float_t fit_range_high, Bool_t use_flat_background,
-                           Bool_t isDetailed, Bool_t use_step,
-                           Bool_t use_low_tail, Bool_t use_high_tail) {
+                           Float_t fit_range_high, BackgroundModel bkg_model,
+                           Bool_t use_step, Bool_t use_low_exp_tail,
+                           Bool_t use_low_lin_tail, Bool_t use_high_exp_tail) {
 
-  working_hist_ = static_cast<TH1F *>(working_hist->Clone());
+  working_hist_ = static_cast<TH1 *>(working_hist->Clone());
   fit_range_low_ = fit_range_low;
   fit_range_high_ = fit_range_high;
-  use_flat_background_ = use_flat_background;
-  isDetailed_ = isDetailed;
+  bkg_model_ = bkg_model;
   use_step_ = use_step;
-  use_low_tail_ = use_low_tail;
-  use_high_tail_ = use_high_tail;
+  use_low_exp_tail_ = use_low_exp_tail;
+  use_low_lin_tail_ = use_low_lin_tail;
+  use_high_exp_tail_ = use_high_exp_tail;
   use_manual_init_ = kFALSE;
 
-  if (!isDetailed_) {
-    fit_function_ = new TF1("Standard", &FittingFunctions::Standard,
-                            fit_range_low_, fit_range_high_, 5);
+  fit_function_ = new TF1("PeakFunction", &FittingFunctions::PeakFunction,
+                          fit_range_low_, fit_range_high_, 12);
 
-    fit_function_->SetParName(0, "Mu");
-    fit_function_->SetParName(1, "Sigma");
-    fit_function_->SetParName(2, "GausAmplitude");
-    fit_function_->SetParName(3, "BkgConst");
-    fit_function_->SetParName(4, "BkgSlope");
+  fit_function_->SetParName(0, "Mu");
+  fit_function_->SetParName(1, "Sigma");
+  fit_function_->SetParName(2, "GausAmplitude");
+  fit_function_->SetParName(3, "StepAmplitude");
+  fit_function_->SetParName(4, "LowExpTailAmplitude");
+  fit_function_->SetParName(5, "LowExpTailDecay");
+  fit_function_->SetParName(6, "LowLinTailAmplitude");
+  fit_function_->SetParName(7, "LowLinTailSlope");
+  fit_function_->SetParName(8, "HighExpTailAmplitude");
+  fit_function_->SetParName(9, "HighExpTailDecay");
+  fit_function_->SetParName(10, "BkgConstant");
+  fit_function_->SetParName(11, "LinBkgSlope");
 
-    Double_t mu_init = (fit_range_low_ + fit_range_high_) / 2;
-    Double_t range_width = fit_range_high_ - fit_range_low_;
-    Double_t sigma_init = range_width * 0.01;
+  Double_t mu_init = (fit_range_low_ + fit_range_high_) / 2;
+  Double_t range_width = fit_range_high_ - fit_range_low_;
+  Double_t sigma_init = range_width * 0.01;
 
-    Double_t max_bin = working_hist_->GetMaximumBin();
-    Double_t peak_height = working_hist_->GetBinContent(max_bin);
-    Double_t bkg_estimate = EstimateBackground();
+  Double_t max_bin = working_hist_->GetMaximumBin();
+  Double_t peak_height = working_hist_->GetBinContent(max_bin);
+  Double_t bkg_estimate = EstimateBackground();
 
-    fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
-    fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
-    fit_function_->SetParLimits(2, 0, peak_height * 0.75);
-    fit_function_->SetParLimits(3, 0, peak_height * 0.75);
-    if (!use_flat_background_) {
-      fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
-    } else
-      fit_function_->SetParLimits(4, 0, 0);
+  fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
+  fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(3, 0, peak_height * 0.75);
+  if (!use_flat_background_) {
+    fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
+                                0.5 * bkg_estimate / range_width);
+  } else
+    fit_function_->SetParLimits(4, 0, 0);
 
-    fit_function_->SetParameter(0, mu_init);
-    fit_function_->SetParameter(1, sigma_init);
-    fit_function_->SetParameter(2, peak_height * 0.8);
-    fit_function_->SetParameter(3, bkg_estimate);
-    fit_function_->SetParameter(4, 0);
-  } else {
-    fit_function_ = new TF1("Detailed", &FittingFunctions::Detailed,
-                            fit_range_low_, fit_range_high_, 10);
-    fit_function_->SetParName(0, "Mu");
-    fit_function_->SetParName(1, "Sigma");
-    fit_function_->SetParName(2, "GausAmplitude");
-    fit_function_->SetParName(3, "BkgConst");
-    fit_function_->SetParName(4, "BkgSlope");
-    fit_function_->SetParName(5, "StepAmplitude");
-    fit_function_->SetParName(6, "LowTailAmplitude");
-    fit_function_->SetParName(7, "LowTailSlope");
-    fit_function_->SetParName(8, "HighTailAmplitude");
-    fit_function_->SetParName(9, "HighTailSlope");
+  fit_function_->SetParameter(0, mu_init);
+  fit_function_->SetParameter(1, sigma_init);
+  fit_function_->SetParameter(2, peak_height * 0.8);
+  fit_function_->SetParameter(3, bkg_estimate);
+  fit_function_->SetParameter(4, 0);
 
-    Double_t mu_init = (fit_range_low_ + fit_range_high_) / 2;
-    Double_t range_width = fit_range_high_ - fit_range_low_;
-    Double_t sigma_init = range_width * 0.01;
+  fit_function_->SetParLimits(5, 0, peak_height * 0.75);
+  fit_function_->SetParameter(5, 0);
 
-    Double_t max_bin = working_hist_->GetMaximumBin();
-    Double_t peak_height = working_hist_->GetBinContent(max_bin);
-    Double_t bkg_estimate = EstimateBackground();
+  fit_function_->SetParLimits(6, 0, peak_height);
+  fit_function_->SetParLimits(7, 1e-1, 5e1);
+  fit_function_->SetParameter(6, peak_height * 0.10);
+  fit_function_->SetParameter(7, 0.2);
 
-    fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
-    fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
-    fit_function_->SetParLimits(2, 0, peak_height * 0.75);
-    fit_function_->SetParLimits(3, 0, peak_height * 0.75);
-    if (!use_flat_background_) {
-      fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
-    } else
-      fit_function_->SetParLimits(4, 0, 0);
+  fit_function_->SetParLimits(8, 0, peak_height);
+  fit_function_->SetParLimits(9, 1e-1, 5e1);
+  fit_function_->SetParameter(8, peak_height * 0.10);
+  fit_function_->SetParameter(9, 0.2);
 
-    fit_function_->SetParameter(0, mu_init);
-    fit_function_->SetParameter(1, sigma_init);
-    fit_function_->SetParameter(2, peak_height * 0.8);
-    fit_function_->SetParameter(3, bkg_estimate);
-    fit_function_->SetParameter(4, 0);
-
-    fit_function_->SetParLimits(5, 0, peak_height * 0.75);
-    fit_function_->SetParameter(5, 0);
-
-    fit_function_->SetParLimits(6, 0, peak_height);
-    fit_function_->SetParLimits(7, 1e-1, 5e1);
-    fit_function_->SetParameter(6, peak_height * 0.10);
-    fit_function_->SetParameter(7, 0.2);
-
-    fit_function_->SetParLimits(8, 0, peak_height);
-    fit_function_->SetParLimits(9, 1e-1, 5e1);
-    fit_function_->SetParameter(8, peak_height * 0.10);
-    fit_function_->SetParameter(9, 0.2);
-
-    std::cout << "Detailed fit configuration:" << std::endl;
-    std::cout << "  Step function: " << (use_step_ ? "ENABLED" : "DISABLED")
-              << std::endl;
-    std::cout << "  Low tail: " << (use_low_tail_ ? "ENABLED" : "DISABLED")
-              << std::endl;
-    std::cout << "  High tail: " << (use_high_tail_ ? "ENABLED" : "DISABLED")
-              << std::endl;
-  }
+  std::cout << "Detailed fit configuration:" << std::endl;
+  std::cout << "  Step function: " << (use_step_ ? "ENABLED" : "DISABLED")
+            << std::endl;
+  std::cout << "  Low tail: " << (use_low_tail_ ? "ENABLED" : "DISABLED")
+            << std::endl;
+  std::cout << "  High tail: " << (use_high_tail_ ? "ENABLED" : "DISABLED")
+            << std::endl;
 }
 
 FittingUtils::~FittingUtils() {
@@ -123,61 +91,52 @@ Double_t FittingFunctions::Gaussian(Double_t *x, Double_t *par) {
 }
 
 Double_t FittingFunctions::LinearBackground(Double_t *x, Double_t *par) {
-  Double_t bkg_const = par[0];
-  Double_t bkg_slope = par[1];
-  return bkg_slope * x[0] + bkg_const;
+  Double_t bkg_constant = par[0];
+  Double_t lin_bkg_slope = par[1];
+  return lin_bkg_slope * x[0] + bkg_constant;
 }
 
 Double_t FittingFunctions::LowTail(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  Double_t tail_amplitude = par[2];
-  Double_t tail_slope = par[3];
+  Double_t exp_tail_amplitude = par[2];
+  Double_t exp_tail_decay = par[3];
+  Double_t lin_tail_amplitude = par[4];
+  Double_t lin_tail_slope = par[5];
 
   if (sigma <= 0)
     return 0;
 
-  if (tail_amplitude == 0)
+  if (exp_tail_amplitude == 0 && lin_tail_amplitude == 0)
     return 0;
 
   Double_t y = x[0] - mu;
-  Double_t alpha = sigma / (TMath::Sqrt(2) * tail_slope);
 
-  Double_t calc_erf_arg = y / (TMath::Sqrt(2) * sigma) + alpha;
-  Double_t erf_arg = TMath::Min(calc_erf_arg, 700.0);
+  Double_t exp_term = exp_tail_amplitude * TMath::Exp(y / exp_tail_decay);
+  Double_t lin_term = lin_tail_amplitude * (1.0 + lin_tail_slope * y);
+  Double_t erf_term = 1.0 - TMath::Erf(y / (TMath::Sqrt(2) * sigma));
 
-  Double_t calc_exp_arg = (TMath::Sqrt(2) * y * alpha) / sigma + alpha * alpha;
-  Double_t exp_arg = TMath::Min(calc_exp_arg, 700.0);
-
-  Double_t transition = 1.0 - TMath::Erf(erf_arg);
-
-  return tail_amplitude * TMath::Exp(exp_arg) * transition;
+  return (exp_term + lin_term) * erf_term;
 }
 
 Double_t FittingFunctions::HighTail(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  Double_t tail_amplitude = par[2];
-  Double_t tail_slope = par[3];
+  Double_t exp_tail_amplitude = par[2];
+  Double_t exp_tail_decay = par[3];
 
   if (sigma <= 0)
     return 0;
 
-  if (tail_amplitude == 0)
+  if (exp_tail_amplitude == 0)
     return 0;
 
   Double_t y = mu - x[0];
-  Double_t alpha = sigma / (TMath::Sqrt(2) * tail_slope);
 
-  Double_t calc_erf_arg = y / (TMath::Sqrt(2) * sigma) + alpha;
-  Double_t erf_arg = TMath::Min(calc_erf_arg, 700.0);
+  Double_t exp_term = exp_tail_amplitude * TMath::Exp(y / exp_tail_decay);
+  Double_t erf_term = 1.0 - TMath::Erf(y / (TMath::Sqrt(2) * sigma));
 
-  Double_t calc_exp_arg = (TMath::Sqrt(2) * y * alpha) / sigma + alpha * alpha;
-  Double_t exp_arg = TMath::Min(calc_exp_arg, 700.0);
-
-  Double_t transition = 1.0 - TMath::Erf(erf_arg);
-
-  return tail_amplitude * TMath::Exp(exp_arg) * transition;
+  return exp_term * erf_term;
 }
 
 Double_t FittingFunctions::Step(Double_t *x, Double_t *par) {
@@ -196,60 +155,38 @@ Double_t FittingFunctions::Step(Double_t *x, Double_t *par) {
   return step_amplitude / denominator;
 }
 
-Double_t FittingFunctions::Standard(Double_t *x, Double_t *par) {
+Double_t FittingFunctions::PeakFunction(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
   Double_t gaus_amplitude = par[2];
-  Double_t bkg_const = par[3];
-  Double_t bkg_slope = par[4];
+  Double_t step_amplitude = par[3];
+  Double_t low_exp_tail_amplitude = par[4];
+  Double_t low_exp_tail_decay = par[5];
+  Double_t low_lin_tail_amplitude = par[6];
+  Double_t low_lin_tail_slope = par[7];
+  Double_t high_exp_tail_amplitude = par[8];
+  Double_t high_exp_tail_decay = par[9];
+  Double_t bkg_constant = par[10];
+  Double_t lin_bkg_slope = par[11];
 
   Double_t gaus_par[3] = {mu, sigma, gaus_amplitude};
-  Double_t bkg_par[2] = {bkg_const, bkg_slope};
-  return Gaussian(x, gaus_par) + LinearBackground(x, bkg_par);
-}
-
-Double_t FittingFunctions::Detailed(Double_t *x, Double_t *par) {
-  Double_t mu = par[0];
-  Double_t sigma = par[1];
-  Double_t gaus_amplitude = par[2];
-  Double_t bkg_const = par[3];
-  Double_t bkg_slope = par[4];
-  Double_t step_amplitude = par[5];
-  Double_t low_tail_amplitude = par[6];
-  Double_t low_tail_slope = par[7];
-  Double_t high_tail_amplitude = par[8];
-  Double_t high_tail_slope = par[9];
-
-  Double_t gaus_par[3] = {mu, sigma, gaus_amplitude};
-  Double_t bkg_par[2] = {bkg_const, bkg_slope};
+  Double_t bkg_par[2] = {bkg_constant, lin_bkg_slope};
   Double_t step_par[3] = {mu, sigma, step_amplitude};
-  Double_t low_tail_par[4] = {mu, sigma, low_tail_amplitude, low_tail_slope};
-  Double_t high_tail_par[4] = {mu, sigma, high_tail_amplitude, high_tail_slope};
+  Double_t low_tail_par[6] = {mu,
+                              sigma,
+                              low_exp_tail_amplitude,
+                              low_exp_tail_decay,
+                              low_lin_tail_amplitude,
+                              low_lin_tail_slope};
+  Double_t high_tail_par[4] = {mu, sigma, high_exp_tail_amplitude,
+                               high_exp_tail_decay};
 
   return Gaussian(x, gaus_par) + LinearBackground(x, bkg_par) +
          Step(x, step_par) + LowTail(x, low_tail_par) +
          HighTail(x, high_tail_par);
 }
 
-Double_t FittingFunctions::DoublePeakStandard(Double_t *x, Double_t *par) {
-  Double_t mu1 = par[0];
-  Double_t sigma1 = par[1];
-  Double_t gaus_amplitude1 = par[2];
-  Double_t mu2 = par[3];
-  Double_t sigma2 = par[4];
-  Double_t gaus_amplitude2 = par[5];
-  Double_t bkg_const = par[6];
-  Double_t bkg_slope = par[7];
-
-  Double_t gaus1_par[3] = {mu1, sigma1, gaus_amplitude1};
-  Double_t gaus2_par[3] = {mu2, sigma2, gaus_amplitude2};
-  Double_t bkg_par[2] = {bkg_const, bkg_slope};
-
-  return Gaussian(x, gaus1_par) + Gaussian(x, gaus2_par) +
-         LinearBackground(x, bkg_par);
-}
-
-Double_t FittingFunctions::DoublePeakDetailed(Double_t *x, Double_t *par) {
+Double_t FittingFunctions::DoublePeakFunction(Double_t *x, Double_t *par) {
   Double_t mu1 = par[0];
   Double_t sigma1 = par[1];
   Double_t gaus_amplitude1 = par[2];
@@ -294,29 +231,7 @@ Double_t FittingFunctions::DoublePeakDetailed(Double_t *x, Double_t *par) {
          LinearBackground(x, bkg_par);
 }
 
-Double_t FittingFunctions::TriplePeakStandard(Double_t *x, Double_t *par) {
-  Double_t mu1 = par[0];
-  Double_t sigma1 = par[1];
-  Double_t gaus_amplitude1 = par[2];
-  Double_t mu2 = par[3];
-  Double_t sigma2 = par[4];
-  Double_t gaus_amplitude2 = par[5];
-  Double_t mu3 = par[6];
-  Double_t sigma3 = par[7];
-  Double_t gaus_amplitude3 = par[8];
-  Double_t bkg_const = par[9];
-  Double_t bkg_slope = par[10];
-
-  Double_t gaus1_par[3] = {mu1, sigma1, gaus_amplitude1};
-  Double_t gaus2_par[3] = {mu2, sigma2, gaus_amplitude2};
-  Double_t gaus3_par[3] = {mu3, sigma3, gaus_amplitude3};
-  Double_t bkg_par[2] = {bkg_const, bkg_slope};
-
-  return Gaussian(x, gaus1_par) + Gaussian(x, gaus2_par) +
-         Gaussian(x, gaus3_par) + LinearBackground(x, bkg_par);
-}
-
-Double_t FittingFunctions::TriplePeakDetailed(Double_t *x, Double_t *par) {
+Double_t FittingFunctions::TriplePeakFunction(Double_t *x, Double_t *par) {
   Double_t mu1 = par[0];
   Double_t sigma1 = par[1];
   Double_t gaus_amplitude1 = par[2];
