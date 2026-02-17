@@ -35,8 +35,8 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
 
     fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
     fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
-    fit_function_->SetParLimits(2, 0, peak_height * 1.5);
-    fit_function_->SetParLimits(3, 0, peak_height * 1.5);
+    fit_function_->SetParLimits(2, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(3, 0, peak_height * 0.75);
     if (!use_flat_background_) {
       fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
                                   0.5 * bkg_estimate / range_width);
@@ -72,8 +72,8 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
 
     fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
     fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
-    fit_function_->SetParLimits(2, 0, peak_height * 1.5);
-    fit_function_->SetParLimits(3, 0, peak_height * 1.5);
+    fit_function_->SetParLimits(2, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(3, 0, peak_height * 0.75);
     if (!use_flat_background_) {
       fit_function_->SetParLimits(4, -0.5 * bkg_estimate / range_width,
                                   0.5 * bkg_estimate / range_width);
@@ -86,16 +86,16 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->SetParameter(3, bkg_estimate);
     fit_function_->SetParameter(4, 0);
 
-    fit_function_->SetParLimits(5, 0, peak_height * 0.5);
+    fit_function_->SetParLimits(5, 0, peak_height * 0.75);
     fit_function_->SetParameter(5, 0);
 
     fit_function_->SetParLimits(6, 0, peak_height);
-    fit_function_->SetParLimits(7, 1, 10);
+    fit_function_->SetParLimits(7, 1e-1, 5e1);
     fit_function_->SetParameter(6, peak_height * 0.10);
     fit_function_->SetParameter(7, 0.2);
 
     fit_function_->SetParLimits(8, 0, peak_height);
-    fit_function_->SetParLimits(9, 1, 10);
+    fit_function_->SetParLimits(9, 1e-1, 5e1);
     fit_function_->SetParameter(8, peak_height * 0.10);
     fit_function_->SetParameter(9, 0.2);
 
@@ -131,17 +131,25 @@ Double_t FittingFunctions::LinearBackground(Double_t *x, Double_t *par) {
 Double_t FittingFunctions::LowTail(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  if (sigma <= 0)
-    return 0;
-
   Double_t tail_amplitude = par[2];
   Double_t tail_slope = par[3];
 
-  Double_t dx = (x[0] - mu) / (TMath::Sqrt(2) * sigma);
+  if (sigma <= 0)
+    return 0;
 
-  Double_t exp_arg = (x[0] - mu) / tail_slope;
+  if (tail_amplitude == 0)
+    return 0;
 
-  Double_t transition = 0.5 * (1.0 - TMath::Erf(dx));
+  Double_t y = x[0] - mu;
+  Double_t alpha = sigma / (TMath::Sqrt(2) * tail_slope);
+
+  Double_t calc_erf_arg = y / (TMath::Sqrt(2) * sigma) + alpha;
+  Double_t erf_arg = TMath::Min(calc_erf_arg, 700.0);
+
+  Double_t calc_exp_arg = (TMath::Sqrt(2) * y * alpha) / sigma + alpha * alpha;
+  Double_t exp_arg = TMath::Min(calc_exp_arg, 700.0);
+
+  Double_t transition = 1.0 - TMath::Erf(erf_arg);
 
   return tail_amplitude * TMath::Exp(exp_arg) * transition;
 }
@@ -149,17 +157,25 @@ Double_t FittingFunctions::LowTail(Double_t *x, Double_t *par) {
 Double_t FittingFunctions::HighTail(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
-  if (sigma <= 0)
-    return 0;
-
   Double_t tail_amplitude = par[2];
   Double_t tail_slope = par[3];
 
-  Double_t dx = (mu - x[0]) / (TMath::Sqrt(2) * sigma);
+  if (sigma <= 0)
+    return 0;
 
-  Double_t exp_arg = (mu - x[0]) / tail_slope;
+  if (tail_amplitude == 0)
+    return 0;
 
-  Double_t transition = 0.5 * (1.0 - TMath::Erf(dx));
+  Double_t y = mu - x[0];
+  Double_t alpha = sigma / (TMath::Sqrt(2) * tail_slope);
+
+  Double_t calc_erf_arg = y / (TMath::Sqrt(2) * sigma) + alpha;
+  Double_t erf_arg = TMath::Min(calc_erf_arg, 700.0);
+
+  Double_t calc_exp_arg = (TMath::Sqrt(2) * y * alpha) / sigma + alpha * alpha;
+  Double_t exp_arg = TMath::Min(calc_exp_arg, 700.0);
+
+  Double_t transition = 1.0 - TMath::Erf(erf_arg);
 
   return tail_amplitude * TMath::Exp(exp_arg) * transition;
 }
@@ -200,15 +216,15 @@ Double_t FittingFunctions::Detailed(Double_t *x, Double_t *par) {
   Double_t bkg_slope = par[4];
   Double_t step_amplitude = par[5];
   Double_t low_tail_amplitude = par[6];
-  Double_t low_tail_range = par[7];
+  Double_t low_tail_slope = par[7];
   Double_t high_tail_amplitude = par[8];
-  Double_t high_tail_range = par[9];
+  Double_t high_tail_slope = par[9];
 
   Double_t gaus_par[3] = {mu, sigma, gaus_amplitude};
   Double_t bkg_par[2] = {bkg_const, bkg_slope};
   Double_t step_par[3] = {mu, sigma, step_amplitude};
-  Double_t low_tail_par[4] = {mu, sigma, low_tail_amplitude, low_tail_range};
-  Double_t high_tail_par[4] = {mu, sigma, high_tail_amplitude, high_tail_range};
+  Double_t low_tail_par[4] = {mu, sigma, low_tail_amplitude, low_tail_slope};
+  Double_t high_tail_par[4] = {mu, sigma, high_tail_amplitude, high_tail_slope};
 
   return Gaussian(x, gaus_par) + LinearBackground(x, bkg_par) +
          Step(x, step_par) + LowTail(x, low_tail_par) +
@@ -239,18 +255,18 @@ Double_t FittingFunctions::DoublePeakDetailed(Double_t *x, Double_t *par) {
   Double_t gaus_amplitude1 = par[2];
   Double_t step_amplitude1 = par[3];
   Double_t low_tail_amplitude1 = par[4];
-  Double_t low_tail_range1 = par[5];
+  Double_t low_tail_slope1 = par[5];
   Double_t high_tail_amplitude1 = par[6];
-  Double_t high_tail_range1 = par[7];
+  Double_t high_tail_slope1 = par[7];
 
   Double_t mu2 = par[8];
   Double_t sigma2 = par[9];
   Double_t gaus_amplitude2 = par[10];
   Double_t step_amplitude2 = par[11];
   Double_t low_tail_amplitude2 = par[12];
-  Double_t low_tail_range2 = par[13];
+  Double_t low_tail_slope2 = par[13];
   Double_t high_tail_amplitude2 = par[14];
-  Double_t high_tail_range2 = par[15];
+  Double_t high_tail_slope2 = par[15];
 
   Double_t bkg_const = par[16];
   Double_t bkg_slope = par[17];
@@ -258,16 +274,16 @@ Double_t FittingFunctions::DoublePeakDetailed(Double_t *x, Double_t *par) {
   Double_t gaus1_par[3] = {mu1, sigma1, gaus_amplitude1};
   Double_t step1_par[3] = {mu1, sigma1, step_amplitude1};
   Double_t low_tail1_par[4] = {mu1, sigma1, low_tail_amplitude1,
-                               low_tail_range1};
+                               low_tail_slope1};
   Double_t high_tail1_par[4] = {mu1, sigma1, high_tail_amplitude1,
-                                high_tail_range1};
+                                high_tail_slope1};
 
   Double_t gaus2_par[3] = {mu2, sigma2, gaus_amplitude2};
   Double_t step2_par[3] = {mu2, sigma2, step_amplitude2};
   Double_t low_tail2_par[4] = {mu2, sigma2, low_tail_amplitude2,
-                               low_tail_range2};
+                               low_tail_slope2};
   Double_t high_tail2_par[4] = {mu2, sigma2, high_tail_amplitude2,
-                                high_tail_range2};
+                                high_tail_slope2};
 
   Double_t bkg_par[2] = {bkg_const, bkg_slope};
 
@@ -306,27 +322,27 @@ Double_t FittingFunctions::TriplePeakDetailed(Double_t *x, Double_t *par) {
   Double_t gaus_amplitude1 = par[2];
   Double_t step_amplitude1 = par[3];
   Double_t low_tail_amplitude1 = par[4];
-  Double_t low_tail_range1 = par[5];
+  Double_t low_tail_slope1 = par[5];
   Double_t high_tail_amplitude1 = par[6];
-  Double_t high_tail_range1 = par[7];
+  Double_t high_tail_slope1 = par[7];
 
   Double_t mu2 = par[8];
   Double_t sigma2 = par[9];
   Double_t gaus_amplitude2 = par[10];
   Double_t step_amplitude2 = par[11];
   Double_t low_tail_amplitude2 = par[12];
-  Double_t low_tail_range2 = par[13];
+  Double_t low_tail_slope2 = par[13];
   Double_t high_tail_amplitude2 = par[14];
-  Double_t high_tail_range2 = par[15];
+  Double_t high_tail_slope2 = par[15];
 
   Double_t mu3 = par[16];
   Double_t sigma3 = par[17];
   Double_t gaus_amplitude3 = par[18];
   Double_t step_amplitude3 = par[19];
   Double_t low_tail_amplitude3 = par[20];
-  Double_t low_tail_range3 = par[21];
+  Double_t low_tail_slope3 = par[21];
   Double_t high_tail_amplitude3 = par[22];
-  Double_t high_tail_range3 = par[23];
+  Double_t high_tail_slope3 = par[23];
 
   Double_t bkg_const = par[24];
   Double_t bkg_slope = par[25];
@@ -334,23 +350,23 @@ Double_t FittingFunctions::TriplePeakDetailed(Double_t *x, Double_t *par) {
   Double_t gaus1_par[3] = {mu1, sigma1, gaus_amplitude1};
   Double_t step1_par[3] = {mu1, sigma1, step_amplitude1};
   Double_t low_tail1_par[4] = {mu1, sigma1, low_tail_amplitude1,
-                               low_tail_range1};
+                               low_tail_slope1};
   Double_t high_tail1_par[4] = {mu1, sigma1, high_tail_amplitude1,
-                                high_tail_range1};
+                                high_tail_slope1};
 
   Double_t gaus2_par[3] = {mu2, sigma2, gaus_amplitude2};
   Double_t step2_par[3] = {mu2, sigma2, step_amplitude2};
   Double_t low_tail2_par[4] = {mu2, sigma2, low_tail_amplitude2,
-                               low_tail_range2};
+                               low_tail_slope2};
   Double_t high_tail2_par[4] = {mu2, sigma2, high_tail_amplitude2,
-                                high_tail_range2};
+                                high_tail_slope2};
 
   Double_t gaus3_par[3] = {mu3, sigma3, gaus_amplitude3};
   Double_t step3_par[3] = {mu3, sigma3, step_amplitude3};
   Double_t low_tail3_par[4] = {mu3, sigma3, low_tail_amplitude3,
-                               low_tail_range3};
+                               low_tail_slope3};
   Double_t high_tail3_par[4] = {mu3, sigma3, high_tail_amplitude3,
-                                high_tail_range3};
+                                high_tail_slope3};
 
   Double_t bkg_par[2] = {bkg_const, bkg_slope};
 
@@ -1510,8 +1526,8 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
 
     fit_function_->ReleaseParameter(6);
     fit_function_->ReleaseParameter(7);
-    fit_function_->SetParLimits(6, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(7, 1, 10);
+    fit_function_->SetParLimits(6, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(7, 1e-1, 5e1);
 
     if (!use_manual_init_) {
       Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
@@ -1558,8 +1574,8 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
 
     fit_function_->ReleaseParameter(8);
     fit_function_->ReleaseParameter(9);
-    fit_function_->SetParLimits(8, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(9, 1, 10);
+    fit_function_->SetParLimits(8, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(9, 1e-1, 5e1);
 
     if (!use_manual_init_) {
       Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
@@ -1646,12 +1662,12 @@ FitResultDetailed FittingUtils::FitPeakDetailed(const TString input_name,
     results.step_amplitude_error = fit_function_->GetParError(5);
     results.low_tail_amplitude = fit_function_->GetParameter(6);
     results.low_tail_amplitude_error = fit_function_->GetParError(6);
-    results.low_tail_range = fit_function_->GetParameter(7);
-    results.low_tail_range_error = fit_function_->GetParError(7);
+    results.low_tail_slope = fit_function_->GetParameter(7);
+    results.low_tail_slope_error = fit_function_->GetParError(7);
     results.high_tail_amplitude = fit_function_->GetParameter(8);
     results.high_tail_amplitude_error = fit_function_->GetParError(8);
-    results.high_tail_range = fit_function_->GetParameter(9);
-    results.high_tail_range_error = fit_function_->GetParError(9);
+    results.high_tail_slope = fit_function_->GetParameter(9);
+    results.high_tail_slope_error = fit_function_->GetParError(9);
     results.reduced_chi2 = final_chi2;
   } else {
     std::cout << "ERROR: Final fit did not converge" << std::endl;
@@ -1696,11 +1712,11 @@ FittingUtils::FitDoublePeakStandard(const TString input_name,
 
   fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(2, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
   fit_function_->SetParLimits(3, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(4, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(5, 0, peak_height * 1.5);
-  fit_function_->SetParLimits(6, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(5, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(6, 0, peak_height * 0.75);
   if (!use_flat_background_) {
     fit_function_->SetParLimits(7, -0.1 * bkg_estimate / range_width,
                                 0.1 * bkg_estimate / range_width);
@@ -1710,10 +1726,10 @@ FittingUtils::FitDoublePeakStandard(const TString input_name,
 
   fit_function_->SetParameter(0, mu1_init);
   fit_function_->SetParameter(1, sigma_init);
-  fit_function_->SetParameter(2, peak_height * 0.5);
+  fit_function_->SetParameter(2, peak_height * 0.75);
   fit_function_->SetParameter(3, mu2_init);
   fit_function_->SetParameter(4, sigma_init);
-  fit_function_->SetParameter(5, peak_height * 0.5);
+  fit_function_->SetParameter(5, peak_height * 0.75);
   fit_function_->SetParameter(6, bkg_estimate);
   fit_function_->SetParameter(7, 0);
 
@@ -1820,23 +1836,23 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
 
   fit_function_->SetParLimits(0, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(1, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(2, 0, peak_height * 1.5);
-  fit_function_->SetParLimits(3, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(3, 0, peak_height * 0.75);
   fit_function_->SetParLimits(4, 0, peak_height);
-  fit_function_->SetParLimits(5, 1, 10);
+  fit_function_->SetParLimits(5, 1e-1, 5e1);
   fit_function_->SetParLimits(6, 0, peak_height);
-  fit_function_->SetParLimits(7, 1, 10);
+  fit_function_->SetParLimits(7, 1e-1, 5e1);
 
   fit_function_->SetParLimits(8, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(9, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(10, 0, peak_height * 1.5);
-  fit_function_->SetParLimits(11, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(10, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(11, 0, peak_height * 0.75);
   fit_function_->SetParLimits(12, 0, peak_height);
-  fit_function_->SetParLimits(13, 1, 10);
+  fit_function_->SetParLimits(13, 1e-1, 5e1);
   fit_function_->SetParLimits(14, 0, peak_height);
-  fit_function_->SetParLimits(15, 1, 10);
+  fit_function_->SetParLimits(15, 1e-1, 5e1);
 
-  fit_function_->SetParLimits(16, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(16, 0, peak_height * 0.75);
   if (!use_flat_background_) {
     fit_function_->SetParLimits(17, -0.1 * bkg_estimate / range_width,
                                 0.1 * bkg_estimate / range_width);
@@ -1846,7 +1862,7 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
 
   fit_function_->SetParameter(0, mu1_init);
   fit_function_->SetParameter(1, sigma_init);
-  fit_function_->SetParameter(2, peak_height * 0.5);
+  fit_function_->SetParameter(2, peak_height * 0.75);
   fit_function_->FixParameter(3, 0);
   fit_function_->FixParameter(4, 0);
   fit_function_->FixParameter(5, 1);
@@ -1855,7 +1871,7 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
 
   fit_function_->SetParameter(8, mu2_init);
   fit_function_->SetParameter(9, sigma_init);
-  fit_function_->SetParameter(10, peak_height * 0.5);
+  fit_function_->SetParameter(10, peak_height * 0.75);
   fit_function_->FixParameter(11, 0);
   fit_function_->FixParameter(12, 0);
   fit_function_->FixParameter(13, 1);
@@ -1977,8 +1993,8 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     std::cout << "Testing low tail for peak1..." << std::endl;
     fit_function_->ReleaseParameter(4);
     fit_function_->ReleaseParameter(5);
-    fit_function_->SetParLimits(4, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(5, 1, 10);
+    fit_function_->SetParLimits(4, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(5, 1e-1, 5e1);
     Double_t tail_amp_init = TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(4, tail_amp_init);
     fit_function_->SetParameter(5, 1);
@@ -2019,8 +2035,8 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     std::cout << "Testing low tail for peak2..." << std::endl;
     fit_function_->ReleaseParameter(12);
     fit_function_->ReleaseParameter(13);
-    fit_function_->SetParLimits(12, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(13, 1, 10);
+    fit_function_->SetParLimits(12, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(13, 1e-1, 5e1);
     tail_amp_init = TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(12, tail_amp_init);
     fit_function_->SetParameter(13, 1);
@@ -2063,8 +2079,8 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     std::cout << "Testing high tail for peak1..." << std::endl;
     fit_function_->ReleaseParameter(6);
     fit_function_->ReleaseParameter(7);
-    fit_function_->SetParLimits(6, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(7, 1, 10);
+    fit_function_->SetParLimits(6, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(7, 1e-1, 5e1);
     Double_t tail_amp_init = TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(6, tail_amp_init);
     fit_function_->SetParameter(7, 1);
@@ -2106,8 +2122,8 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     std::cout << "Testing high tail for peak2..." << std::endl;
     fit_function_->ReleaseParameter(14);
     fit_function_->ReleaseParameter(15);
-    fit_function_->SetParLimits(14, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(15, 1, 10);
+    fit_function_->SetParLimits(14, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(15, 1e-1, 5e1);
     tail_amp_init = TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(14, tail_amp_init);
     fit_function_->SetParameter(15, 1);
@@ -2187,12 +2203,12 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     results.peak1.step_amplitude_error = fit_function_->GetParError(3);
     results.peak1.low_tail_amplitude = fit_function_->GetParameter(4);
     results.peak1.low_tail_amplitude_error = fit_function_->GetParError(4);
-    results.peak1.low_tail_range = fit_function_->GetParameter(5);
-    results.peak1.low_tail_range_error = fit_function_->GetParError(5);
+    results.peak1.low_tail_slope = fit_function_->GetParameter(5);
+    results.peak1.low_tail_slope_error = fit_function_->GetParError(5);
     results.peak1.high_tail_amplitude = fit_function_->GetParameter(6);
     results.peak1.high_tail_amplitude_error = fit_function_->GetParError(6);
-    results.peak1.high_tail_range = fit_function_->GetParameter(7);
-    results.peak1.high_tail_range_error = fit_function_->GetParError(7);
+    results.peak1.high_tail_slope = fit_function_->GetParameter(7);
+    results.peak1.high_tail_slope_error = fit_function_->GetParError(7);
     results.peak1.bkg_const = fit_function_->GetParameter(16);
     results.peak1.bkg_const_error = fit_function_->GetParError(16);
     results.peak1.bkg_slope = fit_function_->GetParameter(17);
@@ -2209,12 +2225,12 @@ FittingUtils::FitDoublePeakDetailed(const TString input_name,
     results.peak2.step_amplitude_error = fit_function_->GetParError(11);
     results.peak2.low_tail_amplitude = fit_function_->GetParameter(12);
     results.peak2.low_tail_amplitude_error = fit_function_->GetParError(12);
-    results.peak2.low_tail_range = fit_function_->GetParameter(13);
-    results.peak2.low_tail_range_error = fit_function_->GetParError(13);
+    results.peak2.low_tail_slope = fit_function_->GetParameter(13);
+    results.peak2.low_tail_slope_error = fit_function_->GetParError(13);
     results.peak2.high_tail_amplitude = fit_function_->GetParameter(14);
     results.peak2.high_tail_amplitude_error = fit_function_->GetParError(14);
-    results.peak2.high_tail_range = fit_function_->GetParameter(15);
-    results.peak2.high_tail_range_error = fit_function_->GetParError(15);
+    results.peak2.high_tail_slope = fit_function_->GetParameter(15);
+    results.peak2.high_tail_slope_error = fit_function_->GetParError(15);
     results.peak2.bkg_const = fit_function_->GetParameter(16);
     results.peak2.bkg_const_error = fit_function_->GetParError(16);
     results.peak2.bkg_slope = fit_function_->GetParameter(17);
@@ -2259,17 +2275,17 @@ FitResultDoublePeakStandard FittingUtils::FitDoublePeakStandard(
 
   fit_function_->FixParameter(0, constrained_peak.mu);
   fit_function_->FixParameter(1, constrained_peak.sigma);
-  fit_function_->SetParLimits(2, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
   fit_function_->SetParameter(2, constrained_peak.gaus_amplitude);
 
   fit_function_->SetParLimits(3, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(4, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(5, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(5, 0, peak_height * 0.75);
   fit_function_->SetParameter(3, mu2_init);
   fit_function_->SetParameter(4, sigma_init);
-  fit_function_->SetParameter(5, peak_height * 0.5);
+  fit_function_->SetParameter(5, peak_height * 0.75);
 
-  fit_function_->SetParLimits(6, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(6, 0, peak_height * 0.75);
   if (!use_flat_background_) {
     fit_function_->SetParLimits(7, -0.1 * bkg_estimate / range_width,
                                 0.1 * bkg_estimate / range_width);
@@ -2367,34 +2383,34 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
 
   fit_function_->FixParameter(0, constrained_peak.mu);
   fit_function_->FixParameter(1, constrained_peak.sigma);
-  fit_function_->SetParLimits(2, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
   fit_function_->SetParameter(2, constrained_peak.gaus_amplitude);
   fit_function_->SetParameter(3, constrained_peak.step_amplitude);
   fit_function_->SetParLimits(3, 0, constrained_peak.step_amplitude * 1.1);
   fit_function_->SetParameter(4, constrained_peak.low_tail_amplitude);
-  fit_function_->FixParameter(5, constrained_peak.low_tail_range);
+  fit_function_->FixParameter(5, constrained_peak.low_tail_slope);
   fit_function_->SetParameter(6, constrained_peak.high_tail_amplitude);
-  fit_function_->FixParameter(7, constrained_peak.high_tail_range);
+  fit_function_->FixParameter(7, constrained_peak.high_tail_slope);
 
   fit_function_->SetParLimits(8, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(9, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(10, 0, peak_height * 1.5);
-  fit_function_->SetParLimits(11, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(10, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(11, 0, peak_height * 0.75);
   fit_function_->SetParLimits(12, 0, peak_height);
-  fit_function_->SetParLimits(13, 1, 10);
+  fit_function_->SetParLimits(13, 1e-1, 5e1);
   fit_function_->SetParLimits(14, 0, peak_height);
-  fit_function_->SetParLimits(15, 1, 10);
+  fit_function_->SetParLimits(15, 1e-1, 5e1);
 
   fit_function_->SetParameter(8, mu2_init);
   fit_function_->SetParameter(9, sigma_init);
-  fit_function_->SetParameter(10, peak_height * 0.5);
+  fit_function_->SetParameter(10, peak_height * 0.75);
   fit_function_->FixParameter(11, 0);
   fit_function_->FixParameter(12, 0);
   fit_function_->FixParameter(13, 1);
   fit_function_->FixParameter(14, 0);
   fit_function_->FixParameter(15, 1);
 
-  fit_function_->SetParLimits(16, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(16, 0, peak_height * 0.75);
   if (!use_flat_background_) {
     fit_function_->SetParLimits(17, -0.1 * bkg_estimate / range_width,
                                 0.1 * bkg_estimate / range_width);
@@ -2483,8 +2499,8 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
     std::cout << "Testing low tail for peak2..." << std::endl;
     fit_function_->ReleaseParameter(12);
     fit_function_->ReleaseParameter(13);
-    fit_function_->SetParLimits(12, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(13, 1, 10);
+    fit_function_->SetParLimits(12, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(13, 1e-1, 5e1);
     Double_t tail_amp_init = TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(12, tail_amp_init);
     fit_function_->SetParameter(13, 1);
@@ -2527,8 +2543,8 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
     std::cout << "Testing high tail for peak2..." << std::endl;
     fit_function_->ReleaseParameter(14);
     fit_function_->ReleaseParameter(15);
-    fit_function_->SetParLimits(14, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(15, 1, 10);
+    fit_function_->SetParLimits(14, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(15, 1e-1, 5e1);
     Double_t tail_amp_init = TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(14, tail_amp_init);
     fit_function_->SetParameter(15, 1);
@@ -2599,12 +2615,12 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
     results.peak1.step_amplitude_error = fit_function_->GetParError(3);
     results.peak1.low_tail_amplitude = fit_function_->GetParameter(4);
     results.peak1.low_tail_amplitude_error = fit_function_->GetParError(4);
-    results.peak1.low_tail_range = fit_function_->GetParameter(5);
-    results.peak1.low_tail_range_error = fit_function_->GetParError(5);
+    results.peak1.low_tail_slope = fit_function_->GetParameter(5);
+    results.peak1.low_tail_slope_error = fit_function_->GetParError(5);
     results.peak1.high_tail_amplitude = fit_function_->GetParameter(6);
     results.peak1.high_tail_amplitude_error = fit_function_->GetParError(6);
-    results.peak1.high_tail_range = fit_function_->GetParameter(7);
-    results.peak1.high_tail_range_error = fit_function_->GetParError(7);
+    results.peak1.high_tail_slope = fit_function_->GetParameter(7);
+    results.peak1.high_tail_slope_error = fit_function_->GetParError(7);
     results.peak1.bkg_const = fit_function_->GetParameter(16);
     results.peak1.bkg_const_error = fit_function_->GetParError(16);
     results.peak1.bkg_slope = fit_function_->GetParameter(17);
@@ -2621,12 +2637,12 @@ FitResultDoublePeakDetailed FittingUtils::FitDoublePeakDetailed(
     results.peak2.step_amplitude_error = fit_function_->GetParError(11);
     results.peak2.low_tail_amplitude = fit_function_->GetParameter(12);
     results.peak2.low_tail_amplitude_error = fit_function_->GetParError(12);
-    results.peak2.low_tail_range = fit_function_->GetParameter(13);
-    results.peak2.low_tail_range_error = fit_function_->GetParError(13);
+    results.peak2.low_tail_slope = fit_function_->GetParameter(13);
+    results.peak2.low_tail_slope_error = fit_function_->GetParError(13);
     results.peak2.high_tail_amplitude = fit_function_->GetParameter(14);
     results.peak2.high_tail_amplitude_error = fit_function_->GetParError(14);
-    results.peak2.high_tail_range = fit_function_->GetParameter(15);
-    results.peak2.high_tail_range_error = fit_function_->GetParError(15);
+    results.peak2.high_tail_slope = fit_function_->GetParameter(15);
+    results.peak2.high_tail_slope_error = fit_function_->GetParError(15);
     results.peak2.bkg_const = fit_function_->GetParameter(16);
     results.peak2.bkg_const_error = fit_function_->GetParError(16);
     results.peak2.bkg_slope = fit_function_->GetParameter(17);
@@ -2675,22 +2691,22 @@ FitResultTriplePeakStandard FittingUtils::FitTriplePeakStandard(
 
   fit_function_->FixParameter(0, constrained_peaks.peak1.mu);
   fit_function_->FixParameter(1, constrained_peaks.peak1.sigma);
-  fit_function_->SetParLimits(2, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
   fit_function_->SetParameter(2, constrained_peaks.peak1.gaus_amplitude);
 
   fit_function_->FixParameter(3, constrained_peaks.peak2.mu);
   fit_function_->FixParameter(4, constrained_peaks.peak2.sigma);
-  fit_function_->SetParLimits(5, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(5, 0, peak_height * 0.75);
   fit_function_->SetParameter(5, constrained_peaks.peak2.gaus_amplitude);
 
   fit_function_->SetParLimits(6, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(7, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(8, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(8, 0, peak_height * 0.75);
   fit_function_->SetParameter(6, mu3_init);
   fit_function_->SetParameter(7, sigma_init);
-  fit_function_->SetParameter(8, peak_height * 0.5);
+  fit_function_->SetParameter(8, peak_height * 0.75);
 
-  fit_function_->SetParLimits(9, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(9, 0, peak_height * 0.75);
   if (!use_flat_background_) {
     fit_function_->SetParLimits(10, -0.1 * bkg_estimate / range_width,
                                 0.1 * bkg_estimate / range_width);
@@ -2807,47 +2823,47 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
 
   fit_function_->FixParameter(0, constrained_peaks.peak1.mu);
   fit_function_->FixParameter(1, constrained_peaks.peak1.sigma);
-  fit_function_->SetParLimits(2, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(2, 0, peak_height * 0.75);
   fit_function_->SetParameter(2, constrained_peaks.peak1.gaus_amplitude);
   fit_function_->SetParameter(3, constrained_peaks.peak1.step_amplitude);
   fit_function_->SetParLimits(3, 0,
                               constrained_peaks.peak1.step_amplitude * 1.1);
   fit_function_->SetParameter(4, constrained_peaks.peak1.low_tail_amplitude);
-  fit_function_->FixParameter(5, constrained_peaks.peak1.low_tail_range);
+  fit_function_->FixParameter(5, constrained_peaks.peak1.low_tail_slope);
   fit_function_->SetParameter(6, constrained_peaks.peak1.high_tail_amplitude);
-  fit_function_->FixParameter(7, constrained_peaks.peak1.high_tail_range);
+  fit_function_->FixParameter(7, constrained_peaks.peak1.high_tail_slope);
 
   fit_function_->FixParameter(8, constrained_peaks.peak2.mu);
   fit_function_->FixParameter(9, constrained_peaks.peak2.sigma);
-  fit_function_->SetParLimits(10, 0, peak_height * 1.5);
+  fit_function_->SetParLimits(10, 0, peak_height * 0.75);
   fit_function_->SetParameter(10, constrained_peaks.peak2.gaus_amplitude);
   fit_function_->SetParameter(11, constrained_peaks.peak2.step_amplitude);
   fit_function_->SetParLimits(11, 0,
                               constrained_peaks.peak2.step_amplitude * 1.1);
   fit_function_->SetParameter(12, constrained_peaks.peak2.low_tail_amplitude);
-  fit_function_->FixParameter(13, constrained_peaks.peak2.low_tail_range);
+  fit_function_->FixParameter(13, constrained_peaks.peak2.low_tail_slope);
   fit_function_->SetParameter(14, constrained_peaks.peak2.high_tail_amplitude);
-  fit_function_->FixParameter(15, constrained_peaks.peak2.high_tail_range);
+  fit_function_->FixParameter(15, constrained_peaks.peak2.high_tail_slope);
 
   fit_function_->SetParLimits(16, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(17, range_width * 0.001, range_width * 0.5);
-  fit_function_->SetParLimits(18, 0, peak_height * 1.5);
-  fit_function_->SetParLimits(19, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(18, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(19, 0, peak_height * 0.75);
   fit_function_->SetParLimits(20, 0, peak_height);
-  fit_function_->SetParLimits(21, 1, 10);
+  fit_function_->SetParLimits(21, 1e-1, 5e1);
   fit_function_->SetParLimits(22, 0, peak_height);
-  fit_function_->SetParLimits(23, 1, 10);
+  fit_function_->SetParLimits(23, 1e-1, 5e1);
 
   fit_function_->SetParameter(16, mu3_init);
   fit_function_->SetParameter(17, sigma_init);
-  fit_function_->SetParameter(18, peak_height * 0.5);
+  fit_function_->SetParameter(18, peak_height * 0.75);
   fit_function_->FixParameter(19, 0);
   fit_function_->FixParameter(20, 0);
   fit_function_->FixParameter(21, 1);
   fit_function_->FixParameter(22, 0);
   fit_function_->FixParameter(23, 1);
 
-  fit_function_->SetParLimits(24, 0, peak_height * 0.5);
+  fit_function_->SetParLimits(24, 0, peak_height * 0.75);
   if (!use_flat_background_) {
     fit_function_->SetParLimits(25, -0.1 * bkg_estimate / range_width,
                                 0.1 * bkg_estimate / range_width);
@@ -2933,8 +2949,8 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     std::cout << "Testing low tail for peak3..." << std::endl;
     fit_function_->ReleaseParameter(20);
     fit_function_->ReleaseParameter(21);
-    fit_function_->SetParLimits(20, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(21, 1, 10);
+    fit_function_->SetParLimits(20, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(21, 1e-1, 5e1);
     Double_t tail_amp_init = TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(20, tail_amp_init);
     fit_function_->SetParameter(21, 1);
@@ -2977,8 +2993,8 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     std::cout << "Testing high tail for peak3..." << std::endl;
     fit_function_->ReleaseParameter(22);
     fit_function_->ReleaseParameter(23);
-    fit_function_->SetParLimits(22, 0, peak_height * 1.2);
-    fit_function_->SetParLimits(23, 1, 10);
+    fit_function_->SetParLimits(22, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(23, 1e-1, 5e1);
     Double_t tail_amp_init = TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25);
     fit_function_->SetParameter(22, tail_amp_init);
     fit_function_->SetParameter(23, 1);
@@ -3047,12 +3063,12 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     results.peak1.step_amplitude_error = fit_function_->GetParError(3);
     results.peak1.low_tail_amplitude = fit_function_->GetParameter(4);
     results.peak1.low_tail_amplitude_error = fit_function_->GetParError(4);
-    results.peak1.low_tail_range = fit_function_->GetParameter(5);
-    results.peak1.low_tail_range_error = fit_function_->GetParError(5);
+    results.peak1.low_tail_slope = fit_function_->GetParameter(5);
+    results.peak1.low_tail_slope_error = fit_function_->GetParError(5);
     results.peak1.high_tail_amplitude = fit_function_->GetParameter(6);
     results.peak1.high_tail_amplitude_error = fit_function_->GetParError(6);
-    results.peak1.high_tail_range = fit_function_->GetParameter(7);
-    results.peak1.high_tail_range_error = fit_function_->GetParError(7);
+    results.peak1.high_tail_slope = fit_function_->GetParameter(7);
+    results.peak1.high_tail_slope_error = fit_function_->GetParError(7);
     results.peak1.bkg_const = fit_function_->GetParameter(24);
     results.peak1.bkg_const_error = fit_function_->GetParError(24);
     results.peak1.bkg_slope = fit_function_->GetParameter(25);
@@ -3069,12 +3085,12 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     results.peak2.step_amplitude_error = fit_function_->GetParError(11);
     results.peak2.low_tail_amplitude = fit_function_->GetParameter(12);
     results.peak2.low_tail_amplitude_error = fit_function_->GetParError(12);
-    results.peak2.low_tail_range = fit_function_->GetParameter(13);
-    results.peak2.low_tail_range_error = fit_function_->GetParError(13);
+    results.peak2.low_tail_slope = fit_function_->GetParameter(13);
+    results.peak2.low_tail_slope_error = fit_function_->GetParError(13);
     results.peak2.high_tail_amplitude = fit_function_->GetParameter(14);
     results.peak2.high_tail_amplitude_error = fit_function_->GetParError(14);
-    results.peak2.high_tail_range = fit_function_->GetParameter(15);
-    results.peak2.high_tail_range_error = fit_function_->GetParError(15);
+    results.peak2.high_tail_slope = fit_function_->GetParameter(15);
+    results.peak2.high_tail_slope_error = fit_function_->GetParError(15);
     results.peak2.bkg_const = fit_function_->GetParameter(24);
     results.peak2.bkg_const_error = fit_function_->GetParError(24);
     results.peak2.bkg_slope = fit_function_->GetParameter(25);
@@ -3091,12 +3107,12 @@ FitResultTriplePeakDetailed FittingUtils::FitTriplePeakDetailed(
     results.peak3.step_amplitude_error = fit_function_->GetParError(19);
     results.peak3.low_tail_amplitude = fit_function_->GetParameter(20);
     results.peak3.low_tail_amplitude_error = fit_function_->GetParError(20);
-    results.peak3.low_tail_range = fit_function_->GetParameter(21);
-    results.peak3.low_tail_range_error = fit_function_->GetParError(21);
+    results.peak3.low_tail_slope = fit_function_->GetParameter(21);
+    results.peak3.low_tail_slope_error = fit_function_->GetParError(21);
     results.peak3.high_tail_amplitude = fit_function_->GetParameter(22);
     results.peak3.high_tail_amplitude_error = fit_function_->GetParError(22);
-    results.peak3.high_tail_range = fit_function_->GetParameter(23);
-    results.peak3.high_tail_range_error = fit_function_->GetParError(23);
+    results.peak3.high_tail_slope = fit_function_->GetParameter(23);
+    results.peak3.high_tail_slope_error = fit_function_->GetParError(23);
     results.peak3.bkg_const = fit_function_->GetParameter(24);
     results.peak3.bkg_const_error = fit_function_->GetParError(24);
     results.peak3.bkg_slope = fit_function_->GetParameter(25);
