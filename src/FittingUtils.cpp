@@ -577,8 +577,8 @@ void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(
-      canvas, "log_" + peak_name + "_" + input_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+                            PlotSaveOptions::kLOG);
 }
 
 void FittingUtils::PlotFitDoublePeak(const TString input_name,
@@ -757,8 +757,8 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(
-      canvas, "log_" + peak_name + "_" + input_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+                            PlotSaveOptions::kLOG);
 }
 
 void FittingUtils::PlotFitTriplePeak(const TString input_name,
@@ -978,8 +978,8 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(
-      canvas, "log_" + peak_name + "_" + input_name + ".png", kFALSE);
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+                            PlotSaveOptions::kLOG);
 }
 
 Double_t FittingUtils::EstimateBackground() {
