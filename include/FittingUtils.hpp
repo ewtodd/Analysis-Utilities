@@ -6,13 +6,11 @@
 #include <TF1.h>
 #include <TFile.h>
 #include <TFitResult.h>
-#include <TH1F.h>
+#include <TH1.h>
 #include <TMath.h>
 #include <TPad.h>
 #include <TSystem.h>
 #include <TTree.h>
-
-enum class BackgroundModel { kFLAT, kLINEAR };
 
 namespace FittingFunctions {
 Double_t Gaussian(Double_t *x, Double_t *par);
@@ -26,24 +24,24 @@ Double_t TriplePeakFunction(Double_t *x, Double_t *par);
 } // namespace FittingFunctions
 
 struct PeakFitResult {
-  Float_t mu, mu_error;
-  Float_t sigma, sigma_error;
-  Float_t gaus_amplitude, gaus_amplitude_error;
-  Float_t step_amplitude, step_amplitude_error;
-  Float_t low_exp_tail_amplitude, low_exp_tail_amplitude_error;
-  Float_t low_exp_tail_decay, low_exp_tail_decay_error;
-  Float_t low_lin_tail_amplitude, low_lin_tail_amplitude_error;
-  Float_t low_lin_tail_slope, low_lin_tail_slope_error;
-  Float_t high_exp_tail_amplitude, high_exp_tail_amplitude_error;
-  Float_t high_exp_tail_decay, high_exp_tail_decay_error;
+  Float_t mu = -1, mu_error = -1;
+  Float_t sigma = -1, sigma_error = -1;
+  Float_t gaus_amplitude = -1, gaus_amplitude_error = -1;
+  Float_t step_amplitude = -1, step_amplitude_error = -1;
+  Float_t low_exp_tail_amplitude = -1, low_exp_tail_amplitude_error = -1;
+  Float_t low_exp_tail_decay = -1, low_exp_tail_decay_error = -1;
+  Float_t low_lin_tail_amplitude = -1, low_lin_tail_amplitude_error = -1;
+  Float_t low_lin_tail_slope = -1, low_lin_tail_slope_error = -1;
+  Float_t high_exp_tail_amplitude = -1, high_exp_tail_amplitude_error = -1;
+  Float_t high_exp_tail_decay = -1, high_exp_tail_decay_error = -1;
 };
 
 struct FitResult {
-  std::vector<PeakFitResult> peaks; // 1, 2, or 3 entries
-  Float_t bkg_constant, bkg_constant_error;
-  Float_t lin_bkg_slope, lin_bkg_slope_error;
-  Float_t reduced_chi2;
-  Bool_t valid;
+  std::vector<PeakFitResult> peaks; // 1-3 entries supported
+  Float_t bkg_constant = -1, bkg_constant_error = -1;
+  Float_t lin_bkg_slope = -1, lin_bkg_slope_error = -1;
+  Float_t reduced_chi2 = -1;
+  Bool_t valid = kFALSE;
 };
 
 class FittingUtils {
@@ -53,7 +51,7 @@ private:
   Float_t fit_range_low_;
   Float_t fit_range_high_;
 
-  BackgroundModel bkg_model_;
+  Bool_t use_flat_background_;
   Bool_t use_step_;
   Bool_t use_low_exp_tail_;
   Bool_t use_low_lin_tail_;
@@ -73,13 +71,15 @@ private:
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
-               BackgroundModel bkg_model = BackgroundModel::kLINEAR,
-               Bool_t use_step = kFALSE, Bool_t use_low_exp_tail = kFALSE,
+               Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
+               Bool_t use_low_exp_tail = kFALSE,
                Bool_t use_low_lin_tail = kFALSE,
                Bool_t use_high_exp_tail = kFALSE);
   ~FittingUtils();
 
-  void SetBackgroundModel(BackgroundModel bkg_model) { bkg_model_ = bkg_model; }
+  void SetBackgroundModel(Bool_t use_flat_background) {
+    use_flat_background_ = use_flat_background;
+  }
   void SetStep(Bool_t use_step = kTRUE) { use_step_ = use_step; }
   void SetLowExpTail(Bool_t use_low_exp_tail = kTRUE) {
     use_low_exp_tail_ = use_low_exp_tail;

@@ -8,7 +8,8 @@ Warning: Currently in active development; breaking changes are all but guarantee
 <!---->
 ### Prerequisites
 <!---->
-This project uses [Nix](https://nixos.org/) to manage dependencies. Install it by following the instructions [here](https://nixos.org/download/).
+This project uses [Nix](https://nixos.org/) to manage dependencies.
+Install it by following the instructions [here](https://nixos.org/download/).
 Ensure [flakes are enabled](https://nixos.wiki/wiki/Flakes#Enable_flakes_permanently) in your Nix configuration.
 <!---->
 ### Setup
@@ -47,47 +48,47 @@ Process raw waveforms and extract physical parameters.
 - **Waveform cropping** - Extract region of interest around trigger
 - **Feature extraction** - Pulse height, peak position, short/long integrals, PSD ratio
 - **Quality cuts** - Reject clipped signals, baseline issues, negative integrals
-- **Parallel file processing** - Process multiple files concurrently using `std::async` with configurable worker count (defaults to 4). Files are dispatched in batches, with each worker getting its own `WaveformProcessingUtils` instance. Requires ROOT thread safety (`ROOT::EnableThreadSafety()`), which is handled automatically.
+- **Parallel file processing** - Process multiple files concurrently using `std::async` with configurable worker count (defaults to 4).
+Files are dispatched in batches, with each worker getting its own `WaveformProcessingUtils` instance.
+Requires ROOT thread safety (`ROOT::EnableThreadSafety()`), which is handled automatically.
 <!---->
 Outputs processed data to ROOT TTrees with optional waveform storage.
 <!---->
 ### FittingUtils
 <!---->
-Fit spectral peaks with configurable models.
+Fit gamma-ray spectral photopeaks with a composable model.
 <!---->
-**Standard model** (5 parameters):
-- Gaussian peak + linear background
+**Base model**:
+- Gaussian peak + linear or flat background
 <!---->
-**Detailed model** (10 parameters):
-Includes standard:
-- Gaussian peak + linear background
+**Optional components** (individually togglable, for semiconductor detectors with segmented electrodes):
+- **Step function** - Models events where part of the photon energy escapes the active volume, producing a step-like distribution on the left side of the peak, smeared by the detector resolution.
+- **Low-energy exponential tail** - Exponential tail below the photopeak from incomplete charge collection, charge trapping, etc.
+- **Low-energy linear tail** - Linear tail component that can capture asymmetric tailing not well described by a single exponential.
+- **High-energy exponential tail** - Exponential tail above the photopeak from pileup effects.
 <!---->
-Details based on
-L.C.
-Longoria, A.H.
-Naboulsi, P.W.
-Gray, T.D.
-MacMahon,
-Analytical peak fitting for gamma-ray spectrum analysis with Ge detectors,
-Nuclear Instruments and Methods in Physics Research Section A: Accelerators, Spectrometers, Detectors and Associated Equipment,
-Volume 299, Issues 1–3,
-1990,
-Pages 308-312,
-ISSN 0168-9002,
-https://doi.org/10.1016/0168-9002(90)90797-A.
-Quotes refer to the aforementioned article.
-Reading the article reveals that the models discussed are not specific to Ge detectors!
-<!---->
-- Step function ("When part of the photon energy escapes from the
-active volume of the detector, an event is recorded in the left-hand side of the peak, creating a tail with a steplike shape. It is assumed that if the detector had no tailing and an extremely narrow resolution, then a step-like distribution would result, with a cutoff at the centroid." In practice of course this means smearing a step by the resolution of the detector as determined by other parameters from the fit.)
-- Low-energy tail (incomplete charge collection, instability, etc.)
-- High-energy tail (pileup)
+Components are tested using a hybrid group-and-prune approach: low-side components (step + both low-energy tails) are enabled as a group, then individually pruned if they do not improve the fit.
+The high-energy tail is tested independently.
+A component is kept only if it improves the reduced chi-squared.
 <!---->
 **Multi-peak fitting**:
-- Double and triple peak variants of both models
+- Double and triple peak variants with all components enabled by default
 - Constrained fitting using results from previous fits
 <!---->
-All fits produce structured results with parameter values, errors, and reduced chi-squared.
+All fits produce structured results (`FitResult` containing `PeakFitResult` entries) with parameter values, errors, and reduced chi-squared.
+Failed fits return -1 for all parameters.
+<!---->
+**References**:
+- Boggs SE, Pike SN.
+Analytical fitting of gamma-ray photopeaks in germanium cross strip detectors.
+*Experimental Astronomy*.
+2023;56(2-3):403-420.
+doi: [10.1007/s10686-023-09914-8](https://doi.org/10.1007/s10686-023-09914-8).
+- Longoria LC, Naboulsi AH, Gray PW, MacMahon TD.
+Analytical peak fitting for gamma-ray spectrum analysis with Ge detectors.
+*Nuclear Instruments and Methods in Physics Research A*.
+1990;299(1-3):308-312.
+doi: [10.1016/0168-9002(90)90797-A](https://doi.org/10.1016/0168-9002(90)90797-A).
 <!---->
 ### PlottingUtils
 <!---->
