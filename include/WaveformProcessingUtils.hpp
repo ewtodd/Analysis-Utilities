@@ -76,7 +76,6 @@ private:
   TTree *output_tree_;
   WaveformFeatures current_features_;
   Bool_t store_waveforms_;
-  TArrayF processed_wf_;
   TArrayF *save_waveform_;
   ULong64_t current_timestamp_;
 
