@@ -47,9 +47,8 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
     return kFALSE;
   }
 
-  Int_t trigger_pos_int = Int_t(trigger_pos);
-  if (trigger_pos_int < pre_samples_ ||
-      (Int_t(processed_wf.size()) - trigger_pos_int) <= post_samples_) {
+  if (trigger_pos < pre_samples_ ||
+      (Int_t(processed_wf.size()) - trigger_pos) <= post_samples_) {
     stats_.rejected_insufficient_samples++;
     return kFALSE;
   }
@@ -164,10 +163,9 @@ WaveformProcessingUtils::FindTrigger(const std::vector<Float_t> &waveform) {
 
 std::vector<Float_t>
 WaveformProcessingUtils::CropWaveform(const std::vector<Float_t> &waveform,
-                                      Float_t trigger_pos) {
-  Int_t trigger_pos_int = Int_t(trigger_pos);
-  Int_t start = trigger_pos_int - pre_samples_;
-  Int_t end = trigger_pos_int + post_samples_;
+                                      Int_t trigger_pos) {
+  Int_t start = trigger_pos - pre_samples_;
+  Int_t end = trigger_pos + post_samples_;
 
   std::vector<Float_t> cropped;
   cropped.reserve(pre_samples_ + post_samples_);
@@ -319,7 +317,7 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   output_tree_->Branch("pulse_height", &current_features_.pulse_height,
                        "pulse_height/F");
   output_tree_->Branch("trigger_position", &current_features_.trigger_position,
-                       "trigger_position/F");
+                       "trigger_position/I");
   output_tree_->Branch("short_integral", &current_features_.short_integral,
                        "short_integral/F");
   output_tree_->Branch("long_integral", &current_features_.long_integral,

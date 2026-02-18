@@ -18,7 +18,7 @@ struct WaveformFeatures {
   Short_t raw_pulse_height;
   Float_t pulse_height;
   Int_t peak_position;
-  Float_t trigger_position;
+  Int_t trigger_position;
   Float_t short_integral;
   Float_t long_integral;
   Float_t negative_fraction;
@@ -111,7 +111,7 @@ public:
   std::vector<Float_t> SubtractBaseline(const std::vector<Short_t> &samples);
   Float_t FindTrigger(const std::vector<Float_t> &waveform);
   std::vector<Float_t> CropWaveform(const std::vector<Float_t> &waveform,
-                                    Float_t trigger_pos);
+                                    Int_t trigger_pos);
   WaveformFeatures ExtractFeatures(const std::vector<Float_t> &cropped_wf);
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
   void SaveSampleWaveform(const std::vector<Float_t> &waveform);
