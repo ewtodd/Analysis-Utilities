@@ -5,7 +5,7 @@ WaveformProcessingUtils::WaveformProcessingUtils()
       pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
       sample_waveforms_to_save_(0), sample_waveforms_saved_(0),
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
-      current_waveform_(nullptr) {}
+      save_waveform_(new TArrayF()) {}
 
 WaveformProcessingUtils::WaveformProcessingUtils(
     const FileProcessingConfig &config)
@@ -17,12 +17,12 @@ WaveformProcessingUtils::WaveformProcessingUtils(
       verbose_(config.verbose),
       sample_waveforms_to_save_(config.sample_waveforms_to_save),
       sample_waveforms_saved_(0), output_file_(nullptr), output_tree_(nullptr),
-      store_waveforms_(config.store_waveforms), current_waveform_(nullptr) {}
+      store_waveforms_(config.store_waveforms), save_waveform_(new TArrayF()) {}
 
 WaveformProcessingUtils::~WaveformProcessingUtils() {
-  if (current_waveform_) {
-    delete current_waveform_;
-    current_waveform_ = nullptr;
+  if (save_waveform_) {
+    delete save_waveform_;
+    save_waveform_ = nullptr;
   }
   if (output_file_) {
     if (output_file_->IsOpen()) {
@@ -33,29 +33,29 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
   }
 }
 
-Bool_t
-WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
-  Short_t raw_max = (polarity_ == 1)
-                        ? *std::max_element(samples.begin(), samples.end())
-                        : *std::min_element(samples.begin(), samples.end());
+Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayS &samples) {
+  const Short_t *raw = samples.GetArray();
+  Int_t n = samples.GetSize();
+  Short_t raw_max = (polarity_ == 1) ? *std::max_element(raw, raw + n)
+                                     : *std::min_element(raw, raw + n);
 
-  std::vector<Float_t> processed_wf = SubtractBaseline(samples);
+  SubtractBaseline(samples);
 
-  Float_t trigger_pos = FindTrigger(processed_wf);
+  Float_t trigger_pos = FindTrigger(processed_wf_);
   if (trigger_pos < 0) {
     stats_.rejected_no_trigger++;
     return kFALSE;
   }
 
   if (trigger_pos < pre_samples_ ||
-      (Int_t(processed_wf.size()) - trigger_pos) <= post_samples_) {
+      (processed_wf_.GetSize() - trigger_pos) <= post_samples_) {
     stats_.rejected_insufficient_samples++;
     return kFALSE;
   }
 
-  std::vector<Float_t> cropped_wf = CropWaveform(processed_wf, trigger_pos);
+  CropWaveform(processed_wf_, trigger_pos);
 
-  WaveformFeatures features = ExtractFeatures(cropped_wf);
+  WaveformFeatures features = ExtractFeatures(*save_waveform_);
   features.raw_pulse_height = std::abs(raw_max);
   features.trigger_position = trigger_pos;
   Bool_t passes_cuts = ApplyQualityCuts(features);
@@ -65,17 +65,8 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
     return kFALSE;
   }
 
-  if (store_waveforms_) {
-    if (current_waveform_)
-      delete current_waveform_;
-    current_waveform_ = new TArrayS(cropped_wf.size());
-    for (size_t i = 0; i < cropped_wf.size(); ++i) {
-      current_waveform_->SetAt(Short_t(cropped_wf[i]), i);
-    }
-  }
-
   if (sample_waveforms_saved_ < sample_waveforms_to_save_) {
-    SaveSampleWaveform(cropped_wf);
+    SaveSampleWaveform(*save_waveform_);
   }
 
   current_features_ = features;
@@ -87,8 +78,7 @@ WaveformProcessingUtils::ProcessWaveform(const std::vector<Short_t> &samples) {
 
 std::mutex WaveformProcessingUtils::canvas_mutex_;
 
-void WaveformProcessingUtils::SaveSampleWaveform(
-    const std::vector<Float_t> &waveform) {
+void WaveformProcessingUtils::SaveSampleWaveform(const TArrayF &waveform) {
 
   std::lock_guard<std::mutex> lock(canvas_mutex_);
 
@@ -96,11 +86,12 @@ void WaveformProcessingUtils::SaveSampleWaveform(
     gSystem->mkdir("plots/samplewaveforms", kTRUE);
   }
 
-  Int_t n = waveform.size();
+  Int_t n = waveform.GetSize();
+  const Float_t *arr = waveform.GetArray();
   std::vector<Double_t> x(n), y(n);
   for (Int_t i = 0; i < n; ++i) {
     x[i] = i;
-    y[i] = waveform[i];
+    y[i] = arr[i];
   }
 
   TGraph *graph = new TGraph(n, x.data(), y.data());
@@ -121,39 +112,40 @@ void WaveformProcessingUtils::SaveSampleWaveform(
   sample_waveforms_saved_++;
 }
 
-std::vector<Float_t>
-WaveformProcessingUtils::SubtractBaseline(const std::vector<Short_t> &samples) {
-  Float_t baseline = 0;
-  Int_t baseline_samples =
-      TMath::Min(num_samples_baseline_, Int_t(samples.size()));
+void WaveformProcessingUtils::SubtractBaseline(const TArrayS &samples) {
+  Int_t n = samples.GetSize();
+  const Short_t *raw = samples.GetArray();
 
+  Float_t baseline = 0;
+  Int_t baseline_samples = TMath::Min(num_samples_baseline_, n);
   for (Int_t i = 0; i < baseline_samples; ++i) {
-    baseline += samples[i];
+    baseline += raw[i];
   }
   baseline /= baseline_samples;
 
-  std::vector<Float_t> processed;
-  processed.reserve(samples.size());
+  processed_wf_.Set(n);
+  Float_t *proc = processed_wf_.GetArray();
 
-  for (size_t i = 0; i < samples.size(); ++i) {
-    if (polarity_ == -1) {
-      processed.push_back(baseline - samples[i]);
-    } else {
-      processed.push_back(samples[i] - baseline);
+  if (polarity_ == -1) {
+    for (Int_t i = 0; i < n; ++i) {
+      proc[i] = baseline - raw[i];
+    }
+  } else {
+    for (Int_t i = 0; i < n; ++i) {
+      proc[i] = raw[i] - baseline;
     }
   }
-
-  return processed;
 }
 
-Float_t
-WaveformProcessingUtils::FindTrigger(const std::vector<Float_t> &waveform) {
+Float_t WaveformProcessingUtils::FindTrigger(const TArrayF &waveform) {
+  Int_t n = waveform.GetSize();
+  const Float_t *arr = waveform.GetArray();
 
-  Float_t peak_value = *std::max_element(waveform.begin(), waveform.end());
+  Float_t peak_value = *std::max_element(arr, arr + n);
   Float_t trigger_level = peak_value * trigger_threshold_;
 
-  for (size_t i = 0; i < waveform.size(); ++i) {
-    if (waveform[i] >= trigger_level) {
+  for (Int_t i = 0; i < n; ++i) {
+    if (arr[i] >= trigger_level) {
       return Float_t(i);
     }
   }
@@ -161,42 +153,42 @@ WaveformProcessingUtils::FindTrigger(const std::vector<Float_t> &waveform) {
   return -1.0;
 }
 
-std::vector<Float_t>
-WaveformProcessingUtils::CropWaveform(const std::vector<Float_t> &waveform,
-                                      Int_t trigger_pos) {
+void WaveformProcessingUtils::CropWaveform(const TArrayF &waveform,
+                                           Int_t trigger_pos) {
   Int_t start = trigger_pos - pre_samples_;
-  Int_t end = trigger_pos + post_samples_;
+  Int_t end = TMath::Min(trigger_pos + post_samples_, waveform.GetSize());
+  Int_t crop_size = end - start;
 
-  std::vector<Float_t> cropped;
-  cropped.reserve(pre_samples_ + post_samples_);
+  save_waveform_->Set(crop_size);
+  const Float_t *src = waveform.GetArray();
+  Float_t *dst = save_waveform_->GetArray();
 
-  for (Int_t i = start; i < end && i < Int_t(waveform.size()); ++i) {
-    cropped.push_back(waveform[i]);
+  for (Int_t i = 0; i < crop_size; ++i) {
+    dst[i] = src[start + i];
   }
-
-  return cropped;
 }
 
-WaveformFeatures WaveformProcessingUtils::ExtractFeatures(
-    const std::vector<Float_t> &cropped_wf) {
+WaveformFeatures
+WaveformProcessingUtils::ExtractFeatures(const TArrayF &cropped_wf) {
   WaveformFeatures features;
   Int_t integration_start = pre_samples_ - pre_gate_;
 
-  auto max_it = std::max_element(cropped_wf.begin(), cropped_wf.end());
+  Int_t n = cropped_wf.GetSize();
+  const Float_t *arr = cropped_wf.GetArray();
+
+  const Float_t *max_it = std::max_element(arr, arr + n);
   features.pulse_height = *max_it;
-  features.peak_position = std::distance(cropped_wf.begin(), max_it);
+  features.peak_position = std::distance(arr, max_it);
 
   features.short_integral = 0;
   features.long_integral = 0;
 
   Int_t negative_samples = 0;
-  Int_t short_end =
-      TMath::Min(integration_start + short_gate_, Int_t(cropped_wf.size()));
-  Int_t long_end =
-      TMath::Min(integration_start + long_gate_, Int_t(cropped_wf.size()));
+  Int_t short_end = TMath::Min(integration_start + short_gate_, n);
+  Int_t long_end = TMath::Min(integration_start + long_gate_, n);
 
   for (Int_t i = integration_start; i < long_end; ++i) {
-    Float_t sample_value = cropped_wf[i];
+    Float_t sample_value = arr[i];
     features.long_integral += sample_value;
     if (i < short_end) {
       features.short_integral += sample_value;
@@ -328,8 +320,7 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                        "timestamp/l");
 
   if (store_waveforms_) {
-    current_waveform_ = nullptr;
-    output_tree_->Branch("Samples", &current_waveform_);
+    output_tree_->Branch("Samples", &save_waveform_);
     std::cout << "Storing waveforms that pass cuts." << std::endl;
   }
 
@@ -351,23 +342,14 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   tree->SetBranchAddress("Timestamp", &current_timestamp_);
 
   Long64_t n_entries = tree->GetEntries();
-  tree->GetEntry(0);
 
   for (Long64_t entry = 0; entry < n_entries; ++entry) {
     if (max_events_ > 0 && stats_.accepted >= max_events_) {
       break;
     }
-
-    if (tree->GetEntry(entry) <= 0)
-      continue;
-
-    std::vector<Short_t> waveform_data;
-    waveform_data.reserve(samples->GetSize());
-    for (Int_t i = 0; i < samples->GetSize(); ++i) {
-      waveform_data.push_back(samples->At(i));
-    }
+    tree->GetEntry(entry);
     stats_.total_processed++;
-    ProcessWaveform(waveform_data);
+    ProcessWaveform(*samples);
   }
 
   delete samples;
@@ -379,7 +361,6 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   delete output_file_;
   output_file_ = nullptr;
   output_tree_ = nullptr;
-  current_waveform_ = nullptr;
 
   if (verbose_) {
     PrintAllStatistics();

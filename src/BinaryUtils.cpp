@@ -101,13 +101,14 @@ void CoMPASSData::PrintFlags() const {
   std::cout << "Flags (0x" << std::hex << flags << std::dec << ")" << std::endl;
   std::cout << "Binary: " << std::bitset<32>(flags) << std::endl;
 
-  auto active = getActiveFlags();
+  std::vector<TString> active = getActiveFlags();
   if (active.empty()) {
     std::cout << "No flags set" << std::endl;
   } else {
     std::cout << "Active flags:" << std::endl;
-    for (const auto &flag : active) {
-      std::cout << "  - " << flag.Data() << std::endl;
+    Int_t n_flags = active.size();
+    for (Int_t flag = 0; flag < n_flags; flag++) {
+      std::cout << "  - " << active.at(flag).Data() << std::endl;
     }
   }
 }

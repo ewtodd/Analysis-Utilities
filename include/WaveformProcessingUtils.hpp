@@ -2,6 +2,7 @@
 #define WAVEFORMPROCESSOR_H
 
 #include "PlottingUtils.hpp"
+#include <TArrayF.h>
 #include <TArrayS.h>
 #include <TFile.h>
 #include <TROOT.h>
@@ -75,7 +76,8 @@ private:
   TTree *output_tree_;
   WaveformFeatures current_features_;
   Bool_t store_waveforms_;
-  TArrayS *current_waveform_;
+  TArrayF processed_wf_;
+  TArrayF *save_waveform_;
   ULong64_t current_timestamp_;
 
 public:
@@ -106,15 +108,14 @@ public:
     sample_waveforms_to_save_ = count;
   }
 
-  Bool_t ProcessWaveform(const std::vector<Short_t> &samples);
+  Bool_t ProcessWaveform(const TArrayS &samples);
 
-  std::vector<Float_t> SubtractBaseline(const std::vector<Short_t> &samples);
-  Float_t FindTrigger(const std::vector<Float_t> &waveform);
-  std::vector<Float_t> CropWaveform(const std::vector<Float_t> &waveform,
-                                    Int_t trigger_pos);
-  WaveformFeatures ExtractFeatures(const std::vector<Float_t> &cropped_wf);
+  void SubtractBaseline(const TArrayS &samples);
+  Float_t FindTrigger(const TArrayF &waveform);
+  void CropWaveform(const TArrayF &waveform, Int_t trigger_pos);
+  WaveformFeatures ExtractFeatures(const TArrayF &cropped_wf);
   Bool_t ApplyQualityCuts(const WaveformFeatures &features);
-  void SaveSampleWaveform(const std::vector<Float_t> &waveform);
+  void SaveSampleWaveform(const TArrayF &waveform);
 
   void PrintAllStatistics() const;
   ProcessingStats GetStats() const { return stats_; };
