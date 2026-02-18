@@ -409,7 +409,7 @@ void FittingUtils::SetManualParameters(const std::vector<Double_t> &params) {
 
   // Apply the parameters immediately
   for (size_t i = 0; i < params.size(); i++) {
-    fit_function_->SetParameter(i, params[i]);
+    fit_function_->FixParameter(i, params[i]);
   }
 
   std::cout << "Manual parameters set:" << std::endl;
@@ -432,7 +432,7 @@ void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
   }
 
   manual_params_[index] = value;
-  fit_function_->SetParameter(index, value);
+  fit_function_->FixParameter(index, value);
 
   std::cout << "Set Par[" << index << "] " << fit_function_->GetParName(index)
             << " = " << value << std::endl;
