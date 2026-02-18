@@ -34,26 +34,40 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
 }
 
 Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayS &samples) {
-  const Short_t *raw = samples.GetArray();
   Int_t n = samples.GetSize();
-  Short_t raw_max = (polarity_ == 1) ? *std::max_element(raw, raw + n)
-                                     : *std::min_element(raw, raw + n);
+
+  if (n == 0)
+    return kFALSE;
+
+  Short_t raw_max = samples.At(0);
+
+  if (polarity_ == 1) {
+    for (Int_t i = 1; i < n; ++i) {
+      if (samples[i] > raw_max)
+        raw_max = samples[i];
+    }
+  } else {
+    for (Int_t i = 1; i < n; ++i) {
+      if (samples[i] < raw_max)
+        raw_max = samples[i];
+    }
+  }
 
   SubtractBaseline(samples);
 
-  Float_t trigger_pos = FindTrigger(processed_wf_);
+  Float_t trigger_pos = FindTrigger(*save_waveform_);
   if (trigger_pos < 0) {
     stats_.rejected_no_trigger++;
     return kFALSE;
   }
 
   if (trigger_pos < pre_samples_ ||
-      (processed_wf_.GetSize() - trigger_pos) <= post_samples_) {
+      (save_waveform_->GetSize() - trigger_pos) <= post_samples_) {
     stats_.rejected_insufficient_samples++;
     return kFALSE;
   }
 
-  CropWaveform(processed_wf_, trigger_pos);
+  CropWaveform(*save_waveform_, trigger_pos);
 
   WaveformFeatures features = ExtractFeatures(*save_waveform_);
   features.raw_pulse_height = std::abs(raw_max);
@@ -114,25 +128,22 @@ void WaveformProcessingUtils::SaveSampleWaveform(const TArrayF &waveform) {
 
 void WaveformProcessingUtils::SubtractBaseline(const TArrayS &samples) {
   Int_t n = samples.GetSize();
-  const Short_t *raw = samples.GetArray();
 
   Float_t baseline = 0;
   Int_t baseline_samples = TMath::Min(num_samples_baseline_, n);
   for (Int_t i = 0; i < baseline_samples; ++i) {
-    baseline += raw[i];
+    baseline += samples.GetAt(i);
   }
   baseline /= baseline_samples;
 
-  processed_wf_.Set(n);
-  Float_t *proc = processed_wf_.GetArray();
-
+  save_waveform_->Set(n);
   if (polarity_ == -1) {
     for (Int_t i = 0; i < n; ++i) {
-      proc[i] = baseline - raw[i];
+      save_waveform_->SetAt(baseline - samples.GetAt(i), i);
     }
   } else {
     for (Int_t i = 0; i < n; ++i) {
-      proc[i] = raw[i] - baseline;
+      save_waveform_->SetAt(samples.GetAt(i) - baseline, i);
     }
   }
 }
@@ -159,13 +170,13 @@ void WaveformProcessingUtils::CropWaveform(const TArrayF &waveform,
   Int_t end = TMath::Min(trigger_pos + post_samples_, waveform.GetSize());
   Int_t crop_size = end - start;
 
-  save_waveform_->Set(crop_size);
+  TArrayF cropped(crop_size);
   const Float_t *src = waveform.GetArray();
-  Float_t *dst = save_waveform_->GetArray();
-
   for (Int_t i = 0; i < crop_size; ++i) {
-    dst[i] = src[start + i];
+    cropped[i] = src[start + i];
   }
+
+  *save_waveform_ = cropped;
 }
 
 WaveformFeatures
