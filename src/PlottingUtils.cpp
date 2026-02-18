@@ -122,13 +122,14 @@ void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
 }
 
 void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename,
-                               Bool_t log) {
+                               PlotSaveOptions save_options) {
   canvas->SetLogy(kFALSE);
   canvas->Modified();
   canvas->Update();
-  canvas->Print("plots/" + output_filename);
+  if (save_options != PlotSaveOptions::kLOG)
+    canvas->Print("plots/" + output_filename);
 
-  if (log) {
+  if (save_options != PlotSaveOptions::kLINEAR) {
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();

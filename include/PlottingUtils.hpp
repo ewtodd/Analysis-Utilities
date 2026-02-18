@@ -15,6 +15,8 @@
 #include <TSystem.h>
 #include <vector>
 
+enum class PlotSaveOptions { kLINEAR, kLOG, kBOTH };
+
 class PlottingUtils {
 public:
   static void SetStylePreferences();
@@ -33,7 +35,7 @@ public:
 
   static void ConfigureCanvas(TCanvas *canvas, Bool_t logy = kFALSE);
   static void SaveFigure(TCanvas *canvas, TString output_filename,
-                         Bool_t log = kTRUE);
+                         PlotSaveOptions save_options = PlotSaveOptions::kBOTH);
 
   static void AddLegend(Double_t x1 = 0.7, Double_t y1 = 0.7, Double_t x2 = 0.9,
                         Double_t y2 = 0.9);
