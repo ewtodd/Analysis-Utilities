@@ -311,9 +311,9 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   else
     fit_function_->FixParameter(4, 0);
 
-  fit_function_->SetParLimits(5, 1, 50);
+  fit_function_->SetParLimits(5, 0.1, 50);
   if (use_low_exp_tail_)
-    fit_function_->SetParameter(5, 1);
+    fit_function_->SetParameter(5, 0.2);
   else
     fit_function_->FixParameter(5, 1);
 
@@ -337,9 +337,9 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   else
     fit_function_->FixParameter(8, 0);
 
-  fit_function_->SetParLimits(9, 1, 50);
+  fit_function_->SetParLimits(9, 0.1, 50);
   if (use_high_exp_tail_)
-    fit_function_->SetParameter(9, 1);
+    fit_function_->SetParameter(9, 0.2);
   else
     fit_function_->FixParameter(9, 1);
 
@@ -1012,23 +1012,15 @@ FitResult FittingUtils::FitPeak(const TString input_name,
   FitResult results;
   results.peaks.emplace_back(); // 1 peak, default -1
 
-  Double_t peak_height =
-      working_hist_->GetBinContent(working_hist_->GetMaximumBin());
-  Double_t range_width = fit_range_high_ - fit_range_low_;
-  Double_t bkg_estimate = EstimateBackground();
+  // Fix all optional components to disabled state
+  fit_function_->FixParameter(3, 0); // StepAmplitude
+  fit_function_->FixParameter(4, 0); // LowExpTailAmplitude
+  fit_function_->FixParameter(5, 1); // LowExpTailDecay
+  fit_function_->FixParameter(6, 0); // LowLinTailAmplitude
+  fit_function_->FixParameter(7, 0); // LowLinTailSlope
+  fit_function_->FixParameter(8, 0); // HighExpTailAmplitude
+  fit_function_->FixParameter(9, 1); // HighExpTailDecay
 
-  Int_t npar = fit_function_->GetNpar();
-  std::vector<Double_t> best_params(npar);
-  std::vector<Double_t> best_errors(npar);
-
-  // Step 1: Fix all optional components to 0, fit Gaussian + background
-  fit_function_->FixParameter(3, 0);  // StepAmplitude
-  fit_function_->FixParameter(4, 0);  // LowExpTailAmplitude
-  fit_function_->FixParameter(5, 1);  // LowExpTailDecay
-  fit_function_->FixParameter(6, 0);  // LowLinTailAmplitude
-  fit_function_->FixParameter(7, 0);  // LowLinTailSlope
-  fit_function_->FixParameter(8, 0);  // HighExpTailAmplitude
-  fit_function_->FixParameter(9, 1);  // HighExpTailDecay
   if (use_flat_background_) {
     fit_function_->FixParameter(11, 0);
   }
@@ -1038,6 +1030,8 @@ FitResult FittingUtils::FitPeak(const TString input_name,
     for (size_t i = 0; i < manual_params_.size(); i++) {
       fit_function_->SetParameter(i, manual_params_[i]);
     }
+    std::cout << "Skipping auto-initialization, using provided values"
+              << std::endl;
   } else {
     if (!use_flat_background_) {
       TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
@@ -1053,32 +1047,40 @@ FitResult FittingUtils::FitPeak(const TString input_name,
     }
   }
 
-  std::cout << "Background mode: " << (use_flat_background_ ? "FLAT" : "LINEAR")
-            << std::endl;
-  std::cout << "Baseline fit (Gaussian + background)..." << std::endl;
-  TFitResultPtr baseline_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+  // Initial fit with just Gaussian + Background
+  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
-  if (!baseline_fit.Get() || !baseline_fit->IsValid()) {
-    std::cout << "ERROR: Baseline fit failed" << std::endl;
+  if (!initial_fit.Get() || !initial_fit->IsValid()) {
+    std::cout << "ERROR: Initial fit failed" << std::endl;
     return results;
   }
 
-  Double_t best_chi2 = baseline_fit->Chi2() / baseline_fit->Ndf();
-  std::cout << "Baseline chi2/ndf = " << best_chi2 << std::endl;
+  Double_t best_chi2 = initial_fit->Chi2() / initial_fit->Ndf();
+  std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
+
+  Double_t gaus_amp = TMath::Abs(fit_function_->GetParameter(2));
+  Double_t peak_height =
+      working_hist_->GetBinContent(working_hist_->GetMaximumBin());
+  Double_t range_width = fit_range_high_ - fit_range_low_;
+  Double_t bkg_estimate = EstimateBackground();
+
+  std::cout << "Background mode: " << (use_flat_background_ ? "FLAT" : "LINEAR")
+            << std::endl;
+
+  Int_t npar = fit_function_->GetNpar();
+  std::vector<Double_t> best_params(npar);
+  std::vector<Double_t> best_errors(npar);
   for (Int_t i = 0; i < npar; i++) {
     best_params[i] = fit_function_->GetParameter(i);
     best_errors[i] = fit_function_->GetParError(i);
   }
 
-  // Step 2: If optional components requested, try fit with all enabled
-  Bool_t any_optional = use_step_ || use_low_exp_tail_ || use_low_lin_tail_ ||
-                        use_high_exp_tail_;
+  //  Low-side group testing (step + low tails together)
+  Bool_t any_low_side = use_step_ || use_low_exp_tail_ || use_low_lin_tail_;
 
-  if (any_optional) {
-    std::cout << "Attempting fit with all enabled components..." << std::endl;
-    Double_t gaus_amp = TMath::Abs(fit_function_->GetParameter(2));
+  if (any_low_side) {
+    std::cout << "Testing low-side component group..." << std::endl;
 
-    // Release and initialize enabled components
     if (use_step_) {
       fit_function_->ReleaseParameter(3);
       fit_function_->SetParLimits(3, 0, peak_height);
@@ -1089,7 +1091,7 @@ FitResult FittingUtils::FitPeak(const TString input_name,
       fit_function_->ReleaseParameter(4);
       fit_function_->ReleaseParameter(5);
       fit_function_->SetParLimits(4, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(5, 1, 50);
+      fit_function_->SetParLimits(5, 0.1, 50);
       if (!use_manual_init_) {
         fit_function_->SetParameter(
             4, TMath::Min(gaus_amp * 0.15, peak_height * 0.25));
@@ -1108,132 +1110,119 @@ FitResult FittingUtils::FitPeak(const TString input_name,
         fit_function_->SetParameter(7, 0);
       }
     }
-    if (use_high_exp_tail_) {
-      fit_function_->ReleaseParameter(8);
-      fit_function_->ReleaseParameter(9);
-      fit_function_->SetParLimits(8, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(9, 1, 50);
-      if (!use_manual_init_) {
-        fit_function_->SetParameter(
-            8, TMath::Min(gaus_amp * 0.15, peak_height * 0.25));
-        fit_function_->SetParameter(9, 1);
-      }
-    }
 
-    TFitResultPtr full_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
-    if (full_fit.Get() && full_fit->IsValid() &&
-        full_fit->Chi2() / full_fit->Ndf() < best_chi2) {
-      best_chi2 = full_fit->Chi2() / full_fit->Ndf();
-      std::cout << "Full fit improved chi2/ndf = " << best_chi2 << std::endl;
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
+    if (group_fit.Get() && group_fit->IsValid()) {
+      Double_t chi2_group = group_fit->Chi2() / group_fit->Ndf();
+      std::cout << "Low-side group chi2/ndf: " << chi2_group << " vs "
+                << best_chi2 << std::endl;
 
-      // Step 3: Prune each component individually
-      if (use_step_) {
-        fit_function_->FixParameter(3, 0);
-        TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-        if (p.Get() && p->IsValid() &&
-            p->Chi2() / p->Ndf() <= best_chi2) {
-          std::cout << "  Step pruned (not needed)" << std::endl;
-          best_chi2 = p->Chi2() / p->Ndf();
-          for (Int_t i = 0; i < npar; i++) {
-            best_params[i] = fit_function_->GetParameter(i);
-            best_errors[i] = fit_function_->GetParError(i);
-          }
-        } else {
-          std::cout << "  Step retained" << std::endl;
-          fit_function_->ReleaseParameter(3);
-          fit_function_->SetParLimits(3, 0, peak_height);
-          for (Int_t i = 0; i < npar; i++) {
-            fit_function_->SetParameter(i, best_params[i]);
-            fit_function_->SetParError(i, best_errors[i]);
+      if (chi2_group < best_chi2) {
+        std::cout << "Low-side group ACCEPTED, pruning..." << std::endl;
+        best_chi2 = chi2_group;
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+
+        // Prune step
+        if (use_step_) {
+          fit_function_->FixParameter(3, 0);
+          TFitResultPtr prune_fit =
+              working_hist_->Fit(fit_function_, "LSMBNQ0R");
+          if (prune_fit.Get() && prune_fit->IsValid() &&
+              prune_fit->Chi2() / prune_fit->Ndf() <= best_chi2) {
+            std::cout << "  Step pruned (not needed)" << std::endl;
+            best_chi2 = prune_fit->Chi2() / prune_fit->Ndf();
+            for (Int_t i = 0; i < npar; i++) {
+              best_params[i] = fit_function_->GetParameter(i);
+              best_errors[i] = fit_function_->GetParError(i);
+            }
+          } else {
+            std::cout << "  Step retained" << std::endl;
+            fit_function_->ReleaseParameter(3);
+            fit_function_->SetParLimits(3, 0, peak_height);
+            for (Int_t i = 0; i < npar; i++) {
+              fit_function_->SetParameter(i, best_params[i]);
+              fit_function_->SetParError(i, best_errors[i]);
+            }
           }
         }
-      }
 
-      if (use_low_exp_tail_) {
-        fit_function_->FixParameter(4, 0);
-        fit_function_->FixParameter(5, 1);
-        TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-        if (p.Get() && p->IsValid() &&
-            p->Chi2() / p->Ndf() <= best_chi2) {
-          std::cout << "  Low exp tail pruned (not needed)" << std::endl;
-          best_chi2 = p->Chi2() / p->Ndf();
-          for (Int_t i = 0; i < npar; i++) {
-            best_params[i] = fit_function_->GetParameter(i);
-            best_errors[i] = fit_function_->GetParError(i);
-          }
-        } else {
-          std::cout << "  Low exp tail retained" << std::endl;
-          fit_function_->ReleaseParameter(4);
-          fit_function_->ReleaseParameter(5);
-          fit_function_->SetParLimits(4, 0, peak_height * 0.75);
-          fit_function_->SetParLimits(5, 1, 50);
-          for (Int_t i = 0; i < npar; i++) {
-            fit_function_->SetParameter(i, best_params[i]);
-            fit_function_->SetParError(i, best_errors[i]);
+        // Prune low exp tail
+        if (use_low_exp_tail_) {
+          fit_function_->FixParameter(4, 0);
+          fit_function_->FixParameter(5, 1);
+          TFitResultPtr prune_fit =
+              working_hist_->Fit(fit_function_, "LSMBNQ0R");
+          if (prune_fit.Get() && prune_fit->IsValid() &&
+              prune_fit->Chi2() / prune_fit->Ndf() <= best_chi2) {
+            std::cout << "  Low exp tail pruned (not needed)" << std::endl;
+            best_chi2 = prune_fit->Chi2() / prune_fit->Ndf();
+            for (Int_t i = 0; i < npar; i++) {
+              best_params[i] = fit_function_->GetParameter(i);
+              best_errors[i] = fit_function_->GetParError(i);
+            }
+          } else {
+            std::cout << "  Low exp tail retained" << std::endl;
+            fit_function_->ReleaseParameter(4);
+            fit_function_->ReleaseParameter(5);
+            fit_function_->SetParLimits(4, 0, peak_height * 0.75);
+            fit_function_->SetParLimits(5, 0.1, 50);
+            for (Int_t i = 0; i < npar; i++) {
+              fit_function_->SetParameter(i, best_params[i]);
+              fit_function_->SetParError(i, best_errors[i]);
+            }
           }
         }
-      }
 
-      if (use_low_lin_tail_) {
-        fit_function_->FixParameter(6, 0);
-        fit_function_->FixParameter(7, 0);
-        TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-        if (p.Get() && p->IsValid() &&
-            p->Chi2() / p->Ndf() <= best_chi2) {
-          std::cout << "  Low lin tail pruned (not needed)" << std::endl;
-          best_chi2 = p->Chi2() / p->Ndf();
-          for (Int_t i = 0; i < npar; i++) {
-            best_params[i] = fit_function_->GetParameter(i);
-            best_errors[i] = fit_function_->GetParError(i);
-          }
-        } else {
-          std::cout << "  Low lin tail retained" << std::endl;
-          fit_function_->ReleaseParameter(6);
-          fit_function_->ReleaseParameter(7);
-          fit_function_->SetParLimits(6, 0, peak_height * 0.75);
-          fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                                      0.5 * bkg_estimate / range_width);
-          for (Int_t i = 0; i < npar; i++) {
-            fit_function_->SetParameter(i, best_params[i]);
-            fit_function_->SetParError(i, best_errors[i]);
+        // Prune low lin tail
+        if (use_low_lin_tail_) {
+          fit_function_->FixParameter(6, 0);
+          fit_function_->FixParameter(7, 0);
+          TFitResultPtr prune_fit =
+              working_hist_->Fit(fit_function_, "LSMBNQ0R");
+          if (prune_fit.Get() && prune_fit->IsValid() &&
+              prune_fit->Chi2() / prune_fit->Ndf() <= best_chi2) {
+            std::cout << "  Low lin tail pruned (not needed)" << std::endl;
+            best_chi2 = prune_fit->Chi2() / prune_fit->Ndf();
+            for (Int_t i = 0; i < npar; i++) {
+              best_params[i] = fit_function_->GetParameter(i);
+              best_errors[i] = fit_function_->GetParError(i);
+            }
+          } else {
+            std::cout << "  Low lin tail retained" << std::endl;
+            fit_function_->ReleaseParameter(6);
+            fit_function_->ReleaseParameter(7);
+            fit_function_->SetParLimits(6, 0, peak_height * 0.75);
+            fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
+                                        0.5 * bkg_estimate / range_width);
+            for (Int_t i = 0; i < npar; i++) {
+              fit_function_->SetParameter(i, best_params[i]);
+              fit_function_->SetParError(i, best_errors[i]);
+            }
           }
         }
-      }
-
-      if (use_high_exp_tail_) {
-        fit_function_->FixParameter(8, 0);
-        fit_function_->FixParameter(9, 1);
-        TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-        if (p.Get() && p->IsValid() &&
-            p->Chi2() / p->Ndf() <= best_chi2) {
-          std::cout << "  High exp tail pruned (not needed)" << std::endl;
-          best_chi2 = p->Chi2() / p->Ndf();
-          for (Int_t i = 0; i < npar; i++) {
-            best_params[i] = fit_function_->GetParameter(i);
-            best_errors[i] = fit_function_->GetParError(i);
-          }
-        } else {
-          std::cout << "  High exp tail retained" << std::endl;
-          fit_function_->ReleaseParameter(8);
-          fit_function_->ReleaseParameter(9);
-          fit_function_->SetParLimits(8, 0, peak_height * 0.75);
-          fit_function_->SetParLimits(9, 1, 50);
-          for (Int_t i = 0; i < npar; i++) {
-            fit_function_->SetParameter(i, best_params[i]);
-            fit_function_->SetParError(i, best_errors[i]);
-          }
+      } else {
+        std::cout << "Low-side group REJECTED" << std::endl;
+        if (use_step_)
+          fit_function_->FixParameter(3, 0);
+        if (use_low_exp_tail_) {
+          fit_function_->FixParameter(4, 0);
+          fit_function_->FixParameter(5, 1);
+        }
+        if (use_low_lin_tail_) {
+          fit_function_->FixParameter(6, 0);
+          fit_function_->FixParameter(7, 0);
+        }
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
         }
       }
     } else {
-      std::cout << "Full fit did not improve over baseline, using Gaussian + "
-                   "background only"
-                << std::endl;
-      // Re-fix all optional components back to 0
+      std::cout << "Low-side group fit FAILED" << std::endl;
       if (use_step_)
         fit_function_->FixParameter(3, 0);
       if (use_low_exp_tail_) {
@@ -1244,10 +1233,55 @@ FitResult FittingUtils::FitPeak(const TString input_name,
         fit_function_->FixParameter(6, 0);
         fit_function_->FixParameter(7, 0);
       }
-      if (use_high_exp_tail_) {
+      for (Int_t i = 0; i < npar; i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
+      }
+    }
+  }
+
+  //  High tail testing (independent)
+  if (use_high_exp_tail_) {
+    std::cout << "Testing high exponential tail..." << std::endl;
+
+    fit_function_->ReleaseParameter(8);
+    fit_function_->ReleaseParameter(9);
+    fit_function_->SetParLimits(8, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(9, 0.1, 50);
+
+    if (!use_manual_init_) {
+      Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
+      fit_function_->SetParameter(8, tail_amp_init);
+      fit_function_->SetParameter(9, 1);
+    }
+
+    TFitResultPtr htail_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+
+    if (htail_fit.Get() && htail_fit->IsValid()) {
+      Double_t chi2_with_htail = htail_fit->Chi2() / htail_fit->Ndf();
+      std::cout << "Chi2/ndf: " << chi2_with_htail << " vs " << best_chi2
+                << std::endl;
+
+      if (chi2_with_htail < best_chi2) {
+        std::cout << "High exp tail ACCEPTED" << std::endl;
+        best_chi2 = chi2_with_htail;
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        std::cout << "High exp tail REJECTED" << std::endl;
         fit_function_->FixParameter(8, 0);
         fit_function_->FixParameter(9, 1);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
       }
+    } else {
+      std::cout << "High exp tail fit FAILED" << std::endl;
+      fit_function_->FixParameter(8, 0);
+      fit_function_->FixParameter(9, 1);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
@@ -1384,14 +1418,13 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(2, 0, peak_height * 0.75);
   fit_function_->SetParLimits(3, 0, peak_height * 0.75);
   fit_function_->SetParLimits(4, 0, peak_height);
-  fit_function_->SetParLimits(5, 1, 50);
+  fit_function_->SetParLimits(5, 0.1, 50);
   fit_function_->SetParLimits(6, 0, peak_height);
   fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(8, 0, peak_height);
-  fit_function_->SetParLimits(9, 1, 50);
+  fit_function_->SetParLimits(9, 0.1, 50);
 
-  // Step 1: Baseline fit - Gaussians + background only, all optionals fixed to 0
   fit_function_->SetParameter(0, mu1_init);
   fit_function_->SetParameter(1, sigma_init);
   fit_function_->SetParameter(2, peak_height * 0.75);
@@ -1407,6 +1440,14 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(10, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(11, range_width * 0.001, range_width * 0.5);
   fit_function_->SetParLimits(12, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(13, 0, peak_height * 0.75);
+  fit_function_->SetParLimits(14, 0, peak_height);
+  fit_function_->SetParLimits(15, 0.1, 50);
+  fit_function_->SetParLimits(16, 0, peak_height);
+  fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
+                              0.5 * bkg_estimate / range_width);
+  fit_function_->SetParLimits(18, 0, peak_height);
+  fit_function_->SetParLimits(19, 0.1, 50);
 
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
@@ -1431,13 +1472,16 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->FixParameter(21, 0);
   }
 
-  std::cout << "Baseline fit (Gaussians + background)..." << std::endl;
-  TFitResultPtr baseline_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+  // Initial fit
+  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
-  if (!baseline_fit.Get() || !baseline_fit->IsValid()) {
-    std::cout << "ERROR: Baseline double peak fit failed" << std::endl;
+  if (!initial_fit.Get() || !initial_fit->IsValid()) {
+    std::cout << "ERROR: Initial double peak fit failed" << std::endl;
     return results;
   }
+
+  Double_t gaus_amp1 = TMath::Abs(fit_function_->GetParameter(2));
+  Double_t gaus_amp2 = TMath::Abs(fit_function_->GetParameter(12));
 
   Int_t npar = fit_function_->GetNpar();
   std::vector<Double_t> best_params(npar);
@@ -1447,269 +1491,294 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     best_errors[i] = fit_function_->GetParError(i);
   }
 
-  Double_t best_chi2 = baseline_fit->Chi2() / baseline_fit->Ndf();
-  std::cout << "Baseline chi2/ndf = " << best_chi2 << std::endl;
+  Double_t best_chi2 = initial_fit->Chi2() / initial_fit->Ndf();
+  std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
 
-  // Step 2: Try fit with all components enabled
-  std::cout << "Attempting fit with all components..." << std::endl;
-  Double_t gaus_amp1 = TMath::Abs(fit_function_->GetParameter(2));
-  Double_t gaus_amp2 = TMath::Abs(fit_function_->GetParameter(12));
+  //  Low-side group for peak 1 (offset 0)
+  {
+    std::cout << "Testing low-side group for peak1..." << std::endl;
 
-  // Release and initialize all optional components for peak 1
-  fit_function_->ReleaseParameter(3);
-  fit_function_->SetParLimits(3, 0, peak_height * 0.75);
-  fit_function_->SetParameter(3, gaus_amp1 * 0.5);
-  fit_function_->ReleaseParameter(4);
-  fit_function_->ReleaseParameter(5);
-  fit_function_->SetParLimits(4, 0, peak_height);
-  fit_function_->SetParLimits(5, 1, 50);
-  fit_function_->SetParameter(4, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(5, 1);
-  fit_function_->ReleaseParameter(6);
-  fit_function_->ReleaseParameter(7);
-  fit_function_->SetParLimits(6, 0, peak_height);
-  fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                              0.5 * bkg_estimate / range_width);
-  fit_function_->SetParameter(6, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(7, 0);
-  fit_function_->ReleaseParameter(8);
-  fit_function_->ReleaseParameter(9);
-  fit_function_->SetParLimits(8, 0, peak_height);
-  fit_function_->SetParLimits(9, 1, 50);
-  fit_function_->SetParameter(8, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(9, 1);
+    fit_function_->ReleaseParameter(3);
+    fit_function_->SetParLimits(3, 0, peak_height);
+    fit_function_->SetParameter(3, gaus_amp1);
 
-  // Release and initialize all optional components for peak 2
-  fit_function_->SetParLimits(13, 0, peak_height * 0.75);
-  fit_function_->ReleaseParameter(13);
-  fit_function_->SetParameter(13, gaus_amp2 * 0.5);
-  fit_function_->ReleaseParameter(14);
-  fit_function_->ReleaseParameter(15);
-  fit_function_->SetParLimits(14, 0, peak_height);
-  fit_function_->SetParLimits(15, 1, 50);
-  fit_function_->SetParameter(14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(15, 1);
-  fit_function_->ReleaseParameter(16);
-  fit_function_->ReleaseParameter(17);
-  fit_function_->SetParLimits(16, 0, peak_height);
-  fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                              0.5 * bkg_estimate / range_width);
-  fit_function_->SetParameter(16, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(17, 0);
-  fit_function_->ReleaseParameter(18);
-  fit_function_->ReleaseParameter(19);
-  fit_function_->SetParLimits(18, 0, peak_height);
-  fit_function_->SetParLimits(19, 1, 50);
-  fit_function_->SetParameter(18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(19, 1);
+    fit_function_->ReleaseParameter(4);
+    fit_function_->ReleaseParameter(5);
+    fit_function_->SetParLimits(4, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(5, 0.1, 50);
+    fit_function_->SetParameter(
+        4, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(5, 1);
 
-  TFitResultPtr full_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    fit_function_->ReleaseParameter(6);
+    fit_function_->ReleaseParameter(7);
+    fit_function_->SetParLimits(6, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
+                                0.5 * bkg_estimate / range_width);
+    fit_function_->SetParameter(
+        6, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(7, 0);
 
-  if (full_fit.Get() && full_fit->IsValid() &&
-      full_fit->Chi2() / full_fit->Ndf() < best_chi2) {
-    best_chi2 = full_fit->Chi2() / full_fit->Ndf();
-    std::cout << "Full fit improved chi2/ndf = " << best_chi2 << std::endl;
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
+    TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
-    // Step 3: Prune each component individually
-    // Peak 1 components (offset 0)
-    // Step1
-    fit_function_->FixParameter(3, 0);
-    TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  Step1 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
+    if (group_fit.Get() && group_fit->IsValid() &&
+        group_fit->Chi2() / group_fit->Ndf() < best_chi2) {
+      std::cout << "Low-side group peak1 ACCEPTED, pruning..." << std::endl;
+      best_chi2 = group_fit->Chi2() / group_fit->Ndf();
       for (Int_t i = 0; i < npar; i++) {
         best_params[i] = fit_function_->GetParameter(i);
         best_errors[i] = fit_function_->GetParError(i);
       }
+
+      // Prune step1
+      fit_function_->FixParameter(3, 0);
+      TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  Step1 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(3);
+        fit_function_->SetParLimits(3, 0, peak_height);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low exp tail1
+      fit_function_->FixParameter(4, 0);
+      fit_function_->FixParameter(5, 1);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowExpTail1 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(4);
+        fit_function_->ReleaseParameter(5);
+        fit_function_->SetParLimits(4, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(5, 0.1, 50);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low lin tail1
+      fit_function_->FixParameter(6, 0);
+      fit_function_->FixParameter(7, 0);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowLinTail1 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(6);
+        fit_function_->ReleaseParameter(7);
+        fit_function_->SetParLimits(6, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
+                                    0.5 * bkg_estimate / range_width);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
     } else {
-      fit_function_->ReleaseParameter(3);
-      fit_function_->SetParLimits(3, 0, peak_height);
+      std::cout << "Low-side group peak1 REJECTED" << std::endl;
+      fit_function_->FixParameter(3, 0);
+      fit_function_->FixParameter(4, 0);
+      fit_function_->FixParameter(5, 1);
+      fit_function_->FixParameter(6, 0);
+      fit_function_->FixParameter(7, 0);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
       }
     }
+  }
 
-    // LowExpTail1
-    fit_function_->FixParameter(4, 0);
-    fit_function_->FixParameter(5, 1);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  LowExpTail1 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
+  //  Low-side group for peak 2 (offset 10)
+  {
+    std::cout << "Testing low-side group for peak2..." << std::endl;
+
+    fit_function_->ReleaseParameter(13);
+    fit_function_->SetParLimits(13, 0, peak_height);
+    fit_function_->SetParameter(13, gaus_amp2);
+
+    fit_function_->ReleaseParameter(14);
+    fit_function_->ReleaseParameter(15);
+    fit_function_->SetParLimits(14, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(15, 0.1, 50);
+    fit_function_->SetParameter(
+        14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(15, 1);
+
+    fit_function_->ReleaseParameter(16);
+    fit_function_->ReleaseParameter(17);
+    fit_function_->SetParLimits(16, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
+                                0.5 * bkg_estimate / range_width);
+    fit_function_->SetParameter(
+        16, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(17, 0);
+
+    TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+
+    if (group_fit.Get() && group_fit->IsValid() &&
+        group_fit->Chi2() / group_fit->Ndf() < best_chi2) {
+      std::cout << "Low-side group peak2 ACCEPTED, pruning..." << std::endl;
+      best_chi2 = group_fit->Chi2() / group_fit->Ndf();
       for (Int_t i = 0; i < npar; i++) {
         best_params[i] = fit_function_->GetParameter(i);
         best_errors[i] = fit_function_->GetParError(i);
       }
+
+      // Prune step2
+      fit_function_->FixParameter(13, 0);
+      TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  Step2 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(13);
+        fit_function_->SetParLimits(13, 0, peak_height);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low exp tail2
+      fit_function_->FixParameter(14, 0);
+      fit_function_->FixParameter(15, 1);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowExpTail2 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(14);
+        fit_function_->ReleaseParameter(15);
+        fit_function_->SetParLimits(14, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(15, 0.1, 50);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low lin tail2
+      fit_function_->FixParameter(16, 0);
+      fit_function_->FixParameter(17, 0);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowLinTail2 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(16);
+        fit_function_->ReleaseParameter(17);
+        fit_function_->SetParLimits(16, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
+                                    0.5 * bkg_estimate / range_width);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
     } else {
-      fit_function_->ReleaseParameter(4);
-      fit_function_->ReleaseParameter(5);
-      fit_function_->SetParLimits(4, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(5, 1, 50);
+      std::cout << "Low-side group peak2 REJECTED" << std::endl;
+      fit_function_->FixParameter(13, 0);
+      fit_function_->FixParameter(14, 0);
+      fit_function_->FixParameter(15, 1);
+      fit_function_->FixParameter(16, 0);
+      fit_function_->FixParameter(17, 0);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
       }
     }
+  }
 
-    // LowLinTail1
-    fit_function_->FixParameter(6, 0);
-    fit_function_->FixParameter(7, 0);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  LowLinTail1 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
+  //  High tail for peak 1
+  {
+    std::cout << "Testing high tail for peak1..." << std::endl;
+    fit_function_->ReleaseParameter(8);
+    fit_function_->ReleaseParameter(9);
+    fit_function_->SetParLimits(8, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(9, 0.1, 50);
+    fit_function_->SetParameter(
+        8, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(9, 1);
+
+    TFitResultPtr ht_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    if (ht_fit.Get() && ht_fit->IsValid() &&
+        ht_fit->Chi2() / ht_fit->Ndf() < best_chi2) {
+      std::cout << "HighTail1 ACCEPTED" << std::endl;
+      best_chi2 = ht_fit->Chi2() / ht_fit->Ndf();
       for (Int_t i = 0; i < npar; i++) {
         best_params[i] = fit_function_->GetParameter(i);
         best_errors[i] = fit_function_->GetParError(i);
       }
     } else {
-      fit_function_->ReleaseParameter(6);
-      fit_function_->ReleaseParameter(7);
-      fit_function_->SetParLimits(6, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
+      std::cout << "HighTail1 REJECTED" << std::endl;
+      fit_function_->FixParameter(8, 0);
+      fit_function_->FixParameter(9, 1);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
       }
     }
+  }
 
-    // HighExpTail1
-    fit_function_->FixParameter(8, 0);
-    fit_function_->FixParameter(9, 1);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  HighExpTail1 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
+  //  High tail for peak 2
+  {
+    std::cout << "Testing high tail for peak2..." << std::endl;
+    fit_function_->ReleaseParameter(18);
+    fit_function_->ReleaseParameter(19);
+    fit_function_->SetParLimits(18, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(19, 0.1, 50);
+    fit_function_->SetParameter(
+        18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(19, 1);
+
+    TFitResultPtr ht_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    if (ht_fit.Get() && ht_fit->IsValid() &&
+        ht_fit->Chi2() / ht_fit->Ndf() < best_chi2) {
+      std::cout << "HighTail2 ACCEPTED" << std::endl;
+      best_chi2 = ht_fit->Chi2() / ht_fit->Ndf();
       for (Int_t i = 0; i < npar; i++) {
         best_params[i] = fit_function_->GetParameter(i);
         best_errors[i] = fit_function_->GetParError(i);
       }
     } else {
-      fit_function_->ReleaseParameter(8);
-      fit_function_->ReleaseParameter(9);
-      fit_function_->SetParLimits(8, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(9, 1, 50);
+      std::cout << "HighTail2 REJECTED" << std::endl;
+      fit_function_->FixParameter(18, 0);
+      fit_function_->FixParameter(19, 1);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
       }
-    }
-
-    // Peak 2 components (offset 10)
-    // Step2
-    fit_function_->FixParameter(13, 0);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  Step2 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
-    } else {
-      fit_function_->ReleaseParameter(13);
-      fit_function_->SetParLimits(13, 0, peak_height);
-      for (Int_t i = 0; i < npar; i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-
-    // LowExpTail2
-    fit_function_->FixParameter(14, 0);
-    fit_function_->FixParameter(15, 1);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  LowExpTail2 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
-    } else {
-      fit_function_->ReleaseParameter(14);
-      fit_function_->ReleaseParameter(15);
-      fit_function_->SetParLimits(14, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(15, 1, 50);
-      for (Int_t i = 0; i < npar; i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-
-    // LowLinTail2
-    fit_function_->FixParameter(16, 0);
-    fit_function_->FixParameter(17, 0);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  LowLinTail2 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
-    } else {
-      fit_function_->ReleaseParameter(16);
-      fit_function_->ReleaseParameter(17);
-      fit_function_->SetParLimits(16, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
-      for (Int_t i = 0; i < npar; i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-
-    // HighExpTail2
-    fit_function_->FixParameter(18, 0);
-    fit_function_->FixParameter(19, 1);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  HighExpTail2 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
-    } else {
-      fit_function_->ReleaseParameter(18);
-      fit_function_->ReleaseParameter(19);
-      fit_function_->SetParLimits(18, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(19, 1, 50);
-      for (Int_t i = 0; i < npar; i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-  } else {
-    std::cout << "Full fit did not improve over baseline, using Gaussians + "
-                 "background only"
-              << std::endl;
-    // Re-fix all optional components
-    fit_function_->FixParameter(3, 0);
-    fit_function_->FixParameter(4, 0);
-    fit_function_->FixParameter(5, 1);
-    fit_function_->FixParameter(6, 0);
-    fit_function_->FixParameter(7, 0);
-    fit_function_->FixParameter(8, 0);
-    fit_function_->FixParameter(9, 1);
-    fit_function_->FixParameter(13, 0);
-    fit_function_->FixParameter(14, 0);
-    fit_function_->FixParameter(15, 1);
-    fit_function_->FixParameter(16, 0);
-    fit_function_->FixParameter(17, 0);
-    fit_function_->FixParameter(18, 0);
-    fit_function_->FixParameter(19, 1);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
     }
   }
 
@@ -1844,14 +1913,13 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(12, 0, peak_height * 0.75);
   fit_function_->SetParLimits(13, 0, peak_height * 0.75);
   fit_function_->SetParLimits(14, 0, peak_height);
-  fit_function_->SetParLimits(15, 1, 50);
+  fit_function_->SetParLimits(15, 0.1, 50);
   fit_function_->SetParLimits(16, 0, peak_height);
   fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(18, 0, peak_height);
-  fit_function_->SetParLimits(19, 1, 50);
+  fit_function_->SetParLimits(19, 0.1, 50);
 
-  // Step 1: Baseline fit - peak 2 Gaussian only, all optionals fixed to 0
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
   fit_function_->SetParameter(12, peak_height * 0.75);
@@ -1875,14 +1943,16 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->FixParameter(21, 0);
   }
 
-  std::cout << "Baseline fit (constrained peak1 + Gaussian peak2)..." << std::endl;
-  TFitResultPtr baseline_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+  // Initial fit
+  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
-  if (!baseline_fit.Get() || !baseline_fit->IsValid()) {
-    std::cout << "ERROR: Baseline double peak fit (constrained) failed"
+  if (!initial_fit.Get() || !initial_fit->IsValid()) {
+    std::cout << "ERROR: Initial double peak fit (constrained) failed"
               << std::endl;
     return results;
   }
+
+  Double_t gaus_amp2 = TMath::Abs(fit_function_->GetParameter(12));
 
   Int_t npar = fit_function_->GetNpar();
   std::vector<Double_t> best_params(npar);
@@ -1892,139 +1962,150 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     best_errors[i] = fit_function_->GetParError(i);
   }
 
-  Double_t best_chi2 = baseline_fit->Chi2() / baseline_fit->Ndf();
-  std::cout << "Baseline chi2/ndf = " << best_chi2 << std::endl;
+  Double_t best_chi2 = initial_fit->Chi2() / initial_fit->Ndf();
+  std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
 
-  // Step 2: Try fit with all peak 2 components enabled
-  std::cout << "Attempting fit with all peak2 components..." << std::endl;
-  Double_t gaus_amp2 = TMath::Abs(fit_function_->GetParameter(12));
+  //  Low-side group for peak 2 only (offset 10)
+  {
+    std::cout << "Testing low-side group for peak2..." << std::endl;
 
-  fit_function_->ReleaseParameter(13);
-  fit_function_->SetParameter(13, gaus_amp2 * 0.5);
-  fit_function_->ReleaseParameter(14);
-  fit_function_->ReleaseParameter(15);
-  fit_function_->SetParameter(14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(15, 1);
-  fit_function_->ReleaseParameter(16);
-  fit_function_->ReleaseParameter(17);
-  fit_function_->SetParameter(16, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(17, 0);
-  fit_function_->ReleaseParameter(18);
-  fit_function_->ReleaseParameter(19);
-  fit_function_->SetParameter(18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(19, 1);
-
-  TFitResultPtr full_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-
-  if (full_fit.Get() && full_fit->IsValid() &&
-      full_fit->Chi2() / full_fit->Ndf() < best_chi2) {
-    best_chi2 = full_fit->Chi2() / full_fit->Ndf();
-    std::cout << "Full fit improved chi2/ndf = " << best_chi2 << std::endl;
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
-
-    // Step 3: Prune peak 2 components
-    // Step2
-  fit_function_->FixParameter(13, 0);
-  TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-  if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-    std::cout << "  Step2 pruned" << std::endl;
-    best_chi2 = p->Chi2() / p->Ndf();
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
-  } else {
     fit_function_->ReleaseParameter(13);
     fit_function_->SetParLimits(13, 0, peak_height);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
-    }
-  }
+    fit_function_->SetParameter(13, gaus_amp2);
 
-  // LowExpTail2
-  fit_function_->FixParameter(14, 0);
-  fit_function_->FixParameter(15, 1);
-  p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-  if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-    std::cout << "  LowExpTail2 pruned" << std::endl;
-    best_chi2 = p->Chi2() / p->Ndf();
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
-  } else {
     fit_function_->ReleaseParameter(14);
     fit_function_->ReleaseParameter(15);
     fit_function_->SetParLimits(14, 0, peak_height * 0.75);
-    fit_function_->SetParLimits(15, 1, 50);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
-    }
-  }
+    fit_function_->SetParLimits(15, 0.1, 50);
+    fit_function_->SetParameter(
+        14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(15, 1);
 
-  // LowLinTail2
-  fit_function_->FixParameter(16, 0);
-  fit_function_->FixParameter(17, 0);
-  p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-  if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-    std::cout << "  LowLinTail2 pruned" << std::endl;
-    best_chi2 = p->Chi2() / p->Ndf();
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
-  } else {
     fit_function_->ReleaseParameter(16);
     fit_function_->ReleaseParameter(17);
     fit_function_->SetParLimits(16, 0, peak_height * 0.75);
     fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
                                 0.5 * bkg_estimate / range_width);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
+    fit_function_->SetParameter(
+        16, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(17, 0);
+
+    TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+
+    if (group_fit.Get() && group_fit->IsValid() &&
+        group_fit->Chi2() / group_fit->Ndf() < best_chi2) {
+      std::cout << "Low-side group peak2 ACCEPTED, pruning..." << std::endl;
+      best_chi2 = group_fit->Chi2() / group_fit->Ndf();
+      for (Int_t i = 0; i < npar; i++) {
+        best_params[i] = fit_function_->GetParameter(i);
+        best_errors[i] = fit_function_->GetParError(i);
+      }
+
+      // Prune step2
+      fit_function_->FixParameter(13, 0);
+      TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  Step2 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(13);
+        fit_function_->SetParLimits(13, 0, peak_height);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low exp tail2
+      fit_function_->FixParameter(14, 0);
+      fit_function_->FixParameter(15, 1);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowExpTail2 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(14);
+        fit_function_->ReleaseParameter(15);
+        fit_function_->SetParLimits(14, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(15, 0.1, 50);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low lin tail2
+      fit_function_->FixParameter(16, 0);
+      fit_function_->FixParameter(17, 0);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowLinTail2 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(16);
+        fit_function_->ReleaseParameter(17);
+        fit_function_->SetParLimits(16, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
+                                    0.5 * bkg_estimate / range_width);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+    } else {
+      std::cout << "Low-side group peak2 REJECTED" << std::endl;
+      fit_function_->FixParameter(13, 0);
+      fit_function_->FixParameter(14, 0);
+      fit_function_->FixParameter(15, 1);
+      fit_function_->FixParameter(16, 0);
+      fit_function_->FixParameter(17, 0);
+      for (Int_t i = 0; i < npar; i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
+      }
     }
   }
 
-  // HighExpTail2
-  fit_function_->FixParameter(18, 0);
-  fit_function_->FixParameter(19, 1);
-  p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-  if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-    std::cout << "  HighExpTail2 pruned" << std::endl;
-    best_chi2 = p->Chi2() / p->Ndf();
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
-  } else {
+  //  High tail for peak 2
+  {
+    std::cout << "Testing high tail for peak2..." << std::endl;
     fit_function_->ReleaseParameter(18);
     fit_function_->ReleaseParameter(19);
     fit_function_->SetParLimits(18, 0, peak_height * 0.75);
-    fit_function_->SetParLimits(19, 1, 50);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
-    }
-  }
-  } else {
-    std::cout << "Full fit did not improve over baseline, using Gaussian peak2 "
-                 "only"
-              << std::endl;
-    fit_function_->FixParameter(13, 0);
-    fit_function_->FixParameter(14, 0);
-    fit_function_->FixParameter(15, 1);
-    fit_function_->FixParameter(16, 0);
-    fit_function_->FixParameter(17, 0);
-    fit_function_->FixParameter(18, 0);
-    fit_function_->FixParameter(19, 1);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
+    fit_function_->SetParLimits(19, 0.1, 50);
+    fit_function_->SetParameter(
+        18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(19, 1);
+
+    TFitResultPtr ht_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    if (ht_fit.Get() && ht_fit->IsValid() &&
+        ht_fit->Chi2() / ht_fit->Ndf() < best_chi2) {
+      std::cout << "HighTail2 ACCEPTED" << std::endl;
+      best_chi2 = ht_fit->Chi2() / ht_fit->Ndf();
+      for (Int_t i = 0; i < npar; i++) {
+        best_params[i] = fit_function_->GetParameter(i);
+        best_errors[i] = fit_function_->GetParError(i);
+      }
+    } else {
+      std::cout << "HighTail2 REJECTED" << std::endl;
+      fit_function_->FixParameter(18, 0);
+      fit_function_->FixParameter(19, 1);
+      for (Int_t i = 0; i < npar; i++) {
+        fit_function_->SetParameter(i, best_params[i]);
+        fit_function_->SetParError(i, best_errors[i]);
+      }
     }
   }
 
@@ -2181,14 +2262,13 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   fit_function_->SetParLimits(22, 0, peak_height * 0.75);
   fit_function_->SetParLimits(23, 0, peak_height * 0.75);
   fit_function_->SetParLimits(24, 0, peak_height);
-  fit_function_->SetParLimits(25, 1, 50);
+  fit_function_->SetParLimits(25, 0.1, 50);
   fit_function_->SetParLimits(26, 0, peak_height);
   fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(28, 0, peak_height);
-  fit_function_->SetParLimits(29, 1, 50);
+  fit_function_->SetParLimits(29, 0.1, 50);
 
-  // Step 1: Baseline fit - peak 3 Gaussian only, all optionals fixed to 0
   fit_function_->SetParameter(20, mu3_init);
   fit_function_->SetParameter(21, sigma_init);
   fit_function_->SetParameter(22, peak_height * 0.75);
@@ -2212,13 +2292,15 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     fit_function_->FixParameter(31, 0);
   }
 
-  std::cout << "Baseline fit (constrained peaks + Gaussian peak3)..." << std::endl;
-  TFitResultPtr baseline_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+  // Initial fit
+  TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
-  if (!baseline_fit.Get() || !baseline_fit->IsValid()) {
-    std::cout << "ERROR: Baseline triple peak fit failed" << std::endl;
+  if (!initial_fit.Get() || !initial_fit->IsValid()) {
+    std::cout << "ERROR: Initial triple peak fit failed" << std::endl;
     return results;
   }
+
+  Double_t gaus_amp3 = TMath::Abs(fit_function_->GetParameter(22));
 
   Int_t npar = fit_function_->GetNpar();
   std::vector<Double_t> best_params(npar);
@@ -2228,139 +2310,150 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     best_errors[i] = fit_function_->GetParError(i);
   }
 
-  Double_t best_chi2 = baseline_fit->Chi2() / baseline_fit->Ndf();
-  std::cout << "Baseline chi2/ndf = " << best_chi2 << std::endl;
+  Double_t best_chi2 = initial_fit->Chi2() / initial_fit->Ndf();
+  std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
 
-  // Step 2: Try fit with all peak 3 components enabled
-  std::cout << "Attempting fit with all peak3 components..." << std::endl;
-  Double_t gaus_amp3 = TMath::Abs(fit_function_->GetParameter(22));
+  //  Low-side group for peak 3 (offset 20)
+  {
+    std::cout << "Testing low-side group for peak3..." << std::endl;
 
-  fit_function_->ReleaseParameter(23);
-  fit_function_->SetParameter(23, gaus_amp3 * 0.5);
-  fit_function_->ReleaseParameter(24);
-  fit_function_->ReleaseParameter(25);
-  fit_function_->SetParameter(24, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(25, 1);
-  fit_function_->ReleaseParameter(26);
-  fit_function_->ReleaseParameter(27);
-  fit_function_->SetParameter(26, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(27, 0);
-  fit_function_->ReleaseParameter(28);
-  fit_function_->ReleaseParameter(29);
-  fit_function_->SetParameter(28, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
-  fit_function_->SetParameter(29, 1);
+    fit_function_->ReleaseParameter(23);
+    fit_function_->SetParLimits(23, 0, peak_height);
+    fit_function_->SetParameter(23, gaus_amp3);
 
-  TFitResultPtr full_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    fit_function_->ReleaseParameter(24);
+    fit_function_->ReleaseParameter(25);
+    fit_function_->SetParLimits(24, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(25, 0.1, 50);
+    fit_function_->SetParameter(
+        24, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(25, 1);
 
-  if (full_fit.Get() && full_fit->IsValid() &&
-      full_fit->Chi2() / full_fit->Ndf() < best_chi2) {
-    best_chi2 = full_fit->Chi2() / full_fit->Ndf();
-    std::cout << "Full fit improved chi2/ndf = " << best_chi2 << std::endl;
-    for (Int_t i = 0; i < npar; i++) {
-      best_params[i] = fit_function_->GetParameter(i);
-      best_errors[i] = fit_function_->GetParError(i);
-    }
+    fit_function_->ReleaseParameter(26);
+    fit_function_->ReleaseParameter(27);
+    fit_function_->SetParLimits(26, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
+                                0.5 * bkg_estimate / range_width);
+    fit_function_->SetParameter(
+        26, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(27, 0);
 
-    // Step 3: Prune peak 3 components
-    // Step3
-    fit_function_->FixParameter(23, 0);
-    TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  Step3 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
+    TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+
+    if (group_fit.Get() && group_fit->IsValid() &&
+        group_fit->Chi2() / group_fit->Ndf() < best_chi2) {
+      std::cout << "Low-side group peak3 ACCEPTED, pruning..." << std::endl;
+      best_chi2 = group_fit->Chi2() / group_fit->Ndf();
       for (Int_t i = 0; i < npar; i++) {
         best_params[i] = fit_function_->GetParameter(i);
         best_errors[i] = fit_function_->GetParError(i);
       }
+
+      // Prune step3
+      fit_function_->FixParameter(23, 0);
+      TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  Step3 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(23);
+        fit_function_->SetParLimits(23, 0, peak_height);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low exp tail3
+      fit_function_->FixParameter(24, 0);
+      fit_function_->FixParameter(25, 1);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowExpTail3 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(24);
+        fit_function_->ReleaseParameter(25);
+        fit_function_->SetParLimits(24, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(25, 0.1, 50);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
+
+      // Prune low lin tail3
+      fit_function_->FixParameter(26, 0);
+      fit_function_->FixParameter(27, 0);
+      p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+      if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
+        std::cout << "  LowLinTail3 pruned" << std::endl;
+        best_chi2 = p->Chi2() / p->Ndf();
+        for (Int_t i = 0; i < npar; i++) {
+          best_params[i] = fit_function_->GetParameter(i);
+          best_errors[i] = fit_function_->GetParError(i);
+        }
+      } else {
+        fit_function_->ReleaseParameter(26);
+        fit_function_->ReleaseParameter(27);
+        fit_function_->SetParLimits(26, 0, peak_height * 0.75);
+        fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
+                                    0.5 * bkg_estimate / range_width);
+        for (Int_t i = 0; i < npar; i++) {
+          fit_function_->SetParameter(i, best_params[i]);
+          fit_function_->SetParError(i, best_errors[i]);
+        }
+      }
     } else {
-      fit_function_->ReleaseParameter(23);
-      fit_function_->SetParLimits(23, 0, peak_height);
+      std::cout << "Low-side group peak3 REJECTED" << std::endl;
+      fit_function_->FixParameter(23, 0);
+      fit_function_->FixParameter(24, 0);
+      fit_function_->FixParameter(25, 1);
+      fit_function_->FixParameter(26, 0);
+      fit_function_->FixParameter(27, 0);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
       }
     }
+  }
 
-    // LowExpTail3
-    fit_function_->FixParameter(24, 0);
-    fit_function_->FixParameter(25, 1);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  LowExpTail3 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
+  //  High tail for peak 3
+  {
+    std::cout << "Testing high tail for peak3..." << std::endl;
+    fit_function_->ReleaseParameter(28);
+    fit_function_->ReleaseParameter(29);
+    fit_function_->SetParLimits(28, 0, peak_height * 0.75);
+    fit_function_->SetParLimits(29, 0.1, 50);
+    fit_function_->SetParameter(
+        28, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
+    fit_function_->SetParameter(29, 1);
+
+    TFitResultPtr ht_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
+    if (ht_fit.Get() && ht_fit->IsValid() &&
+        ht_fit->Chi2() / ht_fit->Ndf() < best_chi2) {
+      std::cout << "HighTail3 ACCEPTED" << std::endl;
+      best_chi2 = ht_fit->Chi2() / ht_fit->Ndf();
       for (Int_t i = 0; i < npar; i++) {
         best_params[i] = fit_function_->GetParameter(i);
         best_errors[i] = fit_function_->GetParError(i);
       }
     } else {
-      fit_function_->ReleaseParameter(24);
-      fit_function_->ReleaseParameter(25);
-      fit_function_->SetParLimits(24, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(25, 1, 50);
+      std::cout << "HighTail3 REJECTED" << std::endl;
+      fit_function_->FixParameter(28, 0);
+      fit_function_->FixParameter(29, 1);
       for (Int_t i = 0; i < npar; i++) {
         fit_function_->SetParameter(i, best_params[i]);
         fit_function_->SetParError(i, best_errors[i]);
       }
-    }
-
-    // LowLinTail3
-    fit_function_->FixParameter(26, 0);
-    fit_function_->FixParameter(27, 0);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  LowLinTail3 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
-    } else {
-      fit_function_->ReleaseParameter(26);
-      fit_function_->ReleaseParameter(27);
-      fit_function_->SetParLimits(26, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
-      for (Int_t i = 0; i < npar; i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-
-    // HighExpTail3
-    fit_function_->FixParameter(28, 0);
-    fit_function_->FixParameter(29, 1);
-    p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-    if (p.Get() && p->IsValid() && p->Chi2() / p->Ndf() <= best_chi2) {
-      std::cout << "  HighExpTail3 pruned" << std::endl;
-      best_chi2 = p->Chi2() / p->Ndf();
-      for (Int_t i = 0; i < npar; i++) {
-        best_params[i] = fit_function_->GetParameter(i);
-        best_errors[i] = fit_function_->GetParError(i);
-      }
-    } else {
-      fit_function_->ReleaseParameter(28);
-      fit_function_->ReleaseParameter(29);
-      fit_function_->SetParLimits(28, 0, peak_height * 0.75);
-      fit_function_->SetParLimits(29, 1, 50);
-      for (Int_t i = 0; i < npar; i++) {
-        fit_function_->SetParameter(i, best_params[i]);
-        fit_function_->SetParError(i, best_errors[i]);
-      }
-    }
-  } else {
-    std::cout << "Full fit did not improve over baseline, using Gaussian peak3 "
-                 "only"
-              << std::endl;
-    fit_function_->FixParameter(23, 0);
-    fit_function_->FixParameter(24, 0);
-    fit_function_->FixParameter(25, 1);
-    fit_function_->FixParameter(26, 0);
-    fit_function_->FixParameter(27, 0);
-    fit_function_->FixParameter(28, 0);
-    fit_function_->FixParameter(29, 1);
-    for (Int_t i = 0; i < npar; i++) {
-      fit_function_->SetParameter(i, best_params[i]);
-      fit_function_->SetParError(i, best_errors[i]);
     }
   }
 

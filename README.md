@@ -67,9 +67,9 @@ Fit gamma-ray spectral photopeaks with a composable model.
 - **Low-energy linear tail** - Linear tail component that can capture asymmetric tailing not well described by a single exponential.
 - **High-energy exponential tail** - Exponential tail above the photopeak from pileup effects.
 <!---->
-Component selection is semi-automated: a baseline Gaussian + background fit is performed first, then a full fit with all enabled components is attempted.
-If the full fit improves the reduced chi-squared, each component is individually tested for removal — a component is kept only if removing it worsens the fit.
-If the full fit fails or does not improve over the baseline Gaussian + background fit, the baseline result is used.
+Components are tested using a hybrid group-and-prune approach: low-side components (step + both low-energy tails) are enabled as a group, then individually pruned if they do not improve the fit.
+The high-energy tail is tested independently.
+A component is kept only if it improves the reduced chi-squared.
 <!---->
 **Multi-peak fitting**:
 - Double and triple peak variants with all components enabled by default
