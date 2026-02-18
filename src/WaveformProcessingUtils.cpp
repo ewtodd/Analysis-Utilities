@@ -71,7 +71,7 @@ Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayS &samples) {
 
   WaveformFeatures features = ExtractFeatures(*save_waveform_);
   features.raw_pulse_height = std::abs(raw_max);
-  features.trigger_position = trigger_pos;
+  features.trigger_position = FindTrigger(*save_waveform_);
   Bool_t passes_cuts = ApplyQualityCuts(features);
   features.passes_cuts = passes_cuts;
 
