@@ -92,13 +92,34 @@ doi: [10.1016/0168-9002(90)90797-A](https://doi.org/10.1016/0168-9002(90)90797-A
 <!---->
 ### PlottingUtils
 <!---->
-Configure ROOT graphics with consistent styling.
+All-static utility class for publication quality ROOT graphics with consistent styling.
+No object instantiation required.
 <!---->
-- Style presets for publication-quality figures
-- Graph and histogram configuration helpers
-- 2D histogram support with color palettes
-- Legend and subplot label utilities
-- Save figures in multiple formats (with optional log scale variants)
+**Initialization**:
+- `SetStylePreferences(PlotSaveFormat)` - Must be called before using other methods (warns if not).
+Sets global ROOT style and chooses output format (`PlotSaveFormat::kPNG` or `PlotSaveFormat::kPDF`, defaults to PNG).
+<!---->
+**Canvas**:
+- `GetConfiguredCanvas(Bool_t logy)` - Returns a pre-configured 1200x800 `TCanvas` with grid and tick marks
+<!---->
+**Object configuration**:
+- `ConfigureGraph` / `ConfigureAndDrawGraph` - Set line color/width, axis label/title sizes, and offsets on a `TGraph`
+- `ConfigureHistogram` / `ConfigureAndDrawHistogram` - Same for `TH1`, plus fill style and axis division settings
+- `Configure2DHistogram` / `ConfigureAndDraw2DHistogram` - Same for `TH2`, enables log-z and adjusts right margin for color axis
+<!---->
+**Annotations**:
+- `AddLegend(x1, x2, y1, y2)` - Returns a drawn `TLegend` with consistent font/border styling.
+Note: argument order is the extremely sane `(x1, x2, y1, y2)`, not the ROOT default `(x1, y1, x2, y2)`.
+- `AddSubplotLabel(label, x, y)` - Returns a drawn `TText` in NDC coordinates for subplot labels (e.g. "(a)", "(b)")
+<!---->
+**Output**:
+- `SaveFigure(canvas, name, PlotSaveOptions)` - Saves to `plots/` directory using the format set in `SetStylePreferences`.
+`PlotSaveOptions` controls linear (`kLINEAR`), log (`kLOG`), or both (`kBOTH`, default).
+Log variants are prefixed with `log_`.
+<!---->
+**Utilities**:
+- `GetDefaultColors()` - Returns a 24-color palette of distinct ROOT colors
+- `GetRandomName()` - Generates a random canvas name to avoid ROOT name collisions
 <!---->
 ### InitUtils
 <!---->
