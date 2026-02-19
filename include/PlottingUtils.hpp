@@ -37,10 +37,10 @@ public:
   static void SaveFigure(TCanvas *canvas, TString output_filename,
                          PlotSaveOptions save_options = PlotSaveOptions::kBOTH);
 
-  static void AddLegend(Double_t x1 = 0.7, Double_t y1 = 0.7, Double_t x2 = 0.9,
-                        Double_t y2 = 0.9);
-  static void AddSubplotLabel(const TString label, Double_t x = 0.9,
-                              Double_t y = 0.85);
+  static TLegend *AddLegend(Double_t x1 = 0.7, Double_t x2 = 0.9,
+                            Double_t y1 = 0.7, Double_t y2 = 0.9);
+  static TText *AddSubplotLabel(const TString label, Double_t x = 0.9,
+                                Double_t y = 0.85);
 
   static std::vector<Int_t> GetDefaultColors();
 
