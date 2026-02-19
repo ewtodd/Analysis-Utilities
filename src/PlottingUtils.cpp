@@ -2,6 +2,7 @@
 
 PlotSaveFormat PlottingUtils::save_format_ = PlotSaveFormat::kPNG;
 Bool_t PlottingUtils::preferences_set_ = kFALSE;
+Width_t PlottingUtils::line_width_ = 2;
 
 void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
   if (!preferences_set_)
@@ -12,6 +13,7 @@ void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
 void PlottingUtils::SetStylePreferences(PlotSaveFormat save_format) {
   save_format_ = save_format;
   preferences_set_ = kTRUE;
+  line_width_ = save_format_ == PlotSaveFormat::kPNG ? 2 : 1;
 
   gStyle->SetOptStat(0);
   gStyle->SetOptFit(0);
@@ -25,19 +27,15 @@ void PlottingUtils::SetStylePreferences(PlotSaveFormat save_format) {
   gStyle->SetTitleOffset(1.2, "X");
   gStyle->SetTitleOffset(1.2, "Y");
   gStyle->SetTextFont(42);
-  gStyle->SetHistLineWidth(1);
-  gStyle->SetLineWidth(1);
+  gStyle->SetHistLineWidth(line_width_);
+  gStyle->SetLineWidth(line_width_);
   gStyle->SetPadGridX(1);
   gStyle->SetPadGridY(1);
   gStyle->SetGridStyle(3);
-  gStyle->SetGridWidth(1);
+  gStyle->SetGridWidth(line_width_);
   gStyle->SetGridColor(kGray);
   gStyle->SetPadTickX(1);
   gStyle->SetPadTickY(1);
-
-  if (save_format == PlotSaveFormat::kPDF)
-    std::cout << "WARNING: Saving as PDF. Double-check output styling."
-              << std::endl;
 }
 
 void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
@@ -51,7 +49,26 @@ void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
   graph->GetYaxis()->SetLabelSize(0.06);
   graph->GetXaxis()->SetTitleOffset(1.2);
   graph->GetYaxis()->SetTitleOffset(1.2);
-  graph->SetLineWidth(2);
+  graph->GetXaxis()->SetNdivisions(506);
+  graph->SetLineWidth(line_width_);
+}
+
+void PlottingUtils::ConfigureGraph(TGraphErrors *graph, Int_t color,
+                                   const TString title) {
+  WarnIfNotConfigured("ConfigureGraph");
+  graph->SetLineColor(color);
+  graph->SetTitle(title);
+  graph->GetXaxis()->SetTitleSize(0.06);
+  graph->GetYaxis()->SetTitleSize(0.06);
+  graph->GetXaxis()->SetLabelSize(0.06);
+  graph->GetYaxis()->SetLabelSize(0.06);
+  graph->GetXaxis()->SetTitleOffset(1.2);
+  graph->GetYaxis()->SetTitleOffset(1.2);
+  graph->GetXaxis()->SetNdivisions(506);
+  graph->SetMarkerStyle(20);
+  graph->SetMarkerSize(1.2);
+  graph->SetMarkerColor(color);
+  graph->SetLineWidth(line_width_);
 }
 
 void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
@@ -62,7 +79,7 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
 
   hist->SetLineColor(color);
   hist->SetTitle(title);
-  hist->SetLineWidth(2);
+  hist->SetLineWidth(line_width_);
   hist->SetFillStyle(0);
   hist->GetYaxis()->SetMoreLogLabels(kFALSE);
   hist->GetYaxis()->SetNoExponent(kFALSE);

@@ -2,9 +2,9 @@
 #define PLOTTINGUTILS_H
 
 #include <TCanvas.h>
-#include <TF1.h>
 #include <TGaxis.h>
 #include <TGraph.h>
+#include <TGraphErrors.h>
 #include <TH1.h>
 #include <TH2.h>
 #include <TLatex.h>
@@ -13,6 +13,7 @@
 #include <TRandom3.h>
 #include <TStyle.h>
 #include <TSystem.h>
+#include <iostream>
 #include <vector>
 
 enum class PlotSaveOptions { kLINEAR, kLOG, kBOTH };
@@ -30,6 +31,9 @@ public:
                                           const TString title = "");
 
   static void ConfigureGraph(TGraph *graph, Int_t color, const TString title);
+  static void ConfigureGraph(TGraphErrors *graph, Int_t color,
+                             const TString title);
+
   static void ConfigureHistogram(TH1 *hist, Int_t color,
                                  const TString title = "");
   static void Configure2DHistogram(TH2 *hist, TCanvas *canvas,
@@ -47,10 +51,12 @@ public:
   static std::vector<Int_t> GetDefaultColors();
 
   static TString GetRandomName();
+  static Width_t GetLineWidth() { return line_width_; };
 
 private:
   static PlotSaveFormat save_format_;
   static Bool_t preferences_set_;
+  static Width_t line_width_;
   static void WarnIfNotConfigured(const TString method_name);
 };
 
