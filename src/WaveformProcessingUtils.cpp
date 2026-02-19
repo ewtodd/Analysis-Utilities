@@ -225,7 +225,7 @@ WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
     return kFALSE;
   }
 
-  if (features.negative_fraction > 0.25) {
+  if (features.negative_fraction > 0.50) {
     stats_.rejected_baseline++;
     return kFALSE;
   }
