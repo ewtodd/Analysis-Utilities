@@ -462,7 +462,7 @@ void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
   working_hist_->GetXaxis()->SetLabelSize(0);
   working_hist_->GetXaxis()->SetTitleSize(0);
   working_hist_->SetLineColor(kViolet);
-  working_hist_->SetLineWidth(2);
+  working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
   working_hist_->Draw();
 
   pad1->SetTickx(0);
@@ -571,7 +571,7 @@ void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
   zero_line->SetLineColor(kBlack);
   zero_line->SetLineStyle(2);
-  zero_line->SetLineWidth(1);
+  zero_line->SetLineWidth(PlottingUtils::GetLineWidth());
   zero_line->Draw("same");
 
   pad1->cd();
@@ -605,7 +605,7 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   working_hist_->GetXaxis()->SetLabelSize(0);
   working_hist_->GetXaxis()->SetTitleSize(0);
   working_hist_->SetLineColor(kViolet);
-  working_hist_->SetLineWidth(2);
+  working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
   working_hist_->Draw();
 
   pad1->SetTickx(0);
@@ -750,7 +750,7 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
   zero_line->SetLineColor(kBlack);
   zero_line->SetLineStyle(2);
-  zero_line->SetLineWidth(1);
+  zero_line->SetLineWidth(PlottingUtils::GetLineWidth());
   zero_line->Draw("same");
 
   pad1->cd();
@@ -784,7 +784,7 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
   working_hist_->GetXaxis()->SetLabelSize(0);
   working_hist_->GetXaxis()->SetTitleSize(0);
   working_hist_->SetLineColor(kViolet);
-  working_hist_->SetLineWidth(2);
+  working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
   working_hist_->Draw();
 
   pad1->SetTickx(0);
@@ -970,7 +970,7 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
   zero_line->SetLineColor(kBlack);
   zero_line->SetLineStyle(2);
-  zero_line->SetLineWidth(1);
+  zero_line->SetLineWidth(PlottingUtils::GetLineWidth());
   zero_line->Draw("same");
 
   pad1->cd();
