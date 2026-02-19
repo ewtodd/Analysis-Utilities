@@ -1,9 +1,7 @@
 #include "InitUtils.hpp"
 
-void InitUtils::SetROOTPreferences(Bool_t setupPlotting) {
-  if (setupPlotting) {
-    PlottingUtils::SetStylePreferences();
-  }
+void InitUtils::SetROOTPreferences(PlotSaveFormat save_format) {
+  PlottingUtils::SetStylePreferences(save_format);
   gROOT->ForceStyle(kTRUE);
   gROOT->SetBatch(kTRUE);
   if (gSystem->AccessPathName("plots")) {

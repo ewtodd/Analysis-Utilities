@@ -439,8 +439,7 @@ void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
 }
 
 void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
-  TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
-  PlottingUtils::ConfigureCanvas(canvas, kFALSE);
+  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
@@ -577,14 +576,13 @@ void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
                             PlotSaveOptions::kLOG);
 }
 
 void FittingUtils::PlotFitDoublePeak(const TString input_name,
                                      const TString peak_name) {
-  TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
-  PlottingUtils::ConfigureCanvas(canvas, kFALSE);
+  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
@@ -757,14 +755,13 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
                             PlotSaveOptions::kLOG);
 }
 
 void FittingUtils::PlotFitTriplePeak(const TString input_name,
                                      const TString peak_name) {
-  TCanvas *canvas = new TCanvas(PlottingUtils::GetRandomName(), "", 1200, 800);
-  PlottingUtils::ConfigureCanvas(canvas, kFALSE);
+  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
   TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
@@ -978,7 +975,7 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name + ".png",
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
                             PlotSaveOptions::kLOG);
 }
 

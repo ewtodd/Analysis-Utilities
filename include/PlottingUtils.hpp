@@ -16,10 +16,12 @@
 #include <vector>
 
 enum class PlotSaveOptions { kLINEAR, kLOG, kBOTH };
+enum class PlotSaveFormat { kPNG, kPDF };
 
 class PlottingUtils {
 public:
-  static void SetStylePreferences();
+  static void
+  SetStylePreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG);
   static void ConfigureAndDrawGraph(TGraph *graph, Int_t color,
                                     const TString title);
   static void ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
@@ -33,7 +35,7 @@ public:
   static void Configure2DHistogram(TH2 *hist, TCanvas *canvas,
                                    const TString title = "");
 
-  static void ConfigureCanvas(TCanvas *canvas, Bool_t logy = kFALSE);
+  static TCanvas *GetConfiguredCanvas(Bool_t logy = kFALSE);
   static void SaveFigure(TCanvas *canvas, TString output_filename,
                          PlotSaveOptions save_options = PlotSaveOptions::kBOTH);
 
@@ -45,6 +47,11 @@ public:
   static std::vector<Int_t> GetDefaultColors();
 
   static TString GetRandomName();
+
+private:
+  static PlotSaveFormat save_format_;
+  static Bool_t preferences_set_;
+  static void WarnIfNotConfigured(const TString method_name);
 };
 
 #endif

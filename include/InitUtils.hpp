@@ -10,7 +10,8 @@
 
 class InitUtils {
 public:
-  static void SetROOTPreferences(Bool_t setupPlotting = kTRUE);
+  static void
+  SetROOTPreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG);
   static Bool_t ConvertWavedumpBinToROOT();
   static UShort_t ConvertCoMPASSBinToROOT(const TString input_filename,
                                           const TString output_name,
