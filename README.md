@@ -98,6 +98,7 @@ No object instantiation required.
 **Initialization**:
 - `SetStylePreferences(PlotSaveFormat)` - Must be called before using other methods (warns if not).
 Sets global ROOT style and chooses output format (`PlotSaveFormat::kPNG` or `PlotSaveFormat::kPDF`, defaults to PNG).
+Calling `InitUtils::SetROOTPreferences()` takes care of this and is recommended.
 <!---->
 **Canvas**:
 - `GetConfiguredCanvas(Bool_t logy)` - Returns a pre-configured 1200x800 `TCanvas` with grid and tick marks
