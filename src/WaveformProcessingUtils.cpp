@@ -108,18 +108,19 @@ void WaveformProcessingUtils::SaveSampleWaveform(const TArrayF &waveform) {
     y[i] = arr[i];
   }
 
+  PlottingUtils::SetStylePreferences(PlotSaveFormat::kPNG);
+
   TGraph *graph = new TGraph(n, x.data(), y.data());
-  TCanvas *canvas =
-      new TCanvas(PlottingUtils::GetRandomName(), "Waveform", 1200, 800);
-  PlottingUtils::SetStylePreferences();
-  PlottingUtils::ConfigureCanvas(canvas);
+  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
+
   PlottingUtils::ConfigureGraph(graph, kBlue + 1, ";Sample;Amplitude [ADC]");
   graph->Draw("AL");
 
-  TString filename = Form("plots/samplewaveforms/%s_waveform_%04d.png",
-                          current_output_name_.Data(), sample_waveforms_saved_);
-  canvas->SaveAs(filename);
+  TString output_name =
+      Form("samplewaveforms/%s_waveform_%04d", current_output_name_.Data(),
+           sample_waveforms_saved_);
 
+  PlottingUtils::SaveFigure(canvas, output_name, PlotSaveOptions::kLINEAR);
   delete graph;
   delete canvas;
 

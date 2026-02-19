@@ -1,6 +1,18 @@
 #include "PlottingUtils.hpp"
 
-void PlottingUtils::SetStylePreferences() {
+PlotSaveFormat PlottingUtils::save_format_ = PlotSaveFormat::kPNG;
+Bool_t PlottingUtils::preferences_set_ = kFALSE;
+
+void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
+  if (!preferences_set_)
+    std::cout << "WARNING: " << method_name
+              << " called before SetStylePreferences()." << std::endl;
+}
+
+void PlottingUtils::SetStylePreferences(PlotSaveFormat save_format) {
+  save_format_ = save_format;
+  preferences_set_ = kTRUE;
+
   gStyle->SetOptStat(0);
   gStyle->SetOptFit(0);
   gStyle->SetPadLeftMargin(0.15);
@@ -22,10 +34,15 @@ void PlottingUtils::SetStylePreferences() {
   gStyle->SetGridColor(kGray);
   gStyle->SetPadTickX(1);
   gStyle->SetPadTickY(1);
+
+  if (save_format == PlotSaveFormat::kPDF)
+    std::cout << "WARNING: Saving as PDF. Double-check output styling."
+              << std::endl;
 }
 
 void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
                                    const TString title) {
+  WarnIfNotConfigured("ConfigureGraph");
   graph->SetLineColor(color);
   graph->SetTitle(title);
   graph->GetXaxis()->SetTitleSize(0.06);
@@ -41,6 +58,7 @@ void PlottingUtils::ConfigureHistogram(TH1 *hist, Int_t color,
                                        const TString title) {
   if (!hist)
     return;
+  WarnIfNotConfigured("ConfigureHistogram");
 
   hist->SetLineColor(color);
   hist->SetTitle(title);
@@ -65,6 +83,7 @@ void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
     return;
   if (!canvas)
     return;
+  WarnIfNotConfigured("Configure2DHistogram");
 
   hist->SetTitle(title);
   hist->GetYaxis()->SetMoreLogLabels(kFALSE);
@@ -108,10 +127,9 @@ void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
   hist->Draw("COLZ");
 }
 
-void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
-
-  if (!canvas)
-    return;
+TCanvas *PlottingUtils::GetConfiguredCanvas(Bool_t logy) {
+  WarnIfNotConfigured("GetConfiguredCanvas");
+  TCanvas *canvas = new TCanvas(GetRandomName(), "", 1200, 800);
 
   canvas->SetGridx(1);
   canvas->SetGridy(1);
@@ -119,13 +137,20 @@ void PlottingUtils::ConfigureCanvas(TCanvas *canvas, Bool_t logy) {
 
   canvas->SetTicks(1, 1);
   gPad->SetTicks(1, 1);
+
+  return canvas;
 }
 
-void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_filename,
+void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
                                PlotSaveOptions save_options) {
+  WarnIfNotConfigured("SaveFigure");
   canvas->SetLogy(kFALSE);
   canvas->Modified();
   canvas->Update();
+
+  TString extension = (save_format_ == PlotSaveFormat::kPNG) ? ".png" : ".pdf";
+  TString output_filename = output_name + extension;
+
   if (save_options != PlotSaveOptions::kLOG)
     canvas->Print("plots/" + output_filename);
 
