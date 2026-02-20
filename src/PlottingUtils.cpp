@@ -111,6 +111,9 @@ void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
   hist->GetYaxis()->SetLabelSize(0.06);
   hist->GetXaxis()->SetTitleOffset(1.2);
   hist->GetYaxis()->SetTitleOffset(1.2);
+  hist->GetXaxis()->SetNdivisions(506);
+  hist->GetYaxis()->SetNdivisions(506);
+
   canvas->SetLogz(kTRUE);
   canvas->SetRightMargin(0.15);
 }
