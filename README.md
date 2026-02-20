@@ -1,6 +1,6 @@
 # Analysis-Utilities
 <!---->
-C++ utilities for analysis of nuclear measurement data, built on [ROOT](https://root.cern/).
+C++ utilities for analysis of nuclear measurement data, built on [ROOT](https://root.cern/), with a focus on ergonomics and performance.
 Supports CAEN digitizers via CoMPASS and WaveDump acquisition software.
 Warning: Currently in active development; breaking changes are all but guaranteed...
 <!---->
