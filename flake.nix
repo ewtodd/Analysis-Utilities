@@ -16,9 +16,10 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        version = "26.02.21";
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
-          version = "26.02.20";
+          inherit version;
 
           src = ./.;
 
@@ -81,9 +82,28 @@
 
           propagatedBuildInputs = [ pkgs.root ];
         };
+        pythonPackage = pkgs.python3Packages.buildPythonPackage {
+          pname = "analysis-utils";
+          inherit version;
+          src = ./python;
+          format = "pyproject";
+          nativeBuildInputs = [ pkgs.python3Packages.setuptools ];
+          postPatch = ''
+            substituteInPlace analysis_utils/__init__.py \
+              --replace-fail '@VERSION@' "${version}"
+            substituteInPlace pyproject.toml \
+              --replace-fail '@VERSION@' "${version}"
+          '';
+          propagatedBuildInputs = with pkgs.python3Packages; [
+            numpy
+            pandas
+          ];
+          doCheck = false;
+        };
       in
       {
         packages.default = toolkit;
+        packages.pythonPackage = pythonPackage;
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
@@ -91,6 +111,12 @@
             gnumake
             pkg-config
             clang-tools
+            (python3.withPackages (
+              python-pkgs: with python-pkgs; [
+                numpy
+                pandas
+              ]
+            ))
           ];
 
           shellHook = ''
