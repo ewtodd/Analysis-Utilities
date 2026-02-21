@@ -110,7 +110,7 @@ void PlottingUtils::Configure2DHistogram(TH2 *hist, TCanvas *canvas,
   hist->GetXaxis()->SetLabelSize(0.06);
   hist->GetYaxis()->SetLabelSize(0.06);
   hist->GetXaxis()->SetTitleOffset(1.2);
-  hist->GetYaxis()->SetTitleOffset(1.2);
+  hist->GetYaxis()->SetTitleOffset(1);
   hist->GetXaxis()->SetNdivisions(506);
   hist->GetYaxis()->SetNdivisions(506);
 
