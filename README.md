@@ -2,6 +2,7 @@
 <!---->
 C++ utilities for analysis of nuclear measurement data, built on [ROOT](https://root.cern/), with a focus on ergonomics and performance.
 Supports CAEN digitizers via CoMPASS and WaveDump acquisition software.
+The flake also exposes a Python package, with a wrapper around the PlottingUtils as well as a method for efficiently loading TTrees into Python native data types (numpy array, pandas df) so that machine learning libraries in Python can be used.
 Warning: Currently in active development; breaking changes are all but guaranteed...
 <!---->
 ## Installation
