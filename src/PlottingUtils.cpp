@@ -198,8 +198,8 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   TLegend *leg = new TLegend(x1, y1, x2, y2);
   leg->SetBorderSize(1);
   leg->SetFillColor(kWhite);
-  leg->SetTextSize(0.05);
-  leg->SetTextFont(132);
+  leg->SetTextSize(30);
+  leg->SetTextFont(43);
   leg->Draw();
 
   return leg;
@@ -209,8 +209,9 @@ TText *PlottingUtils::AddSubplotLabel(const TString label, Double_t x,
                                       Double_t y) {
   TText *text = new TText(x, y, label);
   text->SetNDC();
-  text->SetTextSize(0.06);
+  text->SetTextSize(30);
   text->SetTextAlign(33);
+  text->SetTextFont(43);
   text->Draw();
 
   return text;
