@@ -130,6 +130,95 @@ Initialization and file conversion utilities.
 - `SetROOTPreferences()` - Configure ROOT environment and plotting defaults
 - `ConvertCoMPASSBinToROOT()` - Convert CoMPASS binary files to ROOT format
 <!---->
+## Python Package
+<!---->
+The `analysis-utils` Python package provides two things: a bridge to use PlottingUtils from Python scripts, and a loader for efficiently reading ROOT TTrees into numpy arrays and pandas DataFrames for use with machine learning libraries.
+<!---->
+### Setup
+<!---->
+To use the Python package in a downstream project, add the `pythonPackage` output to your flake and include it in a Python environment:
+<!---->
+```nix
+# In your project's flake.nix
+let
+  pkgs = nixpkgs.legacyPackages.${system};
+  analysis-utils = utils.packages.${system}.default;
+  analysis-utils-py = utils.packages.${system}.pythonPackage;
+in
+{
+  devShells.default = pkgs.mkShell {
+    buildInputs = [
+      analysis-utils
+      (pkgs.python3.withPackages (ps: [
+        analysis-utils-py
+        ps.numpy
+        ps.pandas
+        # add ML libraries here, e.g. ps.scikit-learn
+      ]))
+      pkgs.root
+    ];
+    shellHook = ''
+      export LD_LIBRARY_PATH="${analysis-utils}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      export ROOT_INCLUDE_PATH="${analysis-utils}/include''${ROOT_INCLUDE_PATH:+:$ROOT_INCLUDE_PATH}"
+    '';
+  };
+}
+```
+<!---->
+### PlottingUtils bridge
+<!---->
+`load_cpp_library()` loads the C++ shared library into ROOT and declares the PlottingUtils header, making the full PlottingUtils API available through PyROOT:
+<!---->
+```python
+from analysis_utils import load_cpp_library
+
+ROOT = load_cpp_library()
+
+ROOT.PlottingUtils.SetStylePreferences(ROOT.PlotSaveFormat.kPNG)
+c = ROOT.PlottingUtils.GetConfiguredCanvas(False)
+# Use ROOT.PlottingUtils.ConfigureGraph, ConfigureHistogram, etc.
+```
+<!---->
+### TTree loader
+<!---->
+`load_tree_data()` reads ROOT TTrees into pandas DataFrames and numpy arrays.
+It handles type detection, TChain construction for multiple files, pre-filtering with ROOT selection strings, and optional waveform array branches.
+<!---->
+```python
+from analysis_utils.io import load_tree_data
+
+# Load scalar branches into a DataFrame
+df = load_tree_data("output.root", tree_name="features")
+
+# Load with a cut and event limit
+df = load_tree_data(
+    ["run1.root", "run2.root"],
+    tree_name="features",
+    cut_string="energy > 100 && psd > 0.2",
+    max_events=50000,
+)
+
+# Load waveforms alongside scalar data
+df, waveforms = load_tree_data(
+    "output.root",
+    tree_name="features",
+    array_branch="waveform",
+)
+# waveforms is a 2-D numpy array with shape (n_events, n_samples)
+```
+<!---->
+**Parameters**:
+- `root_files` - Path or list of paths to ROOT files (combined via TChain)
+- `tree_name` - TTree name (default: `"features"`)
+- `scalar_branches` - Branch names to load, or `None` to auto-detect all scalar branches
+- `array_branch` - Name of a `TArrayF`/`TArrayS` branch to load as a 2-D numpy array
+- `cut_string` - ROOT selection string for pre-filtering events
+- `max_events` - Cap on number of events to read
+<!---->
+**Returns** a `pandas.DataFrame` of scalar data. If `array_branch` is specified, returns a tuple of `(DataFrame, numpy.ndarray)`.
+<!---->
+Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `Bool_t`.
+<!---->
 ## Roadmap
 <!---->
 - [x] Implement support for converting CoMPASS binary files to ROOT
