@@ -10,7 +10,6 @@ def load_tree_data(
     tree_name="features",
     scalar_branches=None,
     array_branch=None,
-    cut_string="",
     max_events=None,
 ):
     """Load TTree data into numpy arrays and pandas DataFrame.
@@ -26,8 +25,6 @@ def load_tree_data(
         scalar (non-array) branches.
     array_branch : str or None
         Name of a TArrayF/TArrayS branch to load as a 2-D numpy array.
-    cut_string : str
-        ROOT TTree selection string for pre-filtering.
     max_events : int or None
         Maximum number of events to load.
 
@@ -61,20 +58,10 @@ def load_tree_data(
             if name != array_branch:
                 scalar_branches.append(name)
 
-    # Apply cut string to get entry list
-    if cut_string:
-        chain.Draw(">>elist", cut_string, "entrylist")
-        elist = ROOT.gDirectory.Get("elist")
-        chain.SetEntryList(elist)
-        n_selected = elist.GetN()
-    else:
-        elist = None
-        n_selected = n_total
-
     if max_events is not None:
-        n_to_read = min(n_selected, max_events)
+        n_to_read = min(n_total, max_events)
     else:
-        n_to_read = n_selected
+        n_to_read = n_total
 
     # Set up branch addresses for scalars
     buffers = {}
@@ -120,12 +107,7 @@ def load_tree_data(
     entry_idx = 0
 
     while read_count < n_to_read:
-        if elist:
-            real_entry = elist.GetEntry(entry_idx)
-            if real_entry < 0:
-                break
-        else:
-            real_entry = entry_idx
+        real_entry = entry_idx
 
         if real_entry >= n_total:
             break
