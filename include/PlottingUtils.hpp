@@ -24,15 +24,16 @@ public:
   static void
   SetStylePreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG);
   static void ConfigureAndDrawGraph(TGraph *graph, Int_t color,
-                                    const TString title);
+                                    const TString title = "");
   static void ConfigureAndDrawHistogram(TH1 *hist, Int_t color,
                                         const TString title = "");
   static void ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
                                           const TString title = "");
 
-  static void ConfigureGraph(TGraph *graph, Int_t color, const TString title);
+  static void ConfigureGraph(TGraph *graph, Int_t color,
+                             const TString title = "");
   static void ConfigureGraph(TGraphErrors *graph, Int_t color,
-                             const TString title);
+                             const TString title = "");
 
   static void ConfigureHistogram(TH1 *hist, Int_t color,
                                  const TString title = "");
