@@ -462,6 +462,7 @@ void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
   working_hist_->GetXaxis()->SetLabelSize(0);
   working_hist_->GetXaxis()->SetTitleSize(0);
   working_hist_->SetLineColor(kViolet);
+  working_hist_->GetYaxis()->SetTitleOffset(1);
   working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
   working_hist_->Draw();
 
@@ -605,6 +606,7 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   working_hist_->GetXaxis()->SetLabelSize(0);
   working_hist_->GetXaxis()->SetTitleSize(0);
   working_hist_->SetLineColor(kViolet);
+  working_hist_->GetYaxis()->SetTitleOffset(1);
   working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
   working_hist_->Draw();
 
@@ -784,6 +786,7 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
   working_hist_->GetXaxis()->SetLabelSize(0);
   working_hist_->GetXaxis()->SetTitleSize(0);
   working_hist_->SetLineColor(kViolet);
+  working_hist_->GetYaxis()->SetTitleOffset(1);
   working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
   working_hist_->Draw();
 
