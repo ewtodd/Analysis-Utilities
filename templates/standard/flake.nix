@@ -35,7 +35,7 @@
             echo "ROOT version: $(root-config --version)"
             echo "Analysis-Utilities version: ${analysis-utils.version}"
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
-            STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
+            STDLIB_MACHINE_PATH="$STDLIB_PATH/${pkgs.stdenv.hostPlatform.config}"
             ROOT_INC="$(root-config --incdir)"
             # Local first, then remote, then others
             export CPLUS_INCLUDE_PATH="$PWD/include:$STDLIB_PATH:$STDLIB_MACHINE_PATH:${analysis-utils}/include:$ROOT_INC''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
