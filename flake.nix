@@ -25,8 +25,9 @@
 
           nativeBuildInputs = with pkgs; [
             pkg-config
-            autoPatchelfHook
             gnumake
+          ] ++ pkgs.lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
+            autoPatchelfHook
           ];
 
           buildInputs = with pkgs; [
@@ -37,42 +38,46 @@
             make
           '';
 
-          installPhase = ''
-            mkdir -p $out/{lib,include}
+          installPhase =
+            let
+              sharedExt = if pkgs.stdenv.hostPlatform.isDarwin then "dylib" else "so";
+            in
+            ''
+              mkdir -p $out/{lib,include}
 
-            if [ -d lib ] && [ -n "$(ls -A lib/*.so 2>/dev/null)" ]; then
-              cp lib/*.so $out/lib/
-            else
-              echo "ERROR: No shared libraries found in lib/"
-              exit 1
-            fi
+              if [ -d lib ] && [ -n "$(ls -A lib/*.${sharedExt} 2>/dev/null)" ]; then
+                cp lib/*.${sharedExt} $out/lib/
+              else
+                echo "ERROR: No shared libraries found in lib/"
+                exit 1
+              fi
 
-            if [ -d lib ] && [ -n "$(ls -A lib/*.a 2>/dev/null)" ]; then
-              cp lib/*.a $out/lib/
-            fi
+              if [ -d lib ] && [ -n "$(ls -A lib/*.a 2>/dev/null)" ]; then
+                cp lib/*.a $out/lib/
+              fi
 
-            if [ -d include ] && [ -n "$(ls -A include/*.hpp 2>/dev/null)" ]; then
-              cp include/*.hpp $out/include/
-            else
-              echo "ERROR: No headers found in include/"
-              exit 1
-            fi
+              if [ -d include ] && [ -n "$(ls -A include/*.hpp 2>/dev/null)" ]; then
+                cp include/*.hpp $out/include/
+              else
+                echo "ERROR: No headers found in include/"
+                exit 1
+              fi
 
-            mkdir -p $out/lib/pkgconfig
-            cat > $out/lib/pkgconfig/analysis-utilities.pc <<EOF
-            prefix=$out
-            exec_prefix=\''${prefix}
-            libdir=\''${exec_prefix}/lib
-            includedir=\''${prefix}/include
+              mkdir -p $out/lib/pkgconfig
+              cat > $out/lib/pkgconfig/analysis-utilities.pc <<EOF
+              prefix=$out
+              exec_prefix=''${prefix}
+              libdir=''${exec_prefix}/lib
+              includedir=''${prefix}/include
 
-            Name: analysis-utilities 
-            Description: Analysis Utilities for Nuclear Measurements 
-            Libs: -L\''${libdir} -lanalysis-utilities
-            Cflags: -I\''${includedir}
-            EOF
-          '';
+              Name: analysis-utilities 
+              Description: Analysis Utilities for Nuclear Measurements 
+              Libs: -L''${libdir} -lanalysis-utilities
+              Cflags: -I''${includedir}
+              EOF
+            '';
 
-          postFixup = ''
+          postFixup = pkgs.lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
             for lib in $out/lib/*.so; do
               if [ -f "$lib" ]; then
                 patchelf --set-rpath "$out/lib:${pkgs.root}/lib:${pkgs.stdenv.cc.cc.lib}/lib" "$lib" || true
@@ -123,7 +128,7 @@
             export SHELL="${pkgs.bash}/bin/bash"
             echo "Development environment for working on the analysis utilities source"
             STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
-            STDLIB_MACHINE_PATH="$STDLIB_PATH/x86_64-unknown-linux-gnu"
+            STDLIB_MACHINE_PATH="$STDLIB_PATH/${pkgs.stdenv.hostPlatform.config}"
             # Build include path in correct order: stdlib -> project -> ROOT
             export CPLUS_INCLUDE_PATH="$STDLIB_PATH:$STDLIB_MACHINE_PATH:$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
             export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"

@@ -12,7 +12,16 @@ OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 HEADERS = $(wildcard $(INCDIR)/*.hpp)
 
 LIBNAME = lib-analysis-utils
-SHAREDLIB = $(LIBDIR)/$(LIBNAME).so
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  SHAREDLIB = $(LIBDIR)/$(LIBNAME).dylib
+  SHARED_FLAGS = -dynamiclib
+else
+  SHAREDLIB = $(LIBDIR)/$(LIBNAME).so
+  SHARED_FLAGS = -shared
+endif
+
 STATICLIB = $(LIBDIR)/$(LIBNAME).a
 
 all: $(SHAREDLIB) $(STATICLIB)
@@ -27,7 +36,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 $(SHAREDLIB): $(OBJECTS) | $(LIBDIR)
-	$(CXX) -shared -o $@ $^ $(ROOTLIBS)
+	$(CXX) $(SHARED_FLAGS) -o $@ $^ $(ROOTLIBS)
 	@echo "Built shared library: $(SHAREDLIB)"
 
 $(STATICLIB): $(OBJECTS) | $(LIBDIR)
