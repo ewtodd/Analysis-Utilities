@@ -63,14 +63,24 @@ def load_tree_data(
     else:
         n_to_read = n_total
 
-    # Set up branch addresses for scalars
-    buffers = {}
+    # Disable all branches, then enable only the ones we need
+    chain.SetBranchStatus("*", 0)
     for name in scalar_branches:
         br = chain.GetBranch(name)
         if br is None:
             raise ValueError(
                 f"Branch '{name}' not found in tree '{tree_name}'")
-        leaf = br.GetLeaf(name)
+        chain.SetBranchStatus(name, 1)
+    if array_branch:
+        if chain.GetBranch(array_branch) is None:
+            raise ValueError(
+                f"Branch '{array_branch}' not found in tree '{tree_name}'")
+        chain.SetBranchStatus(array_branch, 1)
+
+    # Set up branch addresses for scalars
+    buffers = {}
+    for name in scalar_branches:
+        leaf = chain.GetBranch(name).GetLeaf(name)
         type_name = leaf.GetTypeName()
 
         if type_name in ("Float_t", "float"):
@@ -95,24 +105,27 @@ def load_tree_data(
     if array_branch:
         arr_obj = ROOT.TArrayF()
         chain.SetBranchAddress(array_branch, arr_obj)
+        # Read first entry to determine waveform size
+        chain.GetEntry(0)
+        wf_size = arr_obj.GetSize()
+        waveforms = np.empty((n_to_read, wf_size), dtype=np.float32)
+    else:
+        waveforms = None
 
-    # Read data
+    # Pre-allocate scalar output arrays
     scalar_data = {
         name: np.empty(n_to_read, dtype=buf.dtype)
         for name, buf in buffers.items()
     }
-    waveform_list = [] if array_branch else None
 
     read_count = 0
     entry_idx = 0
 
     while read_count < n_to_read:
-        real_entry = entry_idx
-
-        if real_entry >= n_total:
+        if entry_idx >= n_total:
             break
 
-        nb = chain.GetEntry(real_entry)
+        nb = chain.GetEntry(entry_idx)
         if nb <= 0:
             entry_idx += 1
             continue
@@ -121,10 +134,9 @@ def load_tree_data(
             scalar_data[name][read_count] = buf[0]
 
         if array_branch:
-            size = arr_obj.GetSize()
-            waveform = np.array([arr_obj.At(i) for i in range(size)],
-                                dtype=np.float32)
-            waveform_list.append(waveform)
+            # Bulk copy via buffer protocol instead of per-element At()
+            waveforms[read_count] = np.frombuffer(
+                arr_obj.GetArray(), dtype=np.float32, count=wf_size)
 
         read_count += 1
         entry_idx += 1
@@ -133,11 +145,12 @@ def load_tree_data(
     if read_count < n_to_read:
         for name in scalar_data:
             scalar_data[name] = scalar_data[name][:read_count]
+        if waveforms is not None:
+            waveforms = waveforms[:read_count]
 
     features_df = pd.DataFrame(scalar_data)
 
     if array_branch:
-        waveforms = np.array(waveform_list, dtype=np.float32)
         return features_df, waveforms
     else:
         return features_df
