@@ -205,9 +205,9 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   return leg;
 }
 
-TText *PlottingUtils::AddText(const TString label, Double_t x, Double_t y,
-                              Double_t angle) {
-  TText *text = new TText(x, y, label);
+TLatex *PlottingUtils::AddText(const TString label, Double_t x, Double_t y,
+                               Double_t angle) {
+  TLatex *text = new TLatex(x, y, label);
   text->SetNDC();
   text->SetTextSize(30);
   text->SetTextAlign(33);

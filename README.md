@@ -112,7 +112,7 @@ Calling `InitUtils::SetROOTPreferences()` takes care of this and is recommended.
 **Annotations**:
 - `AddLegend(x1, x2, y1, y2)` - Returns a drawn `TLegend` with consistent font/border styling.
 Note: argument order is the extremely sane `(x1, x2, y1, y2)`, not the ROOT default `(x1, y1, x2, y2)`.
-- `AddText(label, x, y, angle)` - Returns a drawn `TText` in NDC coordinates for arbitrary annotations (e.g. subplot labels like "(a)", "(b)", or any other text). Optional `angle` (default 0) sets text rotation in degrees.
+- `AddText(label, x, y, angle)` - Returns a drawn `TLatex` in NDC coordinates for arbitrary annotations (e.g. subplot labels like "(a)", "(b)", or any other text). Optional `angle` (default 0) sets text rotation in degrees.
 <!---->
 **Output**:
 - `SaveFigure(canvas, name, PlotSaveOptions)` - Saves to `plots/` directory using the format set in `SetStylePreferences`.
