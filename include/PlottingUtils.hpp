@@ -46,8 +46,8 @@ public:
 
   static TLegend *AddLegend(Double_t x1 = 0.7, Double_t x2 = 0.9,
                             Double_t y1 = 0.7, Double_t y2 = 0.9);
-  static TText *AddSubplotLabel(const TString label, Double_t x = 0.9,
-                                Double_t y = 0.85);
+  static TText *AddText(const TString label, Double_t x = 0.9,
+                        Double_t y = 0.85, Double_t angle = 0);
 
   static std::vector<Int_t> GetDefaultColors();
 

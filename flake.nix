@@ -16,19 +16,22 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "26.02.23";
+        version = "26.2.27";
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
           inherit version;
 
           src = ./.;
 
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            gnumake
-          ] ++ pkgs.lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
-            autoPatchelfHook
-          ];
+          nativeBuildInputs =
+            with pkgs;
+            [
+              pkg-config
+              gnumake
+            ]
+            ++ pkgs.lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
+              autoPatchelfHook
+            ];
 
           buildInputs = with pkgs; [
             root

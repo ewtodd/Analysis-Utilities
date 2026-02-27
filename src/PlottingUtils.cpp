@@ -205,13 +205,14 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   return leg;
 }
 
-TText *PlottingUtils::AddSubplotLabel(const TString label, Double_t x,
-                                      Double_t y) {
+TText *PlottingUtils::AddText(const TString label, Double_t x, Double_t y,
+                              Double_t angle) {
   TText *text = new TText(x, y, label);
   text->SetNDC();
   text->SetTextSize(30);
   text->SetTextAlign(33);
   text->SetTextFont(43);
+  text->SetTextAngle(angle);
   text->Draw();
 
   return text;
