@@ -87,12 +87,20 @@ def load_tree_data(
             buf = np.zeros(1, dtype=np.float32)
         elif type_name in ("Double_t", "double"):
             buf = np.zeros(1, dtype=np.float64)
+        elif type_name in ("Long64_t", "long long"):
+            buf = np.zeros(1, dtype=np.int64)
+        elif type_name in ("ULong64_t", "unsigned long long"):
+            buf = np.zeros(1, dtype=np.uint64)
         elif type_name in ("Int_t", "int"):
             buf = np.zeros(1, dtype=np.int32)
         elif type_name in ("UInt_t", "unsigned int"):
             buf = np.zeros(1, dtype=np.uint32)
         elif type_name in ("Short_t", "short"):
             buf = np.zeros(1, dtype=np.int16)
+        elif type_name in ("UShort_t", "unsigned short"):
+            buf = np.zeros(1, dtype=np.uint16)
+        elif type_name in ("UChar_t", "unsigned char"):
+            buf = np.zeros(1, dtype=np.uint8)
         elif type_name in ("Bool_t", "bool"):
             buf = np.zeros(1, dtype=np.bool_)
         else:
@@ -101,14 +109,20 @@ def load_tree_data(
         chain.SetBranchAddress(name, buf)
         buffers[name] = buf
 
-    # Set up array branch
+    # Set up array branch (detect TArrayF vs TArrayS from branch)
     if array_branch:
-        arr_obj = ROOT.TArrayF()
+        br_class = chain.GetBranch(array_branch).GetClassName()
+        if "TArrayS" in br_class:
+            arr_obj = ROOT.TArrayS()
+            arr_dtype = np.int16
+        else:
+            arr_obj = ROOT.TArrayF()
+            arr_dtype = np.float32
         chain.SetBranchAddress(array_branch, arr_obj)
         # Read first entry to determine waveform size
         chain.GetEntry(0)
         wf_size = arr_obj.GetSize()
-        waveforms = np.empty((n_to_read, wf_size), dtype=np.float32)
+        waveforms = np.empty((n_to_read, wf_size), dtype=arr_dtype)
     else:
         waveforms = None
 
@@ -136,7 +150,7 @@ def load_tree_data(
         if array_branch:
             # Bulk copy via buffer protocol instead of per-element At()
             waveforms[read_count] = np.frombuffer(
-                arr_obj.GetArray(), dtype=np.float32, count=wf_size)
+                arr_obj.GetArray(), dtype=arr_dtype, count=wf_size)
 
         read_count += 1
         entry_idx += 1
