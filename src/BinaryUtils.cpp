@@ -4,7 +4,6 @@ CoMPASSData::CoMPASSData()
     : header(0), board(0), channel(0), timestamp(0), energy_ch(0),
       energy_cal(0.0), energy_short_ch(0), flags(0), waveform_code(0),
       num_samples(0) {
-  samples.clear();
   std::cout << "This version of CoMPASS binary conversion is based on manual "
                "revision 25.1..."
             << std::endl;
@@ -119,10 +118,9 @@ void CoMPASSData::PrintWaveform() const {
     std::cout << "Code:    " << static_cast<Int_t>(waveform_code) << " ("
               << getWaveformCodeName().Data() << ")" << std::endl;
     std::cout << "Samples: " << num_samples << std::endl;
-    if (!samples.empty()) {
+    if (samples.GetSize() > 0) {
       std::cout << "First 5 samples: ";
-      for (UInt_t i = 0;
-           i < TMath::Min(5u, static_cast<UInt_t>(samples.size())); i++) {
+      for (Int_t i = 0; i < TMath::Min(5, samples.GetSize()); i++) {
         std::cout << samples[i] << " ";
       }
       std::cout << std::endl;
@@ -237,10 +235,11 @@ Bool_t CoMPASSReader::ReadEvent() {
               sizeof(UInt_t));
     bytes_read += sizeof(UChar_t) + sizeof(UInt_t);
 
-    current_event.samples.resize(current_event.num_samples);
+    current_event.samples.Set(current_event.num_samples);
+    UShort_t sample_buf;
     for (UInt_t i = 0; i < current_event.num_samples; i++) {
-      file.read(reinterpret_cast<char *>(&current_event.samples[i]),
-                sizeof(UShort_t));
+      file.read(reinterpret_cast<char *>(&sample_buf), sizeof(UShort_t));
+      current_event.samples.SetAt(static_cast<Short_t>(sample_buf), i);
     }
     bytes_read += current_event.num_samples * sizeof(UShort_t);
   }
@@ -251,10 +250,9 @@ Bool_t CoMPASSReader::ReadEvent() {
 WaveDump742Data::WaveDump742Data()
     : event_size(0), board_id(0), pattern(0), channel(0), event_counter(0),
       group_trigger_time_tag(0), dc_offset(0), start_index_cell(0) {
-  samples.clear();
   std::cout << "This version of wavedump binary conversion for 742 family "
                "digitizers is based on manual "
-               "revision 21 and is UNTESTED..."
+               "revision 21"
             << std::endl;
 }
 
@@ -267,7 +265,7 @@ void WaveDump742Data::Print() const {
   std::cout << "Group trigger tag: " << group_trigger_time_tag << std::endl;
   std::cout << "DC offset:         " << dc_offset << std::endl;
   std::cout << "Start cell:        " << start_index_cell << std::endl;
-  std::cout << "Samples:           " << samples.size() << std::endl;
+  std::cout << "Samples:           " << samples.GetSize() << std::endl;
 }
 
 Bool_t WaveDump742Reader::ReadEvent() {
@@ -296,20 +294,22 @@ Bool_t WaveDump742Reader::ReadEvent() {
   current_event.dc_offset = headers[6];
   current_event.start_index_cell = headers[7];
 
-  if (current_event.event_size < 8) {
+  // event_size is in bytes and includes the 8-word (32-byte) header
+  UInt_t header_bytes = 8 * sizeof(UInt_t);
+  if (current_event.event_size <= header_bytes) {
     std::cerr << "Error: Invalid event_size " << current_event.event_size
               << " at event " << current_event.event_counter << std::endl;
     return kFALSE;
   }
 
-  UInt_t sample_size = current_event.event_size - 8;
+  UInt_t sample_bytes = current_event.event_size - header_bytes;
+  UInt_t sample_size = sample_bytes / sizeof(UInt_t);
 
-  current_event.samples.resize(sample_size);
+  current_event.samples.Set(sample_size);
 
   if (corrections_enabled) {
     std::vector<Float_t> float_samples(sample_size);
-    file.read(reinterpret_cast<char *>(float_samples.data()),
-              sample_size * sizeof(Float_t));
+    file.read(reinterpret_cast<char *>(float_samples.data()), sample_bytes);
     if (file.fail()) {
       std::cerr << "Warning: Incomplete event at byte " << bytes_read
                 << " (truncated file, event " << current_event.event_counter
@@ -317,12 +317,11 @@ Bool_t WaveDump742Reader::ReadEvent() {
       return kFALSE;
     }
     for (UInt_t i = 0; i < sample_size; i++) {
-      current_event.samples[i] = static_cast<UShort_t>(float_samples[i]);
+      current_event.samples.SetAt(static_cast<Short_t>(float_samples[i]), i);
     }
   } else {
     std::vector<UInt_t> int_samples(sample_size);
-    file.read(reinterpret_cast<char *>(int_samples.data()),
-              sample_size * sizeof(UInt_t));
+    file.read(reinterpret_cast<char *>(int_samples.data()), sample_bytes);
     if (file.fail()) {
       std::cerr << "Warning: Incomplete event at byte " << bytes_read
                 << " (truncated file, event " << current_event.event_counter
@@ -330,11 +329,12 @@ Bool_t WaveDump742Reader::ReadEvent() {
       return kFALSE;
     }
     for (UInt_t i = 0; i < sample_size; i++) {
-      current_event.samples[i] = int_samples[i] & 0xFFF;
+      current_event.samples.SetAt(static_cast<Short_t>(int_samples[i] & 0xFFF),
+                                  i);
     }
   }
 
-  bytes_read += sample_size * sizeof(UInt_t);
+  bytes_read += sample_bytes;
 
   return kTRUE;
 }

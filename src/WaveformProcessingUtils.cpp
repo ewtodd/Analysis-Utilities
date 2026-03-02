@@ -5,7 +5,8 @@ WaveformProcessingUtils::WaveformProcessingUtils()
       pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
       sample_waveforms_to_save_(0), sample_waveforms_saved_(0),
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
-      save_waveform_(new TArrayF()) {}
+      save_waveform_(new TArrayF()),
+      input_format_(InputFormat::kCOMPASS) {}
 
 WaveformProcessingUtils::WaveformProcessingUtils(
     const FileProcessingConfig &config)
@@ -17,7 +18,8 @@ WaveformProcessingUtils::WaveformProcessingUtils(
       verbose_(config.verbose),
       sample_waveforms_to_save_(config.sample_waveforms_to_save),
       sample_waveforms_saved_(0), output_file_(nullptr), output_tree_(nullptr),
-      store_waveforms_(config.store_waveforms), save_waveform_(new TArrayF()) {}
+      store_waveforms_(config.store_waveforms), save_waveform_(new TArrayF()),
+      input_format_(config.input_format) {}
 
 WaveformProcessingUtils::~WaveformProcessingUtils() {
   if (save_waveform_) {
@@ -351,7 +353,13 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
 
   TArrayS *samples = new TArrayS();
   tree->SetBranchAddress("Samples", &samples);
-  tree->SetBranchAddress("Timestamp", &current_timestamp_);
+
+  UInt_t trigger_time_tag = 0;
+  if (input_format_ == InputFormat::kCOMPASS) {
+    tree->SetBranchAddress("Timestamp", &current_timestamp_);
+  } else if (input_format_ == InputFormat::kWAVEDUMP) {
+    tree->SetBranchAddress("TriggerTimeTag", &trigger_time_tag);
+  }
 
   Long64_t n_entries = tree->GetEntries();
 
@@ -360,6 +368,9 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
       break;
     }
     tree->GetEntry(entry);
+    if (input_format_ == InputFormat::kWAVEDUMP) {
+      current_timestamp_ = static_cast<ULong64_t>(trigger_time_tag);
+    }
     stats_.total_processed++;
     ProcessWaveform(*samples);
   }

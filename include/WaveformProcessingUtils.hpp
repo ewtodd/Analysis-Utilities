@@ -37,6 +37,8 @@ struct ProcessingStats {
   Int_t rejected_clipped = 0;
 };
 
+enum class InputFormat { kCOMPASS, kWAVEDUMP };
+
 struct FileProcessingConfig {
   Int_t polarity = -1;
   Float_t trigger_threshold = 0.15;
@@ -50,6 +52,7 @@ struct FileProcessingConfig {
   Int_t max_events = -1;
   Bool_t verbose = kTRUE;
   Bool_t store_waveforms = kTRUE;
+  InputFormat input_format = InputFormat::kCOMPASS;
 };
 
 class WaveformProcessingUtils {
@@ -78,6 +81,7 @@ private:
   Bool_t store_waveforms_;
   TArrayF *save_waveform_;
   ULong64_t current_timestamp_;
+  InputFormat input_format_;
 
 public:
   WaveformProcessingUtils();

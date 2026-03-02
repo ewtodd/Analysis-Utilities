@@ -61,7 +61,7 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   Double_t energy_cal;
   UInt_t flags, num_samples;
   UChar_t waveform_code;
-  std::vector<UShort_t> *samples = nullptr;
+  TArrayS *samples = nullptr;
 
   tree->Branch("Board", &board, "Board/s");
   tree->Branch("Channel", &channel, "Channel/s");
@@ -82,7 +82,7 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   tree->Branch("Flags", &flags, "Flags/i");
 
   if (has_waveform) {
-    samples = new std::vector<UShort_t>();
+    samples = new TArrayS();
     tree->Branch("WaveformCode", &waveform_code, "WaveformCode/b");
     tree->Branch("NumSamples", &num_samples, "NumSamples/i");
     tree->Branch("Samples", &samples);
@@ -224,4 +224,83 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   std::cout << "Output saved to: " << output_filename << std::endl;
 
   return global_header;
+}
+
+Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
+                                           const TString output_name,
+                                           Bool_t corrections_enabled) {
+  if (gSystem->AccessPathName("root_files")) {
+    gSystem->mkdir("root_files", kTRUE);
+  }
+
+  if (gSystem->AccessPathName(input_filename)) {
+    std::cout << "Error: Input file does not exist: " << input_filename
+              << std::endl;
+    return kFALSE;
+  }
+
+  TString output_filename = "root_files/" + output_name + "_raw.root";
+
+  WaveDump742Reader reader(corrections_enabled);
+
+  if (!reader.Open(input_filename.Data())) {
+    std::cout << "Error: Failed to open WaveDump binary file" << std::endl;
+    return kFALSE;
+  }
+
+  std::cout << "Corrections: " << (corrections_enabled ? "enabled" : "disabled")
+            << std::endl;
+
+  TFile *outfile = new TFile(output_filename, "RECREATE");
+  if (!outfile || outfile->IsZombie()) {
+    std::cout << "Error: Could not create output file " << output_filename
+              << std::endl;
+    reader.Close();
+    return kFALSE;
+  }
+
+  TTree *tree = new TTree("Data_R", "WaveDump 742 Binary Data");
+
+  UInt_t channel_br, event_counter, trigger_time_tag;
+  TArrayS *samples = nullptr;
+
+  tree->Branch("Channel", &channel_br, "Channel/i");
+  tree->Branch("EventCounter", &event_counter, "EventCounter/i");
+  tree->Branch("TriggerTimeTag", &trigger_time_tag, "TriggerTimeTag/i");
+  samples = new TArrayS();
+  tree->Branch("Samples", &samples);
+
+  Long64_t event_count = 0;
+
+  std::cout << "Reading events..." << std::endl;
+
+  while (reader.ReadEvent()) {
+    const WaveDump742Data &event = reader.GetCurrentEvent();
+
+    channel_br = event.channel;
+    event_counter = event.event_counter;
+    trigger_time_tag = event.group_trigger_time_tag;
+    *samples = event.samples;
+
+    tree->Fill();
+    event_count++;
+  }
+
+  std::cout << "Conversion complete." << std::endl;
+  std::cout << "Total events processed: " << event_count << std::endl;
+  std::cout << "Samples per event: "
+            << (event_count > 0 ? samples->GetSize() : 0) << std::endl;
+  std::cout << "Total bytes read: " << reader.GetBytesRead() << std::endl;
+
+  outfile->cd();
+  tree->Write("", TObject::kOverwrite);
+  outfile->Close();
+  reader.Close();
+
+  delete outfile;
+  delete samples;
+
+  std::cout << "Output saved to: " << output_filename << std::endl;
+
+  return kTRUE;
 }

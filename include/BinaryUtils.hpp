@@ -1,6 +1,7 @@
 #ifndef BINARYUTILS_H
 #define BINARYUTILS_H
 
+#include <TArrayS.h>
 #include <TROOT.h>
 #include <TString.h>
 #include <TSystem.h>
@@ -100,7 +101,7 @@ public:
   UInt_t flags;
   UChar_t waveform_code;
   UInt_t num_samples;
-  std::vector<UShort_t> samples;
+  TArrayS samples;
 
   Bool_t hasEnergyCh() const { return (header & 0x0001); }
   Bool_t hasEnergyCal() const { return (header & 0x0002); }
@@ -171,7 +172,7 @@ public:
   UInt_t group_trigger_time_tag;
   UInt_t dc_offset;
   UInt_t start_index_cell;
-  std::vector<UShort_t> samples;
+  TArrayS samples;
 
   void Print() const;
 
