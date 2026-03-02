@@ -277,6 +277,14 @@ Bool_t WaveDump742Reader::ReadEvent() {
 
   UInt_t headers[8];
   file.read(reinterpret_cast<char *>(headers), 8 * sizeof(UInt_t));
+  if (file.fail()) {
+    if (file.gcount() > 0) {
+      std::cerr << "Warning: Incomplete event header at byte " << bytes_read
+                << " (" << file.gcount() << " of " << 8 * sizeof(UInt_t)
+                << " header bytes read, truncated file)" << std::endl;
+    }
+    return kFALSE;
+  }
   bytes_read += 8 * sizeof(UInt_t);
 
   current_event.event_size = headers[0];
@@ -288,6 +296,12 @@ Bool_t WaveDump742Reader::ReadEvent() {
   current_event.dc_offset = headers[6];
   current_event.start_index_cell = headers[7];
 
+  if (current_event.event_size < 8) {
+    std::cerr << "Error: Invalid event_size " << current_event.event_size
+              << " at event " << current_event.event_counter << std::endl;
+    return kFALSE;
+  }
+
   UInt_t sample_size = current_event.event_size - 8;
 
   current_event.samples.resize(sample_size);
@@ -296,6 +310,12 @@ Bool_t WaveDump742Reader::ReadEvent() {
     std::vector<Float_t> float_samples(sample_size);
     file.read(reinterpret_cast<char *>(float_samples.data()),
               sample_size * sizeof(Float_t));
+    if (file.fail()) {
+      std::cerr << "Warning: Incomplete event at byte " << bytes_read
+                << " (truncated file, event " << current_event.event_counter
+                << " discarded)" << std::endl;
+      return kFALSE;
+    }
     for (UInt_t i = 0; i < sample_size; i++) {
       current_event.samples[i] = static_cast<UShort_t>(float_samples[i]);
     }
@@ -303,6 +323,12 @@ Bool_t WaveDump742Reader::ReadEvent() {
     std::vector<UInt_t> int_samples(sample_size);
     file.read(reinterpret_cast<char *>(int_samples.data()),
               sample_size * sizeof(UInt_t));
+    if (file.fail()) {
+      std::cerr << "Warning: Incomplete event at byte " << bytes_read
+                << " (truncated file, event " << current_event.event_counter
+                << " discarded)" << std::endl;
+      return kFALSE;
+    }
     for (UInt_t i = 0; i < sample_size; i++) {
       current_event.samples[i] = int_samples[i] & 0xFFF;
     }
