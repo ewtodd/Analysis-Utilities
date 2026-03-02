@@ -112,7 +112,8 @@ Calling `InitUtils::SetROOTPreferences()` takes care of this and is recommended.
 **Annotations**:
 - `AddLegend(x1, x2, y1, y2)` - Returns a drawn `TLegend` with consistent font/border styling.
 Note: argument order is the extremely sane `(x1, x2, y1, y2)`, not the ROOT default `(x1, y1, x2, y2)`.
-- `AddText(label, x, y, angle)` - Returns a drawn `TLatex` in NDC coordinates for arbitrary annotations (e.g. subplot labels like "(a)", "(b)", or any other text). Optional `angle` (default 0) sets text rotation in degrees.
+- `AddText(label, x, y, angle)` - Returns a drawn `TLatex` in NDC coordinates for arbitrary annotations (e.g. subplot labels like "(a)", "(b)", or any other text).
+Optional `angle` (default 0) sets text rotation in degrees.
 <!---->
 **Output**:
 - `SaveFigure(canvas, name, PlotSaveOptions)` - Saves to `plots/` directory using the format set in `SetStylePreferences`.
@@ -171,9 +172,9 @@ in
 <!---->
 ```python
 from analysis_utils import load_cpp_library
-
+#
 ROOT = load_cpp_library()
-
+#
 ROOT.PlottingUtils.SetStylePreferences(ROOT.PlotSaveFormat.kPNG)
 c = ROOT.PlottingUtils.GetConfiguredCanvas(False)
 # Use ROOT.PlottingUtils.ConfigureGraph, ConfigureHistogram, etc.
@@ -186,17 +187,17 @@ It handles type detection, TChain construction for multiple files, and optional 
 <!---->
 ```python
 from analysis_utils.io import load_tree_data
-
+#
 # Load scalar branches into a DataFrame
 df = load_tree_data("output.root", tree_name="features")
-
+#
 # Load from multiple files with event limit
 df = load_tree_data(
     ["run1.root", "run2.root"],
     tree_name="features",
     max_events=50000,
 )
-
+#
 # Load waveforms alongside scalar data
 df, waveforms = load_tree_data(
     "output.root",
@@ -220,5 +221,5 @@ Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `Bo
 ## Roadmap
 <!---->
 - [x] Implement support for converting CoMPASS binary files to ROOT
-- [ ] Implement support for converting WaveDump binary files to ROOT (742 family digitizers only) - implemented, but as of now untested.
+- [x] Implement support for converting WaveDump binary files to ROOT (742 family digitizers only) - implemented.
 - [ ] Implement support for converting CoMPASS CSV files to ROOT
