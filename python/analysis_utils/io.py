@@ -1,8 +1,32 @@
 """Generic TTree to numpy/pandas loader for waveform analysis."""
 
+import array as _array
+
 import numpy as np
 import pandas as pd
 import ROOT
+
+# ROOT type name -> (array.array typecode, numpy dtype)
+_TYPE_MAP = {
+    "Float_t": ("f", np.float32),
+    "float": ("f", np.float32),
+    "Double_t": ("d", np.float64),
+    "double": ("d", np.float64),
+    "Long64_t": ("q", np.int64),
+    "long long": ("q", np.int64),
+    "ULong64_t": ("Q", np.uint64),
+    "unsigned long long": ("Q", np.uint64),
+    "Int_t": ("i", np.int32),
+    "int": ("i", np.int32),
+    "UInt_t": ("I", np.uint32),
+    "unsigned int": ("I", np.uint32),
+    "Short_t": ("h", np.int16),
+    "short": ("h", np.int16),
+    "UShort_t": ("H", np.uint16),
+    "unsigned short": ("H", np.uint16),
+    "UChar_t": ("B", np.uint8),
+    "unsigned char": ("B", np.uint8),
+}
 
 
 def load_tree_data(
@@ -77,34 +101,21 @@ def load_tree_data(
                 f"Branch '{array_branch}' not found in tree '{tree_name}'")
         chain.SetBranchStatus(array_branch, 1)
 
-    # Set up branch addresses for scalars
+    # Set up branch addresses for scalars using array.array
+    # (numpy buffers don't work with PyROOT for all types)
     buffers = {}
+    np_dtypes = {}
     for name in scalar_branches:
         leaf = chain.GetBranch(name).GetLeaf(name)
         type_name = leaf.GetTypeName()
 
-        if type_name in ("Float_t", "float"):
-            buf = np.zeros(1, dtype=np.float32)
-        elif type_name in ("Double_t", "double"):
-            buf = np.zeros(1, dtype=np.float64)
-        elif type_name in ("Long64_t", "long long"):
-            buf = np.zeros(1, dtype=np.int64)
-        elif type_name in ("ULong64_t", "unsigned long long"):
-            buf = np.zeros(1, dtype=np.uint64)
-        elif type_name in ("Int_t", "int"):
-            buf = np.zeros(1, dtype=np.int32)
-        elif type_name in ("UInt_t", "unsigned int"):
-            buf = np.zeros(1, dtype=np.uint32)
-        elif type_name in ("Short_t", "short"):
-            buf = np.zeros(1, dtype=np.int16)
-        elif type_name in ("UShort_t", "unsigned short"):
-            buf = np.zeros(1, dtype=np.uint16)
-        elif type_name in ("UChar_t", "unsigned char"):
-            buf = np.zeros(1, dtype=np.uint8)
-        elif type_name in ("Bool_t", "bool"):
-            buf = np.zeros(1, dtype=np.bool_)
-        else:
-            buf = np.zeros(1, dtype=np.float64)
+        entry = _TYPE_MAP.get(type_name)
+        if entry is None:
+            print(f"Warning: skipping branch '{name}' (unsupported type '{type_name}')")
+            continue
+        typecode, dt = entry
+        buf = _array.array(typecode, [0])
+        np_dtypes[name] = dt
 
         chain.SetBranchAddress(name, buf)
         buffers[name] = buf
@@ -128,8 +139,8 @@ def load_tree_data(
 
     # Pre-allocate scalar output arrays
     scalar_data = {
-        name: np.empty(n_to_read, dtype=buf.dtype)
-        for name, buf in buffers.items()
+        name: np.empty(n_to_read, dtype=np_dtypes[name])
+        for name in buffers
     }
 
     read_count = 0
@@ -149,8 +160,9 @@ def load_tree_data(
 
         if array_branch:
             # Bulk copy via buffer protocol instead of per-element At()
-            waveforms[read_count] = np.frombuffer(
-                arr_obj.GetArray(), dtype=arr_dtype, count=wf_size)
+            waveforms[read_count] = np.frombuffer(arr_obj.GetArray(),
+                                                  dtype=arr_dtype,
+                                                  count=wf_size)
 
         read_count += 1
         entry_idx += 1
