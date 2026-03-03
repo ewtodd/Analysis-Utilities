@@ -328,14 +328,12 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                        "short_integral/F");
   output_tree_->Branch("long_integral", &current_features_.long_integral,
                        "long_integral/F");
-  output_tree_->Branch("passes_cuts", &current_features_.passes_cuts,
-                       "passes_cuts/O");
   output_tree_->Branch("timestamp", &current_features_.timestamp,
                        "timestamp/l");
 
   if (store_waveforms_) {
     output_tree_->Branch("Samples", &save_waveform_);
-    std::cout << "Storing waveforms that pass cuts." << std::endl;
+    std::cout << "Storing events that pass cuts." << std::endl;
   }
 
   TFile *file = TFile::Open(filepath, "READ");
