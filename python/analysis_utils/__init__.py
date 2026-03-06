@@ -2,8 +2,6 @@
 
 __version__ = "@VERSION@"
 
-#from analysis_utils.fitting import FitResult, PeakFitResult, UnbinnedFit
-
 _cpp_loaded = False
 
 
