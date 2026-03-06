@@ -1,12 +1,12 @@
-"""Generic TTree to numpy/pandas loader for waveform analysis."""
-
 import array as _array
+import os
 
 import numpy as np
 import pandas as pd
 import ROOT
 
-# ROOT type name -> (array.array typecode, numpy dtype)
+_DEFAULT_CACHE_DIR = "df_cache"
+
 _TYPE_MAP = {
     "Float_t": ("f", np.float32),
     "float": ("f", np.float32),
@@ -29,14 +29,31 @@ _TYPE_MAP = {
 }
 
 
+def _cache_key(root_files, tree_name):
+    """Build a cache filename from the ROOT file paths and tree name."""
+    base = "_".join(
+        os.path.splitext(os.path.basename(p))[0] for p in root_files)
+    return f"{base}_{tree_name}"
+
+
+def _newest_mtime(root_files):
+    """Return the newest modification time among root_files."""
+    return max(os.path.getmtime(p) for p in root_files)
+
+
 def load_tree_data(
     root_files,
     tree_name="features",
     scalar_branches=None,
     array_branch=None,
     max_events=None,
+    cache_dir=_DEFAULT_CACHE_DIR,
 ):
     """Load TTree data into numpy arrays and pandas DataFrame.
+
+    Results are cached as pickle (DataFrame) and .npy (waveform array)
+    files inside cache_dir.  The cache is invalidated when
+    any source ROOT file is newer than the cached file.
 
     Parameters
     ----------
@@ -46,11 +63,15 @@ def load_tree_data(
         Name of the TTree to read.
     scalar_branches : list of str or None
         Scalar branch names to load. If None, auto-detects all
-        scalar (non-array) branches.
+        scalar (non-array) branches.  Caching requires all branches
+        (i.e. scalar_branches=None).
     array_branch : str or None
         Name of a TArrayF/TArrayS branch to load as a 2-D numpy array.
     max_events : int or None
         Maximum number of events to load.
+    cache_dir : str or None
+        Directory for cached DataFrames.  Set to None to disable
+        caching.  Defaults to "df_cache" (relative to cwd).
 
     Returns
     -------
@@ -63,6 +84,29 @@ def load_tree_data(
     if isinstance(root_files, str):
         root_files = [root_files]
 
+    use_cache = cache_dir is not None
+    if use_cache and scalar_branches is not None:
+        raise ValueError(
+            "Caching requires loading all branches (scalar_branches=None). "
+            "Either omit scalar_branches or set cache_dir=None.")
+
+    if use_cache:
+        os.makedirs(cache_dir, exist_ok=True)
+        key = _cache_key(root_files, tree_name)
+        pkl_path = os.path.join(cache_dir, f"{key}.pkl")
+        npy_path = os.path.join(cache_dir, f"{key}.npy")
+
+        if os.path.exists(pkl_path):
+            src_mtime = _newest_mtime(root_files)
+            if src_mtime <= os.path.getmtime(pkl_path):
+                print(f"Loading cached DataFrame: {pkl_path}")
+                df = pd.read_pickle(pkl_path)
+                if array_branch:
+                    wf = np.load(npy_path) if os.path.exists(
+                        npy_path) else None
+                    return df, wf
+                return df
+
     chain = ROOT.TChain(tree_name)
     for path in root_files:
         if chain.Add(path) == 0:
@@ -72,7 +116,6 @@ def load_tree_data(
     if n_total == 0:
         raise ValueError(f"TChain is empty (files: {root_files})")
 
-    # Auto-detect scalar branches if not specified
     if scalar_branches is None:
         scalar_branches = []
         branch_list = chain.GetListOfBranches()
@@ -87,7 +130,6 @@ def load_tree_data(
     else:
         n_to_read = n_total
 
-    # Disable all branches, then enable only the ones we need
     chain.SetBranchStatus("*", 0)
     for name in scalar_branches:
         br = chain.GetBranch(name)
@@ -101,8 +143,6 @@ def load_tree_data(
                 f"Branch '{array_branch}' not found in tree '{tree_name}'")
         chain.SetBranchStatus(array_branch, 1)
 
-    # Set up branch addresses for scalars using array.array
-    # (numpy buffers don't work with PyROOT for all types)
     buffers = {}
     np_dtypes = {}
     for name in scalar_branches:
@@ -111,7 +151,9 @@ def load_tree_data(
 
         entry = _TYPE_MAP.get(type_name)
         if entry is None:
-            print(f"Warning: skipping branch '{name}' (unsupported type '{type_name}')")
+            print(
+                f"Warning: skipping branch '{name}' (unsupported type '{type_name}')"
+            )
             continue
         typecode, dt = entry
         buf = _array.array(typecode, [0])
@@ -120,7 +162,6 @@ def load_tree_data(
         chain.SetBranchAddress(name, buf)
         buffers[name] = buf
 
-    # Set up array branch (detect TArrayF vs TArrayS from branch)
     if array_branch:
         br_class = chain.GetBranch(array_branch).GetClassName()
         if "TArrayS" in br_class:
@@ -130,14 +171,12 @@ def load_tree_data(
             arr_obj = ROOT.TArrayF()
             arr_dtype = np.float32
         chain.SetBranchAddress(array_branch, arr_obj)
-        # Read first entry to determine waveform size
         chain.GetEntry(0)
         wf_size = arr_obj.GetSize()
         waveforms = np.empty((n_to_read, wf_size), dtype=arr_dtype)
     else:
         waveforms = None
 
-    # Pre-allocate scalar output arrays
     scalar_data = {
         name: np.empty(n_to_read, dtype=np_dtypes[name])
         for name in buffers
@@ -159,7 +198,6 @@ def load_tree_data(
             scalar_data[name][read_count] = buf[0]
 
         if array_branch:
-            # Bulk copy via buffer protocol instead of per-element At()
             waveforms[read_count] = np.frombuffer(arr_obj.GetArray(),
                                                   dtype=arr_dtype,
                                                   count=wf_size)
@@ -167,7 +205,6 @@ def load_tree_data(
         read_count += 1
         entry_idx += 1
 
-    # Trim arrays if we read fewer than expected
     if read_count < n_to_read:
         for name in scalar_data:
             scalar_data[name] = scalar_data[name][:read_count]
@@ -175,6 +212,13 @@ def load_tree_data(
             waveforms = waveforms[:read_count]
 
     features_df = pd.DataFrame(scalar_data)
+
+    if use_cache:
+        features_df.to_pickle(pkl_path)
+        print(f"Cached DataFrame to {pkl_path}")
+        if waveforms is not None:
+            np.save(npy_path, waveforms)
+            print(f"Cached waveforms to {npy_path}")
 
     if array_branch:
         return features_df, waveforms

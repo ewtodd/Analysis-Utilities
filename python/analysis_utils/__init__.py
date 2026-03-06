@@ -10,8 +10,8 @@ _cpp_loaded = False
 def load_cpp_library():
     """Load the C++ Analysis-Utilities library into ROOT.
 
-    After calling this, ROOT.PlottingUtils, ROOT.PlotSaveFormat,
-    and ROOT.PlotSaveOptions are available.
+    After calling this, ROOT.PlottingUtils, ROOT.InitUtils,
+    ROOT.PlotSaveFormat, and ROOT.PlotSaveOptions are available.
 
     Returns:
         ROOT module (for convenience)
@@ -25,6 +25,7 @@ def load_cpp_library():
                 "Could not load lib-analysis-utils.so. "
                 "Make sure LD_LIBRARY_PATH includes the library directory.")
         ROOT.gInterpreter.Declare('#include "PlottingUtils.hpp"')
+        ROOT.gInterpreter.Declare('#include "InitUtils.hpp"')
         _cpp_loaded = True
 
     return ROOT

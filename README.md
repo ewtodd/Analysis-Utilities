@@ -184,11 +184,13 @@ c = ROOT.PlottingUtils.GetConfiguredCanvas(False)
 <!---->
 `load_tree_data()` reads ROOT TTrees into pandas DataFrames and numpy arrays.
 It handles type detection, TChain construction for multiple files, and optional waveform array branches.
+Results are automatically cached to disk (as pickle/npy files) so that subsequent loads skip the ROOT I/O entirely.
+The cache is invalidated when any source ROOT file is newer than the cached file.
 <!---->
 ```python
 from analysis_utils.io import load_tree_data
 #
-# Load scalar branches into a DataFrame
+# Load scalar branches into a DataFrame (cached to df_cache/ by default)
 df = load_tree_data("output.root", tree_name="features")
 #
 # Load from multiple files with event limit
@@ -205,18 +207,22 @@ df, waveforms = load_tree_data(
     array_branch="waveform",
 )
 # waveforms is a 2-D numpy array with shape (n_events, n_samples)
+#
+# Disable caching
+df = load_tree_data("output.root", cache_dir=None)
 ```
 <!---->
 **Parameters**:
 - `root_files` - Path or list of paths to ROOT files (combined via TChain)
 - `tree_name` - TTree name (default: `"features"`)
-- `scalar_branches` - Branch names to load, or `None` to auto-detect all scalar branches
+- `scalar_branches` - Branch names to load, or `None` to auto-detect all scalar branches. Caching requires `None` (all branches); pass `cache_dir=None` if you need a subset.
 - `array_branch` - Name of a `TArrayF`/`TArrayS` branch to load as a 2-D numpy array
 - `max_events` - Cap on number of events to read
+- `cache_dir` - Directory for cached files (default: `"df_cache"`). Set to `None` to disable caching.
 <!---->
 **Returns** a `pandas.DataFrame` of scalar data. If `array_branch` is specified, returns a tuple of `(DataFrame, numpy.ndarray)`.
 <!---->
-Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `Bool_t`.
+Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `UShort_t`, `Long64_t`, `ULong64_t`, `UChar_t`.
 <!---->
 ## Roadmap
 <!---->
