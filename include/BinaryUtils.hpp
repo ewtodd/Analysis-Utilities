@@ -2,6 +2,7 @@
 #define BINARYUTILS_H
 
 #include <TArrayS.h>
+#include <TMath.h>
 #include <TROOT.h>
 #include <TString.h>
 #include <TSystem.h>

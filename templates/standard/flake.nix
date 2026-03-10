@@ -1,7 +1,7 @@
 {
   description = "ROOT Analysis Development Environment";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     utils.url = "github:ewtodd/Analysis-Utilities";
   };
@@ -28,21 +28,12 @@
           buildInputs = with pkgs; [
             analysis-utils
             root
-            bash
           ];
           shellHook = ''
-            export SHELL="${pkgs.bash}/bin/bash"
-            echo "ROOT version: $(root-config --version)"
             echo "Analysis-Utilities version: ${analysis-utils.version}"
-            STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
-            STDLIB_MACHINE_PATH="$STDLIB_PATH/${pkgs.stdenv.hostPlatform.config}"
-            ROOT_INC="$(root-config --incdir)"
-            # Local first, then remote, then others
-            export CPLUS_INCLUDE_PATH="$PWD/include:$STDLIB_PATH:$STDLIB_MACHINE_PATH:${analysis-utils}/include:$ROOT_INC''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
-            export PKG_CONFIG_PATH="${analysis-utils}/lib/pkgconfig:$PKG_CONFIG_PATH"
-            export ROOT_INCLUDE_PATH="$PWD/include:${analysis-utils}/include''${ROOT_INCLUDE_PATH:+:$ROOT_INCLUDE_PATH}"
-            # Local lib first means linker will use it preferentially
-            export LD_LIBRARY_PATH="$PWD/lib:${analysis-utils}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            export CPLUS_INCLUDE_PATH="$PWD/include''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+            export ROOT_INCLUDE_PATH="$PWD/include''${ROOT_INCLUDE_PATH:+:$ROOT_INCLUDE_PATH}"
+            export LD_LIBRARY_PATH="$PWD/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           '';
         };
       }

@@ -41,9 +41,16 @@ $(SHAREDLIB): $(OBJECTS) | $(LIBDIR)
 $(STATICLIB): $(OBJECTS) | $(LIBDIR)
 	ar rcs $@ $^
 	@echo "Built static library: $(STATICLIB)"
-# Install target (for manual installation, Nix handles this differently)
+PREFIX ?= /usr/local
+
 install: $(SHAREDLIB) $(STATICLIB)
-	@echo "Use 'nix build' to install via Nix"
+	install -d $(PREFIX)/lib $(PREFIX)/include $(PREFIX)/lib/pkgconfig
+	install -m755 $(SHAREDLIB) $(PREFIX)/lib/
+	install -m644 $(STATICLIB) $(PREFIX)/lib/
+	install -m644 $(HEADERS) $(PREFIX)/include/
+	sed -e 's|@PREFIX@|$(PREFIX)|g' \
+	    -e 's|@LIBNAME@|$(LIBNAME)|g' \
+	    analysis-utilities.pc.in > $(PREFIX)/lib/pkgconfig/analysis-utilities.pc
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR)
 .PHONY: all install clean
