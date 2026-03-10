@@ -18,12 +18,19 @@ Ensure [flakes are enabled](https://nixos.wiki/wiki/Flakes#Enable_flakes_permane
 In a new project directory:
 <!---->
 ```bash
+# C++ template (default) — ROOT + compiled libraries
 nix flake init -t github:ewtodd/Analysis-Utilities --refresh
 nix develop
 ```
 <!---->
 This creates a development environment with access to the libraries.
 Compile local code with the included Makefile and run macros with `root -l macro.cpp+`.
+<!---->
+```bash
+# Python template — includes analysis-utils Python package and ML libraries
+nix flake init -t github:ewtodd/Analysis-Utilities#python --refresh
+nix develop
+```
 <!---->
 ## Modules
 <!---->

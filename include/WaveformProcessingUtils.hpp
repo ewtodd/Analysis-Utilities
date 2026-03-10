@@ -5,6 +5,7 @@
 #include <TArrayF.h>
 #include <TArrayS.h>
 #include <TFile.h>
+#include <TMath.h>
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TTree.h>

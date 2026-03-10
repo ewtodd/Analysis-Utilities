@@ -2,7 +2,7 @@
   description = "Nuclear Measurement Utilities";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -16,7 +16,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "26.3.6";
+        version = "26.3.10";
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
           inherit version;
@@ -37,48 +37,9 @@
             root
           ];
 
-          buildPhase = ''
-            make
+          installPhase = ''
+            make install PREFIX=$out
           '';
-
-          installPhase =
-            let
-              sharedExt = if pkgs.stdenv.hostPlatform.isDarwin then "dylib" else "so";
-            in
-            ''
-              mkdir -p $out/{lib,include}
-
-              if [ -d lib ] && [ -n "$(ls -A lib/*.${sharedExt} 2>/dev/null)" ]; then
-                cp lib/*.${sharedExt} $out/lib/
-              else
-                echo "ERROR: No shared libraries found in lib/"
-                exit 1
-              fi
-
-              if [ -d lib ] && [ -n "$(ls -A lib/*.a 2>/dev/null)" ]; then
-                cp lib/*.a $out/lib/
-              fi
-
-              if [ -d include ] && [ -n "$(ls -A include/*.hpp 2>/dev/null)" ]; then
-                cp include/*.hpp $out/include/
-              else
-                echo "ERROR: No headers found in include/"
-                exit 1
-              fi
-
-              mkdir -p $out/lib/pkgconfig
-              cat > $out/lib/pkgconfig/analysis-utilities.pc <<EOF
-              prefix=$out
-              exec_prefix=''${prefix}
-              libdir=''${exec_prefix}/lib
-              includedir=''${prefix}/include
-
-              Name: analysis-utilities 
-              Description: Analysis Utilities for Nuclear Measurements 
-              Libs: -L''${libdir} -lanalysis-utilities
-              Cflags: -I''${includedir}
-              EOF
-            '';
 
           postFixup = pkgs.lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
             for lib in $out/lib/*.so; do
@@ -88,7 +49,7 @@
             done
           '';
 
-          propagatedBuildInputs = [ pkgs.root ];
+          setupHook = ./setup-hook.sh;
         };
         pythonPackage = pkgs.python3Packages.buildPythonPackage {
           pname = "analysis-utils";
@@ -136,12 +97,9 @@
           shellHook = ''
             export SHELL="${pkgs.bash}/bin/bash"
             echo "Development environment for working on the analysis utilities source"
-            STDLIB_PATH="${pkgs.stdenv.cc.cc}/include/c++/${pkgs.stdenv.cc.cc.version}"
-            STDLIB_MACHINE_PATH="$STDLIB_PATH/${pkgs.stdenv.hostPlatform.config}"
-            # Build include path in correct order: stdlib -> project -> ROOT
-            export CPLUS_INCLUDE_PATH="$STDLIB_PATH:$STDLIB_MACHINE_PATH:$PWD/include:$(root-config --incdir):$CPLUS_INCLUDE_PATH"
-            export ROOT_INCLUDE_PATH="$PWD/include:$(root-config --incdir)"
-            export LD_LIBRARY_PATH="$PWD/lib:$LD_LIBRARY_PATH"
+            export CPLUS_INCLUDE_PATH="$PWD/include''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+            export ROOT_INCLUDE_PATH="$PWD/include:${pkgs.root}/include"
+            export LD_LIBRARY_PATH="$PWD/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           '';
         };
       }
@@ -157,6 +115,14 @@
           '';
         };
         standard = self.templates.default;
+        python = {
+          path = ./templates/python;
+          description = "Python analysis development environment with analysis-utils and ML libraries.";
+          welcomeText = ''
+            Run `nix develop` to enter the development environment.
+            The analysis-utils Python package and PlottingUtils bridge are available out of the box.
+          '';
+        };
       };
     };
 }

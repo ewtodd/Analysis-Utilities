@@ -17,6 +17,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         analysis-utils = utils.packages.${system}.default;
+        analysis-utils-py = utils.packages.${system}.pythonPackage;
       in
       {
         devShells.default = pkgs.mkShell {
@@ -28,6 +29,14 @@
           buildInputs = with pkgs; [
             analysis-utils
             root
+            (python3.withPackages (
+              python-pkgs: with python-pkgs; [
+                numpy
+                pandas
+                matplotlib
+                analysis-utils-py
+              ]
+            ))
           ];
           shellHook = ''
             echo "Analysis-Utilities version: ${analysis-utils.version}"
