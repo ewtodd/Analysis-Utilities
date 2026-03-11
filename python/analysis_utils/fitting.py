@@ -9,6 +9,7 @@ from functools import partial
 import numpy as np
 from scipy.integrate import quad
 from scipy.special import erfc
+from iminuit import Minuit, cost
 
 _SQRT2 = np.sqrt(2.0)
 
