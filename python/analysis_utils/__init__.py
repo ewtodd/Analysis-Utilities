@@ -23,6 +23,7 @@ def load_cpp_library():
                 "Could not load lib-analysis-utils.so. "
                 "Make sure LD_LIBRARY_PATH includes the library directory.")
         ROOT.gInterpreter.Declare('#include "PlottingUtils.hpp"')
+        ROOT.gInterpreter.Declare('#include "FittingUtils.hpp"')
         ROOT.gInterpreter.Declare('#include "InitUtils.hpp"')
         _cpp_loaded = True
 
