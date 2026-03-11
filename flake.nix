@@ -16,7 +16,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "26.3.10";
+        version = "26.3.11";
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
           inherit version;

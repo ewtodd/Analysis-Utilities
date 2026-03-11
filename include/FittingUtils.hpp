@@ -60,10 +60,6 @@ private:
   Bool_t use_manual_init_;
   std::vector<Double_t> manual_params_;
 
-  void PlotFitSinglePeak(const TString input_name, const TString peak_name);
-  void PlotFitDoublePeak(const TString input_name, const TString peak_name);
-  void PlotFitTriplePeak(const TString input_name, const TString peak_name);
-
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
 
@@ -99,6 +95,13 @@ public:
   }
 
   TF1 *GetFitFunction() { return fit_function_; }
+  void SetFitFunction(TF1 *func) { fit_function_ = func; }
+
+  void PlotFitSinglePeak(const TString input_name, const TString peak_name,
+                         const TString label = "");
+  void PlotFitDoublePeak(const TString input_name, const TString peak_name,
+                         const TString label = "");
+  void PlotFitTriplePeak(const TString input_name, const TString peak_name);
 
   FitResult FitSinglePeak(const TString input_name, const TString peak_name);
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,

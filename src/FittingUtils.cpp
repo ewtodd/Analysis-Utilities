@@ -439,7 +439,8 @@ void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
 }
 
 void FittingUtils::PlotFitSinglePeak(const TString input_name,
-                                     const TString peak_name) {
+                                     const TString peak_name,
+                                     const TString label) {
   TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
@@ -578,12 +579,16 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
+  if (label.Length() > 0) {
+    PlottingUtils::AddText(label, 0.85, 0.85);
+  }
   PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
                             PlotSaveOptions::kLOG);
 }
 
 void FittingUtils::PlotFitDoublePeak(const TString input_name,
-                                     const TString peak_name) {
+                                     const TString peak_name,
+                                     const TString label) {
   TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
@@ -758,6 +763,9 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
+  if (label.Length() > 0) {
+    PlottingUtils::AddText(label, 0.85, 0.85);
+  }
   PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
                             PlotSaveOptions::kLOG);
 }

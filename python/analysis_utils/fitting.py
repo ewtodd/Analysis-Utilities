@@ -4,14 +4,32 @@ Ports the C++ FittingFunctions namespace from FittingUtils.cpp.
 All functions accept numpy arrays or scalars for x; parameters are scalars.
 """
 
+import pickle
 from functools import partial
+from pathlib import Path
 
 import numpy as np
 from scipy.integrate import quad
 from scipy.special import erfc
 from iminuit import Minuit, cost
 
+import ROOT
+
 _SQRT2 = np.sqrt(2.0)
+
+_SINGLE_PEAK_PARAM_ORDER = [
+    "mu", "sigma", "gaus_amp", "step_amp", "low_exp_amp", "low_exp_decay",
+    "low_lin_amp", "low_lin_slope", "high_exp_amp", "high_exp_decay",
+    "bkg_constant", "lin_bkg_slope"
+]
+
+_DOUBLE_PEAK_PARAM_ORDER = [
+    "mu1", "sigma1", "gaus_amp1", "step_amp1", "low_exp_amp1",
+    "low_exp_decay1", "low_lin_amp1", "low_lin_slope1", "high_exp_amp1",
+    "high_exp_decay1", "mu2", "sigma2", "gaus_amp2", "step_amp2",
+    "low_exp_amp2", "low_exp_decay2", "low_lin_amp2", "low_lin_slope2",
+    "high_exp_amp2", "high_exp_decay2", "bkg_constant", "lin_bkg_slope"
+]
 
 
 def _gaussian(x, mu, sigma, amplitude):
@@ -411,30 +429,24 @@ def estimate_triple_peak_params(data,
     return values, limits, fixed
 
 
-def _single_peak_pdf(fit_range_low, fit_range_high, quad_limit, x, mu, sigma,
-                     gaus_amp, step_amp, low_exp_amp, low_exp_decay,
-                     low_lin_amp, low_lin_slope, high_exp_amp, high_exp_decay,
-                     bkg_constant, lin_bkg_slope):
+def _single_peak_pdf(fit_range_low, fit_range_high, x, mu, sigma, gaus_amp,
+                     step_amp, low_exp_amp, low_exp_decay, low_lin_amp,
+                     low_lin_slope, high_exp_amp, high_exp_decay, bkg_constant,
+                     lin_bkg_slope):
     args = (mu, sigma, gaus_amp, step_amp, low_exp_amp, low_exp_decay,
             low_lin_amp, low_lin_slope, high_exp_amp, high_exp_decay,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=args,
-                   limit=quad_limit,
-                   epsabs=1e-10,
-                   epsrel=1e-8)
+    norm, _ = quad(_peak_function, fit_range_low, fit_range_high, args=args)
     return _peak_function(x, *args) / norm
 
 
-def _double_peak_pdf(fit_range_low, fit_range_high, quad_limit, x, mu1, sigma1,
-                     gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
-                     low_lin_amp1, low_lin_slope1, high_exp_amp1,
-                     high_exp_decay1, mu2, sigma2, gaus_amp2, step_amp2,
-                     low_exp_amp2, low_exp_decay2, low_lin_amp2,
-                     low_lin_slope2, high_exp_amp2, high_exp_decay2,
-                     bkg_constant, lin_bkg_slope):
+def _double_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
+                     step_amp1, low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                     low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
+                     sigma2, gaus_amp2, step_amp2, low_exp_amp2,
+                     low_exp_decay2, low_lin_amp2, low_lin_slope2,
+                     high_exp_amp2, high_exp_decay2, bkg_constant,
+                     lin_bkg_slope):
     args = (mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
             low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
             sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
@@ -443,21 +455,19 @@ def _double_peak_pdf(fit_range_low, fit_range_high, quad_limit, x, mu1, sigma1,
     norm, _ = quad(_double_peak_function,
                    fit_range_low,
                    fit_range_high,
-                   args=args,
-                   limit=quad_limit,
-                   epsabs=1e-10,
-                   epsrel=1e-8)
+                   args=args)
     return _double_peak_function(x, *args) / norm
 
 
-def _triple_peak_pdf(
-        fit_range_low, fit_range_high, quad_limit, x, mu1, sigma1, gaus_amp1,
-        step_amp1, low_exp_amp1, low_exp_decay1, low_lin_amp1, low_lin_slope1,
-        high_exp_amp1, high_exp_decay1, mu2, sigma2, gaus_amp2, step_amp2,
-        low_exp_amp2, low_exp_decay2, low_lin_amp2, low_lin_slope2,
-        high_exp_amp2, high_exp_decay2, mu3, sigma3, gaus_amp3, step_amp3,
-        low_exp_amp3, low_exp_decay3, low_lin_amp3, low_lin_slope3,
-        high_exp_amp3, high_exp_decay3, bkg_constant, lin_bkg_slope):
+def _triple_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
+                     step_amp1, low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                     low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
+                     sigma2, gaus_amp2, step_amp2, low_exp_amp2,
+                     low_exp_decay2, low_lin_amp2, low_lin_slope2,
+                     high_exp_amp2, high_exp_decay2, mu3, sigma3, gaus_amp3,
+                     step_amp3, low_exp_amp3, low_exp_decay3, low_lin_amp3,
+                     low_lin_slope3, high_exp_amp3, high_exp_decay3,
+                     bkg_constant, lin_bkg_slope):
     args = (mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
             low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
             sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
@@ -468,35 +478,223 @@ def _triple_peak_pdf(
     norm, _ = quad(_triple_peak_function,
                    fit_range_low,
                    fit_range_high,
-                   args=args,
-                   limit=quad_limit,
-                   epsabs=1e-10,
-                   epsrel=1e-8)
+                   args=args)
     return _triple_peak_function(x, *args) / norm
 
 
-def single_peak_pdf(fit_range_low, fit_range_high, quad_limit=50):
+def single_peak_pdf(fit_range_low, fit_range_high):
     """Return a normalized single-peak PDF for use with cost.UnbinnedNLL."""
-    return partial(_single_peak_pdf, fit_range_low, fit_range_high, quad_limit)
+    return partial(_single_peak_pdf, fit_range_low, fit_range_high)
 
 
-def double_peak_pdf(fit_range_low, fit_range_high, quad_limit=50):
+def double_peak_pdf(fit_range_low, fit_range_high):
     """Return a normalized double-peak PDF for use with cost.UnbinnedNLL."""
-    return partial(_double_peak_pdf, fit_range_low, fit_range_high, quad_limit)
+    return partial(_double_peak_pdf, fit_range_low, fit_range_high)
 
 
-def triple_peak_pdf(fit_range_low, fit_range_high, quad_limit=50):
+def triple_peak_pdf(fit_range_low, fit_range_high):
     """Return a normalized triple-peak PDF for use with cost.UnbinnedNLL."""
-    return partial(_triple_peak_pdf, fit_range_low, fit_range_high, quad_limit)
+    return partial(_triple_peak_pdf, fit_range_low, fit_range_high)
 
 
-def fit_single_peak(df_column, fit_range_low, fit_range_high, expected_mu):
+def plot_single_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
+                         input_name, peak_name):
+    """Plot a single-peak fit result using the C++ PlotFitSinglePeak.
+
+    Parameters
+    ----------
+    hist : ROOT.TH1
+        The histogram that was fitted.
+    minuit_result : iminuit.Minuit
+        Completed Minuit object from fit_single_peak.
+    fit_range_low, fit_range_high : float
+        Fit range boundaries.
+    input_name, peak_name : str
+        Labels passed to PlotFitSinglePeak for the output filename.
     """
-    Return a Minuit object after fitting with UnbinnedNLL cost function is completed. 
+    # Compute scale factor: N_events * bin_width / integral(peak_function)
+    # so the normalized PDF parameters match histogram counts.
+    bin_low = hist.FindBin(fit_range_low)
+    bin_high = hist.FindBin(fit_range_high)
+    n_events = hist.Integral(bin_low, bin_high)
+    bin_width = hist.GetBinWidth(1)
+
+    params = tuple(minuit_result.values[name]
+                   for name in _SINGLE_PEAK_PARAM_ORDER)
+    norm, _ = quad(_peak_function, fit_range_low, fit_range_high, args=params)
+    scale = n_events * bin_width / norm
+
+    # Indices of amplitude parameters (linear in the function value).
+    # Shape params (mu, sigma, exp_decay, lin_slope) are unchanged.
+    amp_indices = {2, 3, 4, 6, 8, 10, 11}
+
+    def _active(name):
+        return (not minuit_result.fixed[name]
+                and abs(minuit_result.values[name]) > 1e-6)
+
+    fitter = ROOT.FittingUtils(hist, fit_range_low, fit_range_high, False,
+                               _active("step_amp"), _active("low_exp_amp"),
+                               _active("low_lin_amp"), _active("high_exp_amp"))
+    tf1 = fitter.GetFitFunction()
+    for i, name in enumerate(_SINGLE_PEAK_PARAM_ORDER):
+        val = minuit_result.values[name]
+        err = minuit_result.errors[name]
+        if i in amp_indices:
+            val *= scale
+            err *= scale
+        tf1.SetParameter(i, val)
+        tf1.SetParError(i, err)
+        if minuit_result.fixed[name]:
+            tf1.FixParameter(i, val)
+
+    # Chi2/ndf from binned data
+    chi2 = 0.0
+    n_bins_used = 0
+    for i in range(bin_low, bin_high + 1):
+        observed = hist.GetBinContent(i)
+        x = hist.GetBinCenter(i)
+        expected = tf1.Eval(x)
+        if expected > 0:
+            chi2 += (observed - expected)**2 / expected
+            n_bins_used += 1
+    n_free = sum(1 for name in _SINGLE_PEAK_PARAM_ORDER
+                 if not minuit_result.fixed[name])
+    ndf = n_bins_used - n_free
+    if ndf > 0:
+        chi2_ndf = chi2 / ndf
+        chi2_label = f"#chi^{{2}}/ndf = {chi2_ndf:.3f}"
+        print(f"Chi2/ndf = {chi2:.1f}/{ndf} = {chi2_ndf:.3f}")
+    else:
+        chi2_label = f"#chi^{{2}} = {chi2:.1f}"
+        print(
+            f"Chi2 = {chi2:.1f} (ndf <= 0, {n_bins_used} bins, {n_free} free params)"
+        )
+
+    fitter.PlotFitSinglePeak(input_name, peak_name, chi2_label)
+
+
+def plot_double_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
+                         input_name, peak_name):
+    """Plot a double-peak fit result using the C++ PlotFitDoublePeak."""
+    bin_low = hist.FindBin(fit_range_low)
+    bin_high = hist.FindBin(fit_range_high)
+    n_events = hist.Integral(bin_low, bin_high)
+    bin_width = hist.GetBinWidth(1)
+
+    params = tuple(minuit_result.values[name]
+                   for name in _DOUBLE_PEAK_PARAM_ORDER)
+    norm, _ = quad(_double_peak_function,
+                   fit_range_low,
+                   fit_range_high,
+                   args=params)
+    scale = n_events * bin_width / norm
+
+    amp_indices = {2, 3, 4, 6, 8, 12, 13, 14, 16, 18, 20, 21}
+
+    def _active(name):
+        return (not minuit_result.fixed[name]
+                and abs(minuit_result.values[name]) > 1e-6)
+
+    fitter = ROOT.FittingUtils(
+        hist, fit_range_low, fit_range_high, False,
+        _active("step_amp1") or _active("step_amp2"),
+        _active("low_exp_amp1") or _active("low_exp_amp2"),
+        _active("low_lin_amp1") or _active("low_lin_amp2"),
+        _active("high_exp_amp1") or _active("high_exp_amp2"))
+
+    tf1 = ROOT.TF1("DoublePeak", ROOT.FittingFunctions.DoublePeakFunction,
+                   fit_range_low, fit_range_high, 22)
+    for i, name in enumerate(_DOUBLE_PEAK_PARAM_ORDER):
+        val = minuit_result.values[name]
+        err = minuit_result.errors[name]
+        if i in amp_indices:
+            val *= scale
+            err *= scale
+        tf1.SetParameter(i, val)
+        tf1.SetParError(i, err)
+        if minuit_result.fixed[name]:
+            tf1.FixParameter(i, val)
+    fitter.SetFitFunction(tf1)
+
+    chi2 = 0.0
+    n_bins_used = 0
+    for i in range(bin_low, bin_high + 1):
+        observed = hist.GetBinContent(i)
+        x = hist.GetBinCenter(i)
+        expected = tf1.Eval(x)
+        if expected > 0:
+            chi2 += (observed - expected)**2 / expected
+            n_bins_used += 1
+    n_free = sum(1 for name in _DOUBLE_PEAK_PARAM_ORDER
+                 if not minuit_result.fixed[name])
+    ndf = n_bins_used - n_free
+    if ndf > 0:
+        chi2_ndf = chi2 / ndf
+        chi2_label = f"#chi^{{2}}/ndf = {chi2_ndf:.3f}"
+        print(f"Chi2/ndf = {chi2:.1f}/{ndf} = {chi2_ndf:.3f}")
+    else:
+        chi2_label = f"#chi^{{2}} = {chi2:.1f}"
+        print(
+            f"Chi2 = {chi2:.1f} (ndf <= 0, {n_bins_used} bins, {n_free} free params)"
+        )
+
+    fitter.PlotFitDoublePeak(input_name, peak_name, chi2_label)
+
+
+def _save_minuit_state(m, path):
+    state = {
+        "values": {
+            k: m.values[k]
+            for k in m.parameters
+        },
+        "errors": {
+            k: m.errors[k]
+            for k in m.parameters
+        },
+        "fixed": {
+            k: m.fixed[k]
+            for k in m.parameters
+        },
+        "limits": {
+            k: m.limits[k]
+            for k in m.parameters
+        },
+        "fval": m.fval,
+    }
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump(state, f)
+    print(f"Fit result cached to {path}")
+
+
+def _restore_minuit_state(m, path):
+    with open(path, "rb") as f:
+        state = pickle.load(f)
+    for k, v in state["values"].items():
+        m.values[k] = v
+    for k, v in state["errors"].items():
+        m.errors[k] = v
+    for k, v in state["limits"].items():
+        m.limits[k] = v
+    for k, v in state["fixed"].items():
+        m.fixed[k] = v
+    print(f"Loaded cached fit from {path} (NLL = {state['fval']:.2f})")
+
+
+def fit_single_peak(df_column,
+                    fit_range_low,
+                    fit_range_high,
+                    expected_mu,
+                    cache_path=None):
+    """Fit a single-peak model with automated component testing and pruning.
+
+    Returns a Minuit object. If cache_path is given, results are cached.
     """
+    data = np.asarray(df_column, dtype=np.float64)
+    data = data[(data >= fit_range_low) & (data <= fit_range_high)]
     pdf = single_peak_pdf(fit_range_low, fit_range_high)
-    c = cost.UnbinnedNLL(df_column, pdf)
-    values, limits, fixed = estimate_peak_params(df_column,
+    c = cost.UnbinnedNLL(data, pdf)
+    values, limits, fixed = estimate_peak_params(data,
                                                  fit_range_low,
                                                  fit_range_high,
                                                  mu=expected_mu)
@@ -505,6 +703,10 @@ def fit_single_peak(df_column, fit_range_low, fit_range_high, expected_mu):
         m.limits[k] = v
     for k, v in fixed.items():
         m.fixed[k] = v
+
+    if cache_path and Path(cache_path).exists():
+        _restore_minuit_state(m, cache_path)
+        return m
 
     m.migrad()
     best_nll = m.fval
@@ -628,9 +830,214 @@ def fit_single_peak(df_column, fit_range_low, fit_range_high, expected_mu):
         m.values["high_exp_decay"] = 1.0
         print("  High tail REJECTED")
 
-    print(f"Final fit with selected components...")
+    print("Final fit with selected components...")
     m.migrad()
     m.hesse()
     print(f"Final NLL = {m.fval:.2f}")
     print(m)
+    if cache_path:
+        _save_minuit_state(m, cache_path)
+    return m
+
+
+def _test_low_side_group(m, suffix, gaus_amp, best_nll):
+    """Test and prune low-side components for a single peak within a
+    multi-peak fit. Returns updated best_nll."""
+    s = suffix
+    print(f"Testing low-side group for peak{s}...")
+
+    m.fixed[f"step_amp{s}"] = False
+    m.limits[f"step_amp{s}"] = (0, gaus_amp * 2)
+    m.values[f"step_amp{s}"] = gaus_amp * 0.1
+
+    m.fixed[f"low_exp_amp{s}"] = False
+    m.fixed[f"low_exp_decay{s}"] = False
+    m.limits[f"low_exp_amp{s}"] = (0, gaus_amp * 2)
+    m.limits[f"low_exp_decay{s}"] = (0.1, 50)
+    m.values[f"low_exp_amp{s}"] = gaus_amp * 0.15
+    m.values[f"low_exp_decay{s}"] = 1.0
+
+    m.fixed[f"low_lin_amp{s}"] = False
+    m.fixed[f"low_lin_slope{s}"] = False
+    m.limits[f"low_lin_amp{s}"] = (0, gaus_amp * 2)
+    m.limits[f"low_lin_slope{s}"] = (-1, 1)
+    m.values[f"low_lin_amp{s}"] = gaus_amp * 0.15
+    m.values[f"low_lin_slope{s}"] = 0.0
+
+    m.migrad()
+    print(
+        f"  Low-side group NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+    )
+
+    if m.fval < best_nll - 1:
+        print(f"  Low-side group peak{s} ACCEPTED — pruning...")
+        best_nll = m.fval
+
+        saved = m.values[f"step_amp{s}"]
+        m.fixed[f"step_amp{s}"] = True
+        m.values[f"step_amp{s}"] = 0.0
+        m.migrad()
+        print(
+            f"  Without step{s}: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print(f"  Step{s} PRUNED")
+        else:
+            m.fixed[f"step_amp{s}"] = False
+            m.values[f"step_amp{s}"] = saved
+            m.migrad()
+            print(f"  Step{s} KEPT")
+
+        saved_amp = m.values[f"low_exp_amp{s}"]
+        saved_decay = m.values[f"low_exp_decay{s}"]
+        m.fixed[f"low_exp_amp{s}"] = True
+        m.fixed[f"low_exp_decay{s}"] = True
+        m.values[f"low_exp_amp{s}"] = 0.0
+        m.values[f"low_exp_decay{s}"] = 1.0
+        m.migrad()
+        print(
+            f"  Without low exp tail{s}: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print(f"  Low exp tail{s} PRUNED")
+        else:
+            m.fixed[f"low_exp_amp{s}"] = False
+            m.fixed[f"low_exp_decay{s}"] = False
+            m.values[f"low_exp_amp{s}"] = saved_amp
+            m.values[f"low_exp_decay{s}"] = saved_decay
+            m.migrad()
+            print(f"  Low exp tail{s} KEPT")
+
+        saved_amp = m.values[f"low_lin_amp{s}"]
+        saved_slope = m.values[f"low_lin_slope{s}"]
+        m.fixed[f"low_lin_amp{s}"] = True
+        m.fixed[f"low_lin_slope{s}"] = True
+        m.values[f"low_lin_amp{s}"] = 0.0
+        m.values[f"low_lin_slope{s}"] = 0.0
+        m.migrad()
+        print(
+            f"  Without low lin tail{s}: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print(f"  Low lin tail{s} PRUNED")
+        else:
+            m.fixed[f"low_lin_amp{s}"] = False
+            m.fixed[f"low_lin_slope{s}"] = False
+            m.values[f"low_lin_amp{s}"] = saved_amp
+            m.values[f"low_lin_slope{s}"] = saved_slope
+            m.migrad()
+            print(f"  Low lin tail{s} KEPT")
+    else:
+        print(f"  Low-side group peak{s} REJECTED — re-fixing all")
+        m.fixed[f"step_amp{s}"] = True
+        m.values[f"step_amp{s}"] = 0.0
+        m.fixed[f"low_exp_amp{s}"] = True
+        m.fixed[f"low_exp_decay{s}"] = True
+        m.values[f"low_exp_amp{s}"] = 0.0
+        m.values[f"low_exp_decay{s}"] = 1.0
+        m.fixed[f"low_lin_amp{s}"] = True
+        m.fixed[f"low_lin_slope{s}"] = True
+        m.values[f"low_lin_amp{s}"] = 0.0
+        m.values[f"low_lin_slope{s}"] = 0.0
+
+    return best_nll
+
+
+def _test_high_tail(m, suffix, gaus_amp, best_nll):
+    """Test high exponential tail for a single peak. Returns updated best_nll."""
+    s = suffix
+    print(f"Testing high exponential tail for peak{s}...")
+    m.fixed[f"high_exp_amp{s}"] = False
+    m.fixed[f"high_exp_decay{s}"] = False
+    m.limits[f"high_exp_amp{s}"] = (0, gaus_amp * 2)
+    m.limits[f"high_exp_decay{s}"] = (0.1, 50)
+    m.values[f"high_exp_amp{s}"] = gaus_amp * 0.15
+    m.values[f"high_exp_decay{s}"] = 1.0
+    m.migrad()
+    print(
+        f"  High tail{s} NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})")
+    if m.fval < best_nll - 1:
+        best_nll = m.fval
+        print(f"  High tail{s} ACCEPTED")
+    else:
+        m.fixed[f"high_exp_amp{s}"] = True
+        m.fixed[f"high_exp_decay{s}"] = True
+        m.values[f"high_exp_amp{s}"] = 0.0
+        m.values[f"high_exp_decay{s}"] = 1.0
+        print(f"  High tail{s} REJECTED")
+    return best_nll
+
+
+def fit_double_peak(df_column,
+                    fit_range_low,
+                    fit_range_high,
+                    expected_mu1,
+                    expected_mu2,
+                    cache_path=None):
+    """Fit a double-peak model with automated component testing and pruning.
+
+    Returns a Minuit object. If cache_path is given, results are cached.
+    """
+    if expected_mu1 > expected_mu2:
+        expected_mu1, expected_mu2 = expected_mu2, expected_mu1
+
+    data = np.asarray(df_column, dtype=np.float64)
+    data = data[(data >= fit_range_low) & (data <= fit_range_high)]
+    pdf = double_peak_pdf(fit_range_low, fit_range_high)
+    c = cost.UnbinnedNLL(data, pdf)
+    values, limits, fixed = estimate_double_peak_params(data,
+                                                        fit_range_low,
+                                                        fit_range_high,
+                                                        mu1=expected_mu1,
+                                                        mu2=expected_mu2)
+    m = Minuit(c, **values)
+    for k, v in limits.items():
+        m.limits[k] = v
+    for k, v in fixed.items():
+        m.fixed[k] = v
+
+    if cache_path and Path(cache_path).exists():
+        _restore_minuit_state(m, cache_path)
+        return m
+
+    m.migrad()
+    best_nll = m.fval
+    gaus_amp1 = m.values["gaus_amp1"]
+    gaus_amp2 = m.values["gaus_amp2"]
+    print(f"Initial fit: NLL = {best_nll:.2f}")
+
+    best_nll = _test_low_side_group(m, "1", gaus_amp1, best_nll)
+    best_nll = _test_low_side_group(m, "2", gaus_amp2, best_nll)
+    best_nll = _test_high_tail(m, "1", gaus_amp1, best_nll)
+    best_nll = _test_high_tail(m, "2", gaus_amp2, best_nll)
+
+    print("Final fit with selected components...")
+    m.migrad()
+    m.hesse()
+
+    # Ensure mu1 < mu2
+    if m.values["mu1"] > m.values["mu2"]:
+        print("Warning: mu1 > mu2 after fit, swapping peak parameters")
+        for base in [
+                "mu", "sigma", "gaus_amp", "step_amp", "low_exp_amp",
+                "low_exp_decay", "low_lin_amp", "low_lin_slope",
+                "high_exp_amp", "high_exp_decay"
+        ]:
+            v1, v2 = m.values[f"{base}1"], m.values[f"{base}2"]
+            m.values[f"{base}1"] = v2
+            m.values[f"{base}2"] = v1
+            e1, e2 = m.errors[f"{base}1"], m.errors[f"{base}2"]
+            m.errors[f"{base}1"] = e2
+            m.errors[f"{base}2"] = e1
+            f1, f2 = m.fixed[f"{base}1"], m.fixed[f"{base}2"]
+            m.fixed[f"{base}1"] = f2
+            m.fixed[f"{base}2"] = f1
+
+    print(f"Final NLL = {m.fval:.2f}")
+    print(m)
+    if cache_path:
+        _save_minuit_state(m, cache_path)
     return m
