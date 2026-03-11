@@ -971,6 +971,153 @@ def _test_high_tail(m, suffix, gaus_amp, best_nll):
     return best_nll
 
 
+def _test_inter_peak_group(m, gaus_amp1, gaus_amp2, best_nll):
+    """Test peak1 high tail and peak2 low-side group together.
+
+    These components overlap in the inter-peak region, so they must be tested
+    jointly to avoid one absorbing the contribution of the other.
+    Returns updated best_nll.
+    """
+    print("Testing inter-peak group (peak1 high tail + peak2 low-side)...")
+
+    # Release peak1 high tail
+    m.fixed["high_exp_amp1"] = False
+    m.fixed["high_exp_decay1"] = False
+    m.limits["high_exp_amp1"] = (0, gaus_amp1 * 2)
+    m.limits["high_exp_decay1"] = (0.1, 50)
+    m.values["high_exp_amp1"] = gaus_amp1 * 0.15
+    m.values["high_exp_decay1"] = 1.0
+
+    # Release peak2 low-side group
+    m.fixed["step_amp2"] = False
+    m.limits["step_amp2"] = (0, gaus_amp2 * 2)
+    m.values["step_amp2"] = gaus_amp2 * 0.1
+
+    m.fixed["low_exp_amp2"] = False
+    m.fixed["low_exp_decay2"] = False
+    m.limits["low_exp_amp2"] = (0, gaus_amp2 * 2)
+    m.limits["low_exp_decay2"] = (0.1, 50)
+    m.values["low_exp_amp2"] = gaus_amp2 * 0.15
+    m.values["low_exp_decay2"] = 1.0
+
+    m.fixed["low_lin_amp2"] = False
+    m.fixed["low_lin_slope2"] = False
+    m.limits["low_lin_amp2"] = (0, gaus_amp2 * 2)
+    m.limits["low_lin_slope2"] = (-1, 1)
+    m.values["low_lin_amp2"] = gaus_amp2 * 0.15
+    m.values["low_lin_slope2"] = 0.0
+
+    m.migrad()
+    print(
+        f"  Inter-peak group NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+    )
+
+    if m.fval < best_nll - 1:
+        print("  Inter-peak group ACCEPTED — pruning...")
+        best_nll = m.fval
+
+        # Prune peak1 high tail
+        saved_amp = m.values["high_exp_amp1"]
+        saved_decay = m.values["high_exp_decay1"]
+        m.fixed["high_exp_amp1"] = True
+        m.fixed["high_exp_decay1"] = True
+        m.values["high_exp_amp1"] = 0.0
+        m.values["high_exp_decay1"] = 1.0
+        m.migrad()
+        print(
+            f"  Without high tail1: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  High tail1 PRUNED")
+        else:
+            m.fixed["high_exp_amp1"] = False
+            m.fixed["high_exp_decay1"] = False
+            m.values["high_exp_amp1"] = saved_amp
+            m.values["high_exp_decay1"] = saved_decay
+            m.migrad()
+            print("  High tail1 KEPT")
+
+        # Prune peak2 step
+        saved = m.values["step_amp2"]
+        m.fixed["step_amp2"] = True
+        m.values["step_amp2"] = 0.0
+        m.migrad()
+        print(
+            f"  Without step2: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  Step2 PRUNED")
+        else:
+            m.fixed["step_amp2"] = False
+            m.values["step_amp2"] = saved
+            m.migrad()
+            print("  Step2 KEPT")
+
+        # Prune peak2 low exp tail
+        saved_amp = m.values["low_exp_amp2"]
+        saved_decay = m.values["low_exp_decay2"]
+        m.fixed["low_exp_amp2"] = True
+        m.fixed["low_exp_decay2"] = True
+        m.values["low_exp_amp2"] = 0.0
+        m.values["low_exp_decay2"] = 1.0
+        m.migrad()
+        print(
+            f"  Without low exp tail2: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  Low exp tail2 PRUNED")
+        else:
+            m.fixed["low_exp_amp2"] = False
+            m.fixed["low_exp_decay2"] = False
+            m.values["low_exp_amp2"] = saved_amp
+            m.values["low_exp_decay2"] = saved_decay
+            m.migrad()
+            print("  Low exp tail2 KEPT")
+
+        # Prune peak2 low lin tail
+        saved_amp = m.values["low_lin_amp2"]
+        saved_slope = m.values["low_lin_slope2"]
+        m.fixed["low_lin_amp2"] = True
+        m.fixed["low_lin_slope2"] = True
+        m.values["low_lin_amp2"] = 0.0
+        m.values["low_lin_slope2"] = 0.0
+        m.migrad()
+        print(
+            f"  Without low lin tail2: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  Low lin tail2 PRUNED")
+        else:
+            m.fixed["low_lin_amp2"] = False
+            m.fixed["low_lin_slope2"] = False
+            m.values["low_lin_amp2"] = saved_amp
+            m.values["low_lin_slope2"] = saved_slope
+            m.migrad()
+            print("  Low lin tail2 KEPT")
+    else:
+        print("  Inter-peak group REJECTED — re-fixing all")
+        m.fixed["high_exp_amp1"] = True
+        m.fixed["high_exp_decay1"] = True
+        m.values["high_exp_amp1"] = 0.0
+        m.values["high_exp_decay1"] = 1.0
+        m.fixed["step_amp2"] = True
+        m.values["step_amp2"] = 0.0
+        m.fixed["low_exp_amp2"] = True
+        m.fixed["low_exp_decay2"] = True
+        m.values["low_exp_amp2"] = 0.0
+        m.values["low_exp_decay2"] = 1.0
+        m.fixed["low_lin_amp2"] = True
+        m.fixed["low_lin_slope2"] = True
+        m.values["low_lin_amp2"] = 0.0
+        m.values["low_lin_slope2"] = 0.0
+
+    return best_nll
+
+
 def fit_double_peak(df_column,
                     fit_range_low,
                     fit_range_high,
@@ -1009,10 +1156,11 @@ def fit_double_peak(df_column,
     gaus_amp2 = m.values["gaus_amp2"]
     print(f"Initial fit: NLL = {best_nll:.2f}")
 
+    # Outer components (no inter-peak overlap)
     best_nll = _test_low_side_group(m, "1", gaus_amp1, best_nll)
-    best_nll = _test_low_side_group(m, "2", gaus_amp2, best_nll)
-    best_nll = _test_high_tail(m, "1", gaus_amp1, best_nll)
     best_nll = _test_high_tail(m, "2", gaus_amp2, best_nll)
+    # Inter-peak components tested jointly: peak1 high tail + peak2 low-side
+    best_nll = _test_inter_peak_group(m, gaus_amp1, gaus_amp2, best_nll)
 
     print("Final fit with selected components...")
     m.migrad()
