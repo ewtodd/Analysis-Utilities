@@ -1,6 +1,5 @@
 from analysis_utils import load_cpp_library
 
-
 def set_root_preferences(save_format=None):
     """Initialize ROOT environment: batch mode, style, output directories.
 
