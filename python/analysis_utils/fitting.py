@@ -4,18 +4,32 @@ Ports the C++ FittingFunctions namespace from FittingUtils.cpp.
 All functions accept numpy arrays or scalars for x; parameters are scalars.
 """
 
+import math
 import pickle
 from functools import partial
 from pathlib import Path
 
 import numpy as np
-from scipy.integrate import quad
-from scipy.special import erfc
+import numba as nb
+from numpy.polynomial.legendre import leggauss
 from iminuit import Minuit, cost
 
 import ROOT
 
 _SQRT2 = np.sqrt(2.0)
+
+# Gauss-Legendre quadrature: precompute nodes/weights on [-1, 1].
+# 128 points is more than sufficient for these smooth peak functions.
+_GL_ORDER = 128
+_gl_ref_nodes, _gl_ref_weights = leggauss(_GL_ORDER)
+
+
+def _gl_quadrature(func, low, high, args):
+    """Fast fixed-order Gauss-Legendre integration replacing scipy.integrate.quad."""
+    mid = (high + low) * 0.5
+    half = (high - low) * 0.5
+    nodes = mid + half * _gl_ref_nodes
+    return half * np.dot(_gl_ref_weights, func(nodes, *args))
 
 _SINGLE_PEAK_PARAM_ORDER = [
     "mu", "sigma", "gaus_amp", "step_amp", "low_exp_amp", "low_exp_decay",
@@ -32,71 +46,65 @@ _DOUBLE_PEAK_PARAM_ORDER = [
 ]
 
 
-def _gaussian(x, mu, sigma, amplitude):
-    """Gaussian peak. Mirrors FittingFunctions::Gaussian."""
-    z = (x - mu) / sigma
-    return amplitude * np.exp(-0.5 * z * z)
+@nb.njit(cache=True)
+def _eval_one_peak(x, mu, sigma, gaus_amp, step_amp, low_exp_amp,
+                   low_exp_decay, low_lin_amp, low_lin_slope, high_exp_amp,
+                   high_exp_decay):
+    """Evaluate a single peak contribution (no background) over array x."""
+    n = x.shape[0]
+    result = np.empty(n)
+    sqrt2 = math.sqrt(2.0)
+    for i in range(n):
+        xi = x[i]
+        z = (xi - mu) / sigma
+        val = gaus_amp * math.exp(-0.5 * z * z)
 
+        if step_amp != 0.0 and sigma > 0.0:
+            sz = z
+            if sz < -500.0:
+                sz = -500.0
+            elif sz > 350.0:
+                sz = 350.0
+            val += step_amp / (1.0 + math.exp(sz))**2
 
-def _linear_background(x, bkg_constant, lin_bkg_slope):
-    """Linear background. Mirrors FittingFunctions::LinearBackground."""
-    return lin_bkg_slope * x + bkg_constant
+        if sigma > 0.0 and (low_exp_amp != 0.0 or low_lin_amp != 0.0):
+            y = xi - mu
+            erfc_val = math.erfc(y / (sqrt2 * sigma))
+            tail = 0.0
+            if low_exp_amp != 0.0:
+                arg = y / low_exp_decay
+                if arg < -500.0:
+                    arg = -500.0
+                elif arg > 500.0:
+                    arg = 500.0
+                tail += low_exp_amp * math.exp(arg)
+            if low_lin_amp != 0.0:
+                tail += low_lin_amp * (1.0 + low_lin_slope * y)
+            val += tail * erfc_val
 
+        if high_exp_amp != 0.0 and sigma > 0.0:
+            y = mu - xi
+            arg = y / high_exp_decay
+            if arg < -500.0:
+                arg = -500.0
+            elif arg > 500.0:
+                arg = 500.0
+            val += high_exp_amp * math.exp(arg) * math.erfc(y / (sqrt2 * sigma))
 
-def _step(x, mu, sigma, step_amplitude):
-    """Logistic step function. Mirrors FittingFunctions::Step."""
-    if sigma <= 0.0:
-        return np.zeros_like(x, dtype=np.float64)
-    z = np.clip((x - mu) / sigma, -500, 350)
-    denom = (1.0 + np.exp(z))**2
-    return step_amplitude / denom
-
-
-def _low_tail(x, mu, sigma, exp_amp, exp_decay, lin_amp, lin_slope):
-    """Low-energy tail (exponential + linear) * erfc.
-
-    Mirrors FittingFunctions::LowTail.
-    """
-    if sigma <= 0.0 or (exp_amp == 0.0 and lin_amp == 0.0):
-        return np.zeros_like(x, dtype=np.float64)
-
-    y = x - mu
-    if exp_amp != 0.0:
-        exp_term = exp_amp * np.exp(np.clip(y / exp_decay, -500, 500))
-    else:
-        exp_term = 0.0
-    lin_term = lin_amp * (1.0 + lin_slope * y) if lin_amp != 0.0 else 0.0
-    erfc_term = erfc(y / (_SQRT2 * sigma))
-
-    return (exp_term + lin_term) * erfc_term
-
-
-def _high_tail(x, mu, sigma, exp_amp, exp_decay):
-    """High-energy exponential tail * erfc.
-
-    Mirrors FittingFunctions::HighTail.
-    """
-    if sigma <= 0.0 or exp_amp == 0.0:
-        return np.zeros_like(x, dtype=np.float64)
-
-    y = mu - x
-    return exp_amp * np.exp(np.clip(y / exp_decay, -500, 500)) * erfc(
-        y / (_SQRT2 * sigma))
+        result[i] = val
+    return result
 
 
 def _peak_function(x, mu, sigma, gaus_amp, step_amp, low_exp_amp,
                    low_exp_decay, low_lin_amp, low_lin_slope, high_exp_amp,
                    high_exp_decay, bkg_constant, lin_bkg_slope):
-    """Full single-peak model (12 parameters).
-
-    Mirrors FittingFunctions::PeakFunction.
-    """
-    return (_gaussian(x, mu, sigma, gaus_amp) +
-            _linear_background(x, bkg_constant, lin_bkg_slope) +
-            _step(x, mu, sigma, step_amp) +
-            _low_tail(x, mu, sigma, low_exp_amp, low_exp_decay, low_lin_amp,
-                      low_lin_slope) +
-            _high_tail(x, mu, sigma, high_exp_amp, high_exp_decay))
+    """Full single-peak model (12 parameters)."""
+    xa = np.atleast_1d(np.asarray(x, dtype=np.float64))
+    result = _eval_one_peak(xa, mu, sigma, gaus_amp, step_amp, low_exp_amp,
+                            low_exp_decay, low_lin_amp, low_lin_slope,
+                            high_exp_amp, high_exp_decay)
+    result += lin_bkg_slope * xa + bkg_constant
+    return result
 
 
 def _double_peak_function(x, mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1,
@@ -105,22 +113,16 @@ def _double_peak_function(x, mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1,
                           gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
                           low_lin_amp2, low_lin_slope2, high_exp_amp2,
                           high_exp_decay2, bkg_constant, lin_bkg_slope):
-    """Full double-peak model (22 parameters, shared background).
-
-    Mirrors FittingFunctions::DoublePeakFunction.
-    Peak 1: params 0-9, Peak 2: params 10-19, Background: params 20-21.
-    """
-    return (_gaussian(x, mu1, sigma1, gaus_amp1) +
-            _step(x, mu1, sigma1, step_amp1) +
-            _low_tail(x, mu1, sigma1, low_exp_amp1, low_exp_decay1,
-                      low_lin_amp1, low_lin_slope1) +
-            _high_tail(x, mu1, sigma1, high_exp_amp1, high_exp_decay1) +
-            _gaussian(x, mu2, sigma2, gaus_amp2) +
-            _step(x, mu2, sigma2, step_amp2) +
-            _low_tail(x, mu2, sigma2, low_exp_amp2, low_exp_decay2,
-                      low_lin_amp2, low_lin_slope2) +
-            _high_tail(x, mu2, sigma2, high_exp_amp2, high_exp_decay2) +
-            _linear_background(x, bkg_constant, lin_bkg_slope))
+    """Full double-peak model (22 parameters, shared background)."""
+    xa = np.atleast_1d(np.asarray(x, dtype=np.float64))
+    result = _eval_one_peak(xa, mu1, sigma1, gaus_amp1, step_amp1,
+                            low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                            low_lin_slope1, high_exp_amp1, high_exp_decay1)
+    result += _eval_one_peak(xa, mu2, sigma2, gaus_amp2, step_amp2,
+                             low_exp_amp2, low_exp_decay2, low_lin_amp2,
+                             low_lin_slope2, high_exp_amp2, high_exp_decay2)
+    result += lin_bkg_slope * xa + bkg_constant
+    return result
 
 
 def _triple_peak_function(x, mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1,
@@ -132,27 +134,19 @@ def _triple_peak_function(x, mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1,
                           low_exp_amp3, low_exp_decay3, low_lin_amp3,
                           low_lin_slope3, high_exp_amp3, high_exp_decay3,
                           bkg_constant, lin_bkg_slope):
-    """Full triple-peak model (32 parameters, shared background).
-
-    Mirrors FittingFunctions::TriplePeakFunction.
-    Peak 1: 0-9, Peak 2: 10-19, Peak 3: 20-29, Background: 30-31.
-    """
-    return (_gaussian(x, mu1, sigma1, gaus_amp1) +
-            _step(x, mu1, sigma1, step_amp1) +
-            _low_tail(x, mu1, sigma1, low_exp_amp1, low_exp_decay1,
-                      low_lin_amp1, low_lin_slope1) +
-            _high_tail(x, mu1, sigma1, high_exp_amp1, high_exp_decay1) +
-            _gaussian(x, mu2, sigma2, gaus_amp2) +
-            _step(x, mu2, sigma2, step_amp2) +
-            _low_tail(x, mu2, sigma2, low_exp_amp2, low_exp_decay2,
-                      low_lin_amp2, low_lin_slope2) +
-            _high_tail(x, mu2, sigma2, high_exp_amp2, high_exp_decay2) +
-            _gaussian(x, mu3, sigma3, gaus_amp3) +
-            _step(x, mu3, sigma3, step_amp3) +
-            _low_tail(x, mu3, sigma3, low_exp_amp3, low_exp_decay3,
-                      low_lin_amp3, low_lin_slope3) +
-            _high_tail(x, mu3, sigma3, high_exp_amp3, high_exp_decay3) +
-            _linear_background(x, bkg_constant, lin_bkg_slope))
+    """Full triple-peak model (32 parameters, shared background)."""
+    xa = np.atleast_1d(np.asarray(x, dtype=np.float64))
+    result = _eval_one_peak(xa, mu1, sigma1, gaus_amp1, step_amp1,
+                            low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                            low_lin_slope1, high_exp_amp1, high_exp_decay1)
+    result += _eval_one_peak(xa, mu2, sigma2, gaus_amp2, step_amp2,
+                             low_exp_amp2, low_exp_decay2, low_lin_amp2,
+                             low_lin_slope2, high_exp_amp2, high_exp_decay2)
+    result += _eval_one_peak(xa, mu3, sigma3, gaus_amp3, step_amp3,
+                             low_exp_amp3, low_exp_decay3, low_lin_amp3,
+                             low_lin_slope3, high_exp_amp3, high_exp_decay3)
+    result += lin_bkg_slope * xa + bkg_constant
+    return result
 
 
 def _estimate_from_data(data, fit_range_low, fit_range_high):
@@ -436,7 +430,7 @@ def _single_peak_pdf(fit_range_low, fit_range_high, x, mu, sigma, gaus_amp,
     args = (mu, sigma, gaus_amp, step_amp, low_exp_amp, low_exp_decay,
             low_lin_amp, low_lin_slope, high_exp_amp, high_exp_decay,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_peak_function, fit_range_low, fit_range_high, args=args)
+    norm = _gl_quadrature(_peak_function, fit_range_low, fit_range_high, args)
     return _peak_function(x, *args) / norm
 
 
@@ -452,10 +446,8 @@ def _double_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
             sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
             low_lin_amp2, low_lin_slope2, high_exp_amp2, high_exp_decay2,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_double_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=args)
+    norm = _gl_quadrature(_double_peak_function, fit_range_low, fit_range_high,
+                          args)
     return _double_peak_function(x, *args) / norm
 
 
@@ -475,10 +467,8 @@ def _triple_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
             sigma3, gaus_amp3, step_amp3, low_exp_amp3, low_exp_decay3,
             low_lin_amp3, low_lin_slope3, high_exp_amp3, high_exp_decay3,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_triple_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=args)
+    norm = _gl_quadrature(_triple_peak_function, fit_range_low, fit_range_high,
+                          args)
     return _triple_peak_function(x, *args) / norm
 
 
@@ -521,7 +511,7 @@ def plot_single_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
 
     params = tuple(minuit_result.values[name]
                    for name in _SINGLE_PEAK_PARAM_ORDER)
-    norm, _ = quad(_peak_function, fit_range_low, fit_range_high, args=params)
+    norm = _gl_quadrature(_peak_function, fit_range_low, fit_range_high, params)
     scale = n_events * bin_width / norm
 
     # Indices of amplitude parameters (linear in the function value).
@@ -583,10 +573,8 @@ def plot_double_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
 
     params = tuple(minuit_result.values[name]
                    for name in _DOUBLE_PEAK_PARAM_ORDER)
-    norm, _ = quad(_double_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=params)
+    norm = _gl_quadrature(_double_peak_function, fit_range_low, fit_range_high,
+                          params)
     scale = n_events * bin_width / norm
 
     amp_indices = {2, 3, 4, 6, 8, 12, 13, 14, 16, 18, 20, 21}
