@@ -60,7 +60,7 @@ private:
   Bool_t use_manual_init_;
   std::vector<Double_t> manual_params_;
 
-  void PlotFit(const TString input_name, const TString peak_name);
+  void PlotFitSinglePeak(const TString input_name, const TString peak_name);
   void PlotFitDoublePeak(const TString input_name, const TString peak_name);
   void PlotFitTriplePeak(const TString input_name, const TString peak_name);
 
@@ -100,7 +100,7 @@ public:
 
   TF1 *GetFitFunction() { return fit_function_; }
 
-  FitResult FitPeak(const TString input_name, const TString peak_name);
+  FitResult FitSinglePeak(const TString input_name, const TString peak_name);
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,
                           Double_t mu1_init, Double_t mu2_init);
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,

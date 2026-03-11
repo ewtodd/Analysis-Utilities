@@ -61,7 +61,8 @@ def _high_tail(x, mu, sigma, exp_amp, exp_decay):
         return np.zeros_like(x, dtype=np.float64)
 
     y = mu - x
-    return exp_amp * np.exp(np.clip(y / exp_decay, -500, 500)) * erfc(y / (_SQRT2 * sigma))
+    return exp_amp * np.exp(np.clip(y / exp_decay, -500, 500)) * erfc(
+        y / (_SQRT2 * sigma))
 
 
 def _peak_function(x, mu, sigma, gaus_amp, step_amp, low_exp_amp,
@@ -142,7 +143,8 @@ def _estimate_from_data(data, fit_range_low, fit_range_high):
     """
     in_range = data[(data >= fit_range_low) & (data <= fit_range_high)]
     n_bins = max(10, int(np.sqrt(len(in_range))))
-    counts, edges = np.histogram(in_range, bins=n_bins,
+    counts, edges = np.histogram(in_range,
+                                 bins=n_bins,
                                  range=(fit_range_low, fit_range_high))
 
     peak_height = float(counts.max())
@@ -154,10 +156,17 @@ def _estimate_from_data(data, fit_range_low, fit_range_high):
     return peak_height, bkg_estimate
 
 
-def _estimate_single_peak(data, fit_range_low, fit_range_high, peak_height,
-                          bkg_estimate, use_step, use_low_exp_tail,
-                          use_low_lin_tail, use_high_exp_tail,
-                          use_flat_background, suffix=""):
+def _estimate_single_peak(data,
+                          fit_range_low,
+                          fit_range_high,
+                          peak_height,
+                          bkg_estimate,
+                          use_step,
+                          use_low_exp_tail,
+                          use_low_lin_tail,
+                          use_high_exp_tail,
+                          use_flat_background,
+                          suffix=""):
     """Build values/limits/fixed dicts for one peak plus background.
 
     suffix is "" for single peak, "1"/"2"/"3" for multi-peak.
@@ -203,9 +212,8 @@ def _estimate_single_peak(data, fit_range_low, fit_range_high, peak_height,
                                              peak_height * 0.25)
         limits[f"low_lin_amp{suffix}"] = (0, peak_height)
         values[f"low_lin_slope{suffix}"] = 0.0
-        limits[f"low_lin_slope{suffix}"] = (
-            -0.5 * bkg_estimate / range_width,
-            0.5 * bkg_estimate / range_width)
+        limits[f"low_lin_slope{suffix}"] = (-0.5 * bkg_estimate / range_width,
+                                            0.5 * bkg_estimate / range_width)
     else:
         values[f"low_lin_amp{suffix}"] = 0.0
         values[f"low_lin_slope{suffix}"] = 0.0
@@ -228,10 +236,15 @@ def _estimate_single_peak(data, fit_range_low, fit_range_high, peak_height,
     return values, limits, fixed
 
 
-def estimate_peak_params(data, fit_range_low, fit_range_high,
-                         use_step=False, use_low_exp_tail=False,
-                         use_low_lin_tail=False, use_high_exp_tail=False,
-                         use_flat_background=False, **overrides):
+def estimate_peak_params(data,
+                         fit_range_low,
+                         fit_range_high,
+                         use_step=False,
+                         use_low_exp_tail=False,
+                         use_low_lin_tail=False,
+                         use_high_exp_tail=False,
+                         use_flat_background=False,
+                         **overrides):
     """Estimate initial parameters for a single-peak fit.
 
     Returns (values, limits, fixed) dicts for use with iminuit::
@@ -243,8 +256,8 @@ def estimate_peak_params(data, fit_range_low, fit_range_high,
 
     Any keyword argument overrides the corresponding auto-estimated value.
     """
-    peak_height, bkg_estimate = _estimate_from_data(
-        data, fit_range_low, fit_range_high)
+    peak_height, bkg_estimate = _estimate_from_data(data, fit_range_low,
+                                                    fit_range_high)
     range_width = fit_range_high - fit_range_low
 
     values, limits, fixed = _estimate_single_peak(
@@ -268,27 +281,46 @@ def estimate_peak_params(data, fit_range_low, fit_range_high,
     return values, limits, fixed
 
 
-def estimate_double_peak_params(data, fit_range_low, fit_range_high,
-                                use_step=False, use_low_exp_tail=False,
-                                use_low_lin_tail=False, use_high_exp_tail=False,
-                                use_flat_background=False, **overrides):
+def estimate_double_peak_params(data,
+                                fit_range_low,
+                                fit_range_high,
+                                use_step=False,
+                                use_low_exp_tail=False,
+                                use_low_lin_tail=False,
+                                use_high_exp_tail=False,
+                                use_flat_background=False,
+                                **overrides):
     """Estimate initial parameters for a double-peak fit.
 
     You almost certainly want to override mu1 and mu2.
     Returns (values, limits, fixed) dicts for use with iminuit.
     """
-    peak_height, bkg_estimate = _estimate_from_data(
-        data, fit_range_low, fit_range_high)
+    peak_height, bkg_estimate = _estimate_from_data(data, fit_range_low,
+                                                    fit_range_high)
     range_width = fit_range_high - fit_range_low
 
-    v1, l1, f1 = _estimate_single_peak(
-        data, fit_range_low, fit_range_high, peak_height, bkg_estimate,
-        use_step, use_low_exp_tail, use_low_lin_tail, use_high_exp_tail,
-        use_flat_background, suffix="1")
-    v2, l2, f2 = _estimate_single_peak(
-        data, fit_range_low, fit_range_high, peak_height, bkg_estimate,
-        use_step, use_low_exp_tail, use_low_lin_tail, use_high_exp_tail,
-        use_flat_background, suffix="2")
+    v1, l1, f1 = _estimate_single_peak(data,
+                                       fit_range_low,
+                                       fit_range_high,
+                                       peak_height,
+                                       bkg_estimate,
+                                       use_step,
+                                       use_low_exp_tail,
+                                       use_low_lin_tail,
+                                       use_high_exp_tail,
+                                       use_flat_background,
+                                       suffix="1")
+    v2, l2, f2 = _estimate_single_peak(data,
+                                       fit_range_low,
+                                       fit_range_high,
+                                       peak_height,
+                                       bkg_estimate,
+                                       use_step,
+                                       use_low_exp_tail,
+                                       use_low_lin_tail,
+                                       use_high_exp_tail,
+                                       use_flat_background,
+                                       suffix="2")
 
     values = {**v1, **v2}
     limits = {**l1, **l2}
@@ -308,31 +340,57 @@ def estimate_double_peak_params(data, fit_range_low, fit_range_high,
     return values, limits, fixed
 
 
-def estimate_triple_peak_params(data, fit_range_low, fit_range_high,
-                                use_step=False, use_low_exp_tail=False,
-                                use_low_lin_tail=False, use_high_exp_tail=False,
-                                use_flat_background=False, **overrides):
+def estimate_triple_peak_params(data,
+                                fit_range_low,
+                                fit_range_high,
+                                use_step=False,
+                                use_low_exp_tail=False,
+                                use_low_lin_tail=False,
+                                use_high_exp_tail=False,
+                                use_flat_background=False,
+                                **overrides):
     """Estimate initial parameters for a triple-peak fit.
 
     You almost certainly want to override mu1, mu2, and mu3.
     Returns (values, limits, fixed) dicts for use with iminuit.
     """
-    peak_height, bkg_estimate = _estimate_from_data(
-        data, fit_range_low, fit_range_high)
+    peak_height, bkg_estimate = _estimate_from_data(data, fit_range_low,
+                                                    fit_range_high)
     range_width = fit_range_high - fit_range_low
 
-    v1, l1, f1 = _estimate_single_peak(
-        data, fit_range_low, fit_range_high, peak_height, bkg_estimate,
-        use_step, use_low_exp_tail, use_low_lin_tail, use_high_exp_tail,
-        use_flat_background, suffix="1")
-    v2, l2, f2 = _estimate_single_peak(
-        data, fit_range_low, fit_range_high, peak_height, bkg_estimate,
-        use_step, use_low_exp_tail, use_low_lin_tail, use_high_exp_tail,
-        use_flat_background, suffix="2")
-    v3, l3, f3 = _estimate_single_peak(
-        data, fit_range_low, fit_range_high, peak_height, bkg_estimate,
-        use_step, use_low_exp_tail, use_low_lin_tail, use_high_exp_tail,
-        use_flat_background, suffix="3")
+    v1, l1, f1 = _estimate_single_peak(data,
+                                       fit_range_low,
+                                       fit_range_high,
+                                       peak_height,
+                                       bkg_estimate,
+                                       use_step,
+                                       use_low_exp_tail,
+                                       use_low_lin_tail,
+                                       use_high_exp_tail,
+                                       use_flat_background,
+                                       suffix="1")
+    v2, l2, f2 = _estimate_single_peak(data,
+                                       fit_range_low,
+                                       fit_range_high,
+                                       peak_height,
+                                       bkg_estimate,
+                                       use_step,
+                                       use_low_exp_tail,
+                                       use_low_lin_tail,
+                                       use_high_exp_tail,
+                                       use_flat_background,
+                                       suffix="2")
+    v3, l3, f3 = _estimate_single_peak(data,
+                                       fit_range_low,
+                                       fit_range_high,
+                                       peak_height,
+                                       bkg_estimate,
+                                       use_step,
+                                       use_low_exp_tail,
+                                       use_low_lin_tail,
+                                       use_high_exp_tail,
+                                       use_flat_background,
+                                       suffix="3")
 
     values = {**v1, **v2, **v3}
     limits = {**l1, **l2, **l3}
@@ -352,54 +410,67 @@ def estimate_triple_peak_params(data, fit_range_low, fit_range_high,
     return values, limits, fixed
 
 
-def _single_peak_pdf(fit_range_low, fit_range_high, quad_limit,
-                     x, mu, sigma, gaus_amp, step_amp, low_exp_amp,
-                     low_exp_decay, low_lin_amp, low_lin_slope, high_exp_amp,
-                     high_exp_decay, bkg_constant, lin_bkg_slope):
+def _single_peak_pdf(fit_range_low, fit_range_high, quad_limit, x, mu, sigma,
+                     gaus_amp, step_amp, low_exp_amp, low_exp_decay,
+                     low_lin_amp, low_lin_slope, high_exp_amp, high_exp_decay,
+                     bkg_constant, lin_bkg_slope):
     args = (mu, sigma, gaus_amp, step_amp, low_exp_amp, low_exp_decay,
             low_lin_amp, low_lin_slope, high_exp_amp, high_exp_decay,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_peak_function, fit_range_low, fit_range_high,
-                   args=args, limit=quad_limit, epsabs=1e-10, epsrel=1e-8)
+    norm, _ = quad(_peak_function,
+                   fit_range_low,
+                   fit_range_high,
+                   args=args,
+                   limit=quad_limit,
+                   epsabs=1e-10,
+                   epsrel=1e-8)
     return _peak_function(x, *args) / norm
 
 
-def _double_peak_pdf(fit_range_low, fit_range_high, quad_limit,
-                     x, mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1,
-                     low_exp_decay1, low_lin_amp1, low_lin_slope1,
-                     high_exp_amp1, high_exp_decay1, mu2, sigma2, gaus_amp2,
-                     step_amp2, low_exp_amp2, low_exp_decay2, low_lin_amp2,
+def _double_peak_pdf(fit_range_low, fit_range_high, quad_limit, x, mu1, sigma1,
+                     gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
+                     low_lin_amp1, low_lin_slope1, high_exp_amp1,
+                     high_exp_decay1, mu2, sigma2, gaus_amp2, step_amp2,
+                     low_exp_amp2, low_exp_decay2, low_lin_amp2,
                      low_lin_slope2, high_exp_amp2, high_exp_decay2,
                      bkg_constant, lin_bkg_slope):
     args = (mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
-            low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1,
-            mu2, sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
+            low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
+            sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
             low_lin_amp2, low_lin_slope2, high_exp_amp2, high_exp_decay2,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_double_peak_function, fit_range_low, fit_range_high,
-                   args=args, limit=quad_limit, epsabs=1e-10, epsrel=1e-8)
+    norm, _ = quad(_double_peak_function,
+                   fit_range_low,
+                   fit_range_high,
+                   args=args,
+                   limit=quad_limit,
+                   epsabs=1e-10,
+                   epsrel=1e-8)
     return _double_peak_function(x, *args) / norm
 
 
-def _triple_peak_pdf(fit_range_low, fit_range_high, quad_limit,
-                     x, mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1,
-                     low_exp_decay1, low_lin_amp1, low_lin_slope1,
-                     high_exp_amp1, high_exp_decay1, mu2, sigma2, gaus_amp2,
-                     step_amp2, low_exp_amp2, low_exp_decay2, low_lin_amp2,
-                     low_lin_slope2, high_exp_amp2, high_exp_decay2, mu3,
-                     sigma3, gaus_amp3, step_amp3, low_exp_amp3,
-                     low_exp_decay3, low_lin_amp3, low_lin_slope3,
-                     high_exp_amp3, high_exp_decay3, bkg_constant,
-                     lin_bkg_slope):
+def _triple_peak_pdf(
+        fit_range_low, fit_range_high, quad_limit, x, mu1, sigma1, gaus_amp1,
+        step_amp1, low_exp_amp1, low_exp_decay1, low_lin_amp1, low_lin_slope1,
+        high_exp_amp1, high_exp_decay1, mu2, sigma2, gaus_amp2, step_amp2,
+        low_exp_amp2, low_exp_decay2, low_lin_amp2, low_lin_slope2,
+        high_exp_amp2, high_exp_decay2, mu3, sigma3, gaus_amp3, step_amp3,
+        low_exp_amp3, low_exp_decay3, low_lin_amp3, low_lin_slope3,
+        high_exp_amp3, high_exp_decay3, bkg_constant, lin_bkg_slope):
     args = (mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
-            low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1,
-            mu2, sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
-            low_lin_amp2, low_lin_slope2, high_exp_amp2, high_exp_decay2,
-            mu3, sigma3, gaus_amp3, step_amp3, low_exp_amp3, low_exp_decay3,
+            low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
+            sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
+            low_lin_amp2, low_lin_slope2, high_exp_amp2, high_exp_decay2, mu3,
+            sigma3, gaus_amp3, step_amp3, low_exp_amp3, low_exp_decay3,
             low_lin_amp3, low_lin_slope3, high_exp_amp3, high_exp_decay3,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_triple_peak_function, fit_range_low, fit_range_high,
-                   args=args, limit=quad_limit, epsabs=1e-10, epsrel=1e-8)
+    norm, _ = quad(_triple_peak_function,
+                   fit_range_low,
+                   fit_range_high,
+                   args=args,
+                   limit=quad_limit,
+                   epsabs=1e-10,
+                   epsrel=1e-8)
     return _triple_peak_function(x, *args) / norm
 
 
@@ -416,3 +487,149 @@ def double_peak_pdf(fit_range_low, fit_range_high, quad_limit=50):
 def triple_peak_pdf(fit_range_low, fit_range_high, quad_limit=50):
     """Return a normalized triple-peak PDF for use with cost.UnbinnedNLL."""
     return partial(_triple_peak_pdf, fit_range_low, fit_range_high, quad_limit)
+
+
+def fit_single_peak(df_column, fit_range_low, fit_range_high, expected_mu):
+    """
+    Return a Minuit object after fitting with UnbinnedNLL cost function is completed. 
+    """
+    pdf = single_peak_pdf(fit_range_low, fit_range_high)
+    c = cost.UnbinnedNLL(df_column, pdf)
+    values, limits, fixed = estimate_peak_params(df_column,
+                                                 fit_range_low,
+                                                 fit_range_high,
+                                                 mu=expected_mu)
+    m = Minuit(c, **values)
+    for k, v in limits.items():
+        m.limits[k] = v
+    for k, v in fixed.items():
+        m.fixed[k] = v
+
+    m.migrad()
+    best_nll = m.fval
+    gaus_amp = m.values["gaus_amp"]
+    print(f"Initial fit: NLL = {best_nll:.2f}")
+
+    print("Testing low-side group (step + low exp tail + low lin tail)...")
+    m.fixed["step_amp"] = False
+    m.limits["step_amp"] = (0, gaus_amp * 2)
+    m.values["step_amp"] = gaus_amp * 0.1
+
+    m.fixed["low_exp_amp"] = False
+    m.fixed["low_exp_decay"] = False
+    m.limits["low_exp_amp"] = (0, gaus_amp * 2)
+    m.limits["low_exp_decay"] = (0.1, 50)
+    m.values["low_exp_amp"] = gaus_amp * 0.15
+    m.values["low_exp_decay"] = 1.0
+
+    m.fixed["low_lin_amp"] = False
+    m.fixed["low_lin_slope"] = False
+    m.limits["low_lin_amp"] = (0, gaus_amp * 2)
+    m.limits["low_lin_slope"] = (-1, 1)
+    m.values["low_lin_amp"] = gaus_amp * 0.15
+    m.values["low_lin_slope"] = 0.0
+
+    m.migrad()
+    print(
+        f"  Low-side group NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+    )
+
+    if m.fval < best_nll - 1:
+        print("  Low-side group ACCEPTED — pruning individual components...")
+        best_nll = m.fval
+
+        saved = m.values["step_amp"]
+        m.fixed["step_amp"] = True
+        m.values["step_amp"] = 0.0
+        m.migrad()
+        print(
+            f"  Without step: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  Step PRUNED")
+        else:
+            m.fixed["step_amp"] = False
+            m.values["step_amp"] = saved
+            m.migrad()
+            print("  Step KEPT")
+
+        saved_amp = m.values["low_exp_amp"]
+        saved_decay = m.values["low_exp_decay"]
+        m.fixed["low_exp_amp"] = True
+        m.fixed["low_exp_decay"] = True
+        m.values["low_exp_amp"] = 0.0
+        m.values["low_exp_decay"] = 1.0
+        m.migrad()
+        print(
+            f"  Without low exp tail: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  Low exp tail PRUNED")
+        else:
+            m.fixed["low_exp_amp"] = False
+            m.fixed["low_exp_decay"] = False
+            m.values["low_exp_amp"] = saved_amp
+            m.values["low_exp_decay"] = saved_decay
+            m.migrad()
+            print("  Low exp tail KEPT")
+
+        saved_amp = m.values["low_lin_amp"]
+        saved_slope = m.values["low_lin_slope"]
+        m.fixed["low_lin_amp"] = True
+        m.fixed["low_lin_slope"] = True
+        m.values["low_lin_amp"] = 0.0
+        m.values["low_lin_slope"] = 0.0
+        m.migrad()
+        print(
+            f"  Without low lin tail: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
+        )
+        if m.fval < best_nll - 1:
+            best_nll = m.fval
+            print("  Low lin tail PRUNED")
+        else:
+            m.fixed["low_lin_amp"] = False
+            m.fixed["low_lin_slope"] = False
+            m.values["low_lin_amp"] = saved_amp
+            m.values["low_lin_slope"] = saved_slope
+            m.migrad()
+            print("  Low lin tail KEPT")
+    else:
+        print("  Low-side group REJECTED — re-fixing all")
+        m.fixed["step_amp"] = True
+        m.values["step_amp"] = 0.0
+        m.fixed["low_exp_amp"] = True
+        m.fixed["low_exp_decay"] = True
+        m.values["low_exp_amp"] = 0.0
+        m.values["low_exp_decay"] = 1.0
+        m.fixed["low_lin_amp"] = True
+        m.fixed["low_lin_slope"] = True
+        m.values["low_lin_amp"] = 0.0
+        m.values["low_lin_slope"] = 0.0
+
+    print("Testing high exponential tail...")
+    m.fixed["high_exp_amp"] = False
+    m.fixed["high_exp_decay"] = False
+    m.limits["high_exp_amp"] = (0, gaus_amp * 2)
+    m.limits["high_exp_decay"] = (0.1, 50)
+    m.values["high_exp_amp"] = gaus_amp * 0.15
+    m.values["high_exp_decay"] = 1.0
+    m.migrad()
+    print(f"  High tail NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})")
+    if m.fval < best_nll - 1:
+        best_nll = m.fval
+        print("  High tail ACCEPTED")
+    else:
+        m.fixed["high_exp_amp"] = True
+        m.fixed["high_exp_decay"] = True
+        m.values["high_exp_amp"] = 0.0
+        m.values["high_exp_decay"] = 1.0
+        print("  High tail REJECTED")
+
+    print(f"Final fit with selected components...")
+    m.migrad()
+    m.hesse()
+    print(f"Final NLL = {m.fval:.2f}")
+    print(m)
+    return m

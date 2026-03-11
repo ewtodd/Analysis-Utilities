@@ -438,7 +438,8 @@ void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
             << " = " << value << std::endl;
 }
 
-void FittingUtils::PlotFit(const TString input_name, const TString peak_name) {
+void FittingUtils::PlotFitSinglePeak(const TString input_name,
+                                     const TString peak_name) {
   TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
@@ -1007,8 +1008,8 @@ Double_t FittingUtils::ClampToBounds(Int_t param_index, Double_t value) {
   return value;
 }
 
-FitResult FittingUtils::FitPeak(const TString input_name,
-                                const TString peak_name) {
+FitResult FittingUtils::FitSinglePeak(const TString input_name,
+                                      const TString peak_name) {
   FitResult results;
   results.peaks.emplace_back(); // 1 peak, default -1
 
@@ -1322,7 +1323,7 @@ FitResult FittingUtils::FitPeak(const TString input_name,
               << (fit_function_->GetParameter(8) > 1e-6 ? "YES" : "NO")
               << std::endl;
 
-    PlotFit(input_name, peak_name);
+    PlotFitSinglePeak(input_name, peak_name);
 
     PeakFitResult peak;
     peak.mu = fit_function_->GetParameter(0);
