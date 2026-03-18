@@ -1,34 +1,198 @@
-"""PDF component functions for unbinned likelihood fitting.
-
-Ports the C++ FittingFunctions namespace from FittingUtils.cpp.
-All functions accept numpy arrays or scalars for x; parameters are scalars.
-"""
-
 import pickle
 from functools import partial
 from pathlib import Path
 
 import numpy as np
-from scipy.integrate import quad
-from scipy.special import erfc
+from scipy.special import erf, erfc
 from iminuit import Minuit, cost
 
 import ROOT
 
 _SQRT2 = np.sqrt(2.0)
+_SQRT_2_OVER_PI = np.sqrt(2.0 / np.pi)
+_SQRT_PI_OVER_2 = np.sqrt(np.pi / 2.0)
+_INV_SQRT_2PI = 1.0 / np.sqrt(2.0 * np.pi)
+_MAX_SUBSIDIARY_FRAC = 0.25
+
+# ---------------------------------------------------------------------------------
+# Analytic integrals for normalization computed using integral calculator the goat
+# ---------------------------------------------------------------------------------
+
+
+def _integral_gaussian(a, b, mu, sigma, amplitude):
+    """Integral of amplitude * exp(-0.5*((x-mu)/sigma)^2) over [a, b]."""
+    if amplitude == 0.0 or sigma <= 0.0:
+        return 0.0
+    return amplitude * sigma * _SQRT_PI_OVER_2 * (erf(
+        (b - mu) / (_SQRT2 * sigma)) - erf((a - mu) / (_SQRT2 * sigma)))
+
+
+def _integral_linear_background(a, b, bkg_constant, lin_bkg_slope):
+    """Integral of (lin_bkg_slope * x + bkg_constant) over [a, b]."""
+    return bkg_constant * (b - a) + lin_bkg_slope * (b * b - a * a) / 2.0
+
+
+def _step_antideriv(u):
+    """Antiderivative of 1/(1+exp(u))^2.
+ 
+    F(u) = u - ln(1 + exp(u)) + 1/(1 + exp(u))
+    """
+    log1pexp = np.logaddexp(0.0, u)
+    u_safe = np.clip(u, -500.0, 500.0)
+    return u - log1pexp + 1.0 / (1.0 + np.exp(u_safe))
+
+
+def _integral_step(a, b, mu, sigma, step_amplitude):
+    """Integral of step_amplitude / (1+exp((x-mu)/sigma))^2 over [a, b]."""
+    if step_amplitude == 0.0 or sigma <= 0.0:
+        return 0.0
+    za = (a - mu) / sigma
+    zb = (b - mu) / sigma
+    return step_amplitude * sigma * (_step_antideriv(zb) - _step_antideriv(za))
+
+
+def _exp_erfc_antideriv(y, sigma, tau):
+    """Antiderivative of exp(y/tau) * erfc(y/(sqrt(2)*sigma)).
+ 
+    F(y) = tau * exp(sigma^2/(2*tau^2)) * erf(y/(sqrt(2)*sigma) - sigma/(sqrt(2)*tau))
+         + tau * exp(y/tau) * erfc(y/(sqrt(2)*sigma))
+    """
+    u = y / (_SQRT2 * sigma)
+    alpha = sigma / (_SQRT2 * tau)
+    exp_arg = np.clip(alpha * alpha, -700.0, 700.0)
+    term1 = tau * np.exp(exp_arg) * erf(u - alpha)
+    term2 = tau * np.exp(np.clip(y / tau, -700.0, 700.0)) * erfc(u)
+    return term1 + term2
+
+
+def _erfc_const_antideriv(y, sigma):
+    """Antiderivative of erfc(y/(sqrt(2)*sigma)).
+ 
+    F(y) = y * erfc(y/(sqrt(2)*sigma)) - sigma*sqrt(2/pi)*exp(-y^2/(2*sigma^2))
+    """
+    u = y / (_SQRT2 * sigma)
+    return y * erfc(u) - sigma * _SQRT_2_OVER_PI * np.exp(
+        np.clip(-u * u, -700.0, 0.0))
+
+
+def _erfc_slope_antideriv(y, sigma):
+    """Antiderivative of y * erfc(y/(sqrt(2)*sigma)).
+ 
+    F(y) = sigma^2/2 * erf(y/(sqrt(2)*sigma))
+         + y^2/2 * erfc(y/(sqrt(2)*sigma))
+         - y*sigma/sqrt(2*pi) * exp(-y^2/(2*sigma^2))
+    """
+    u = y / (_SQRT2 * sigma)
+    s2 = sigma * sigma
+    exp_term = np.exp(np.clip(-u * u, -700.0, 0.0))
+    return (s2 / 2.0 * erf(u) + y * y / 2.0 * erfc(u) -
+            y * sigma * _INV_SQRT_2PI * exp_term)
+
+
+def _integral_low_tail(a, b, mu, sigma, exp_amp, exp_decay, lin_amp,
+                       lin_slope):
+    """Integral of low tail over [a, b] (y = x - mu)."""
+    if sigma <= 0.0 or (exp_amp == 0.0 and lin_amp == 0.0):
+        return 0.0
+    ya = a - mu
+    yb = b - mu
+    result = 0.0
+    if exp_amp != 0.0:
+        result += exp_amp * (_exp_erfc_antideriv(yb, sigma, exp_decay) -
+                             _exp_erfc_antideriv(ya, sigma, exp_decay))
+    if lin_amp != 0.0:
+        result += lin_amp * (_erfc_const_antideriv(yb, sigma) -
+                             _erfc_const_antideriv(ya, sigma))
+        result += lin_amp * lin_slope * (_erfc_slope_antideriv(yb, sigma) -
+                                         _erfc_slope_antideriv(ya, sigma))
+    return result
+
+
+def _integral_high_tail(a, b, mu, sigma, exp_amp, exp_decay):
+    """Integral of high tail over [a, b] (y = mu - x)."""
+    if sigma <= 0.0 or exp_amp == 0.0:
+        return 0.0
+    ya = mu - b
+    yb = mu - a
+    return exp_amp * (_exp_erfc_antideriv(yb, sigma, exp_decay) -
+                      _exp_erfc_antideriv(ya, sigma, exp_decay))
+
+
+def _analytic_norm_peak(a, b, mu, sigma, gaus_amp, step_amp, low_exp_amp,
+                        low_exp_decay, low_lin_amp, low_lin_slope,
+                        high_exp_amp, high_exp_decay):
+    """Analytic integral of one peak's components (no background) over [a, b]."""
+    return (_integral_gaussian(a, b, mu, sigma, gaus_amp) +
+            _integral_step(a, b, mu, sigma, step_amp) +
+            _integral_low_tail(a, b, mu, sigma, low_exp_amp, low_exp_decay,
+                               low_lin_amp, low_lin_slope) +
+            _integral_high_tail(a, b, mu, sigma, high_exp_amp, high_exp_decay))
+
+
+def _analytic_norm_single(a, b, mu, sigma, gaus_amp, step_amp, low_exp_amp,
+                          low_exp_decay, low_lin_amp, low_lin_slope,
+                          high_exp_amp, high_exp_decay, bkg_constant,
+                          lin_bkg_slope):
+    """Analytic integral of the full single-peak model over [a, b]."""
+    return (_analytic_norm_peak(a, b, mu, sigma, gaus_amp, step_amp,
+                                low_exp_amp, low_exp_decay, low_lin_amp,
+                                low_lin_slope, high_exp_amp, high_exp_decay) +
+            _integral_linear_background(a, b, bkg_constant, lin_bkg_slope))
+
+
+def _analytic_norm_double(a, b, mu1, sigma1, gaus_amp1, step_amp1,
+                          low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                          low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
+                          sigma2, gaus_amp2, step_amp2, low_exp_amp2,
+                          low_exp_decay2, low_lin_amp2, low_lin_slope2,
+                          high_exp_amp2, high_exp_decay2, bkg_constant,
+                          lin_bkg_slope):
+    """Analytic integral of the full double-peak model over [a, b]."""
+    return (
+        _analytic_norm_peak(a, b, mu1, sigma1, gaus_amp1, step_amp1,
+                            low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                            low_lin_slope1, high_exp_amp1, high_exp_decay1) +
+        _analytic_norm_peak(a, b, mu2, sigma2, gaus_amp2, step_amp2,
+                            low_exp_amp2, low_exp_decay2, low_lin_amp2,
+                            low_lin_slope2, high_exp_amp2, high_exp_decay2) +
+        _integral_linear_background(a, b, bkg_constant, lin_bkg_slope))
+
+
+def _analytic_norm_triple(a, b, mu1, sigma1, gaus_amp1, step_amp1,
+                          low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                          low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
+                          sigma2, gaus_amp2, step_amp2, low_exp_amp2,
+                          low_exp_decay2, low_lin_amp2, low_lin_slope2,
+                          high_exp_amp2, high_exp_decay2, mu3, sigma3,
+                          gaus_amp3, step_amp3, low_exp_amp3, low_exp_decay3,
+                          low_lin_amp3, low_lin_slope3, high_exp_amp3,
+                          high_exp_decay3, bkg_constant, lin_bkg_slope):
+    """Analytic integral of the full triple-peak model over [a, b]."""
+    return (
+        _analytic_norm_peak(a, b, mu1, sigma1, gaus_amp1, step_amp1,
+                            low_exp_amp1, low_exp_decay1, low_lin_amp1,
+                            low_lin_slope1, high_exp_amp1, high_exp_decay1) +
+        _analytic_norm_peak(a, b, mu2, sigma2, gaus_amp2, step_amp2,
+                            low_exp_amp2, low_exp_decay2, low_lin_amp2,
+                            low_lin_slope2, high_exp_amp2, high_exp_decay2) +
+        _analytic_norm_peak(a, b, mu3, sigma3, gaus_amp3, step_amp3,
+                            low_exp_amp3, low_exp_decay3, low_lin_amp3,
+                            low_lin_slope3, high_exp_amp3, high_exp_decay3) +
+        _integral_linear_background(a, b, bkg_constant, lin_bkg_slope))
+
 
 _SINGLE_PEAK_PARAM_ORDER = [
-    "mu", "sigma", "gaus_amp", "step_amp", "low_exp_amp", "low_exp_decay",
-    "low_lin_amp", "low_lin_slope", "high_exp_amp", "high_exp_decay",
+    "mu", "sigma", "gaus_amp", "step_frac", "low_exp_frac", "low_exp_decay",
+    "low_lin_frac", "low_lin_slope", "high_exp_frac", "high_exp_decay",
     "bkg_constant", "lin_bkg_slope"
 ]
 
 _DOUBLE_PEAK_PARAM_ORDER = [
-    "mu1", "sigma1", "gaus_amp1", "step_amp1", "low_exp_amp1",
-    "low_exp_decay1", "low_lin_amp1", "low_lin_slope1", "high_exp_amp1",
-    "high_exp_decay1", "mu2", "sigma2", "gaus_amp2", "step_amp2",
-    "low_exp_amp2", "low_exp_decay2", "low_lin_amp2", "low_lin_slope2",
-    "high_exp_amp2", "high_exp_decay2", "bkg_constant", "lin_bkg_slope"
+    "mu1", "sigma1", "gaus_amp1", "step_frac1", "low_exp_frac1",
+    "low_exp_decay1", "low_lin_frac1", "low_lin_slope1", "high_exp_frac1",
+    "high_exp_decay1", "mu2", "sigma2", "gaus_amp2", "step_frac2",
+    "low_exp_frac2", "low_exp_decay2", "low_lin_frac2", "low_lin_slope2",
+    "high_exp_frac2", "high_exp_decay2", "bkg_constant", "lin_bkg_slope"
 ]
 
 
@@ -204,52 +368,49 @@ def _estimate_single_peak(data,
     values[f"gaus_amp{suffix}"] = peak_height * 0.999
     limits[f"gaus_amp{suffix}"] = (0, peak_height * 2.0)
 
-    # Step
+    # Step fraction
     if use_step:
-        values[f"step_amp{suffix}"] = peak_height * 0.1
-        limits[f"step_amp{suffix}"] = (0, peak_height)
+        values[f"step_frac{suffix}"] = 0.1
+        limits[f"step_frac{suffix}"] = (0, _MAX_SUBSIDIARY_FRAC)
     else:
-        values[f"step_amp{suffix}"] = 0.0
-        fixed[f"step_amp{suffix}"] = True
+        values[f"step_frac{suffix}"] = 0.0
+        fixed[f"step_frac{suffix}"] = True
 
-    # Low exponential tail
+    # Low exponential tail fraction
     if use_low_exp_tail:
-        values[f"low_exp_amp{suffix}"] = min(peak_height * 0.15,
-                                             peak_height * 0.25)
-        limits[f"low_exp_amp{suffix}"] = (0, peak_height)
+        values[f"low_exp_frac{suffix}"] = 0.15
+        limits[f"low_exp_frac{suffix}"] = (0, _MAX_SUBSIDIARY_FRAC)
         values[f"low_exp_decay{suffix}"] = 1.0
         limits[f"low_exp_decay{suffix}"] = (0.1, 50)
     else:
-        values[f"low_exp_amp{suffix}"] = 0.0
+        values[f"low_exp_frac{suffix}"] = 0.0
         values[f"low_exp_decay{suffix}"] = 1.0
-        fixed[f"low_exp_amp{suffix}"] = True
+        fixed[f"low_exp_frac{suffix}"] = True
         fixed[f"low_exp_decay{suffix}"] = True
 
-    # Low linear tail
+    # Low linear tail fraction
     if use_low_lin_tail:
-        values[f"low_lin_amp{suffix}"] = min(peak_height * 0.15,
-                                             peak_height * 0.25)
-        limits[f"low_lin_amp{suffix}"] = (0, peak_height)
+        values[f"low_lin_frac{suffix}"] = 0.15
+        limits[f"low_lin_frac{suffix}"] = (0, _MAX_SUBSIDIARY_FRAC)
         values[f"low_lin_slope{suffix}"] = 0.0
         limits[f"low_lin_slope{suffix}"] = (-0.5 * bkg_estimate / range_width,
                                             0.5 * bkg_estimate / range_width)
     else:
-        values[f"low_lin_amp{suffix}"] = 0.0
+        values[f"low_lin_frac{suffix}"] = 0.0
         values[f"low_lin_slope{suffix}"] = 0.0
-        fixed[f"low_lin_amp{suffix}"] = True
+        fixed[f"low_lin_frac{suffix}"] = True
         fixed[f"low_lin_slope{suffix}"] = True
 
-    # High exponential tail
+    # High exponential tail fraction
     if use_high_exp_tail:
-        values[f"high_exp_amp{suffix}"] = min(peak_height * 0.15,
-                                              peak_height * 0.25)
-        limits[f"high_exp_amp{suffix}"] = (0, peak_height)
+        values[f"high_exp_frac{suffix}"] = 0.15
+        limits[f"high_exp_frac{suffix}"] = (0, _MAX_SUBSIDIARY_FRAC)
         values[f"high_exp_decay{suffix}"] = 1.0
         limits[f"high_exp_decay{suffix}"] = (0.1, 50)
     else:
-        values[f"high_exp_amp{suffix}"] = 0.0
+        values[f"high_exp_frac{suffix}"] = 0.0
         values[f"high_exp_decay{suffix}"] = 1.0
-        fixed[f"high_exp_amp{suffix}"] = True
+        fixed[f"high_exp_frac{suffix}"] = True
         fixed[f"high_exp_decay{suffix}"] = True
 
     return values, limits, fixed
@@ -430,44 +591,65 @@ def estimate_triple_peak_params(data,
 
 
 def _single_peak_pdf(fit_range_low, fit_range_high, x, mu, sigma, gaus_amp,
-                     step_amp, low_exp_amp, low_exp_decay, low_lin_amp,
-                     low_lin_slope, high_exp_amp, high_exp_decay, bkg_constant,
-                     lin_bkg_slope):
+                     step_frac, low_exp_frac, low_exp_decay, low_lin_frac,
+                     low_lin_slope, high_exp_frac, high_exp_decay,
+                     bkg_constant, lin_bkg_slope):
+    step_amp = step_frac * gaus_amp
+    low_exp_amp = low_exp_frac * gaus_amp
+    low_lin_amp = low_lin_frac * gaus_amp
+    high_exp_amp = high_exp_frac * gaus_amp
     args = (mu, sigma, gaus_amp, step_amp, low_exp_amp, low_exp_decay,
             low_lin_amp, low_lin_slope, high_exp_amp, high_exp_decay,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_peak_function, fit_range_low, fit_range_high, args=args)
+    norm = _analytic_norm_single(fit_range_low, fit_range_high, *args)
     return _peak_function(x, *args) / norm
 
 
 def _double_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
-                     step_amp1, low_exp_amp1, low_exp_decay1, low_lin_amp1,
-                     low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
-                     sigma2, gaus_amp2, step_amp2, low_exp_amp2,
-                     low_exp_decay2, low_lin_amp2, low_lin_slope2,
-                     high_exp_amp2, high_exp_decay2, bkg_constant,
+                     step_frac1, low_exp_frac1, low_exp_decay1, low_lin_frac1,
+                     low_lin_slope1, high_exp_frac1, high_exp_decay1, mu2,
+                     sigma2, gaus_amp2, step_frac2, low_exp_frac2,
+                     low_exp_decay2, low_lin_frac2, low_lin_slope2,
+                     high_exp_frac2, high_exp_decay2, bkg_constant,
                      lin_bkg_slope):
+    step_amp1 = step_frac1 * gaus_amp1
+    low_exp_amp1 = low_exp_frac1 * gaus_amp1
+    low_lin_amp1 = low_lin_frac1 * gaus_amp1
+    high_exp_amp1 = high_exp_frac1 * gaus_amp1
+    step_amp2 = step_frac2 * gaus_amp2
+    low_exp_amp2 = low_exp_frac2 * gaus_amp2
+    low_lin_amp2 = low_lin_frac2 * gaus_amp2
+    high_exp_amp2 = high_exp_frac2 * gaus_amp2
     args = (mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
             low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
             sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
             low_lin_amp2, low_lin_slope2, high_exp_amp2, high_exp_decay2,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_double_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=args)
+    norm = _analytic_norm_double(fit_range_low, fit_range_high, *args)
     return _double_peak_function(x, *args) / norm
 
 
 def _triple_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
-                     step_amp1, low_exp_amp1, low_exp_decay1, low_lin_amp1,
-                     low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
-                     sigma2, gaus_amp2, step_amp2, low_exp_amp2,
-                     low_exp_decay2, low_lin_amp2, low_lin_slope2,
-                     high_exp_amp2, high_exp_decay2, mu3, sigma3, gaus_amp3,
-                     step_amp3, low_exp_amp3, low_exp_decay3, low_lin_amp3,
-                     low_lin_slope3, high_exp_amp3, high_exp_decay3,
+                     step_frac1, low_exp_frac1, low_exp_decay1, low_lin_frac1,
+                     low_lin_slope1, high_exp_frac1, high_exp_decay1, mu2,
+                     sigma2, gaus_amp2, step_frac2, low_exp_frac2,
+                     low_exp_decay2, low_lin_frac2, low_lin_slope2,
+                     high_exp_frac2, high_exp_decay2, mu3, sigma3, gaus_amp3,
+                     step_frac3, low_exp_frac3, low_exp_decay3, low_lin_frac3,
+                     low_lin_slope3, high_exp_frac3, high_exp_decay3,
                      bkg_constant, lin_bkg_slope):
+    step_amp1 = step_frac1 * gaus_amp1
+    low_exp_amp1 = low_exp_frac1 * gaus_amp1
+    low_lin_amp1 = low_lin_frac1 * gaus_amp1
+    high_exp_amp1 = high_exp_frac1 * gaus_amp1
+    step_amp2 = step_frac2 * gaus_amp2
+    low_exp_amp2 = low_exp_frac2 * gaus_amp2
+    low_lin_amp2 = low_lin_frac2 * gaus_amp2
+    high_exp_amp2 = high_exp_frac2 * gaus_amp2
+    step_amp3 = step_frac3 * gaus_amp3
+    low_exp_amp3 = low_exp_frac3 * gaus_amp3
+    low_lin_amp3 = low_lin_frac3 * gaus_amp3
+    high_exp_amp3 = high_exp_frac3 * gaus_amp3
     args = (mu1, sigma1, gaus_amp1, step_amp1, low_exp_amp1, low_exp_decay1,
             low_lin_amp1, low_lin_slope1, high_exp_amp1, high_exp_decay1, mu2,
             sigma2, gaus_amp2, step_amp2, low_exp_amp2, low_exp_decay2,
@@ -475,10 +657,7 @@ def _triple_peak_pdf(fit_range_low, fit_range_high, x, mu1, sigma1, gaus_amp1,
             sigma3, gaus_amp3, step_amp3, low_exp_amp3, low_exp_decay3,
             low_lin_amp3, low_lin_slope3, high_exp_amp3, high_exp_decay3,
             bkg_constant, lin_bkg_slope)
-    norm, _ = quad(_triple_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=args)
+    norm = _analytic_norm_triple(fit_range_low, fit_range_high, *args)
     return _triple_peak_function(x, *args) / norm
 
 
@@ -495,6 +674,62 @@ def double_peak_pdf(fit_range_low, fit_range_high):
 def triple_peak_pdf(fit_range_low, fit_range_high):
     """Return a normalized triple-peak PDF for use with cost.UnbinnedNLL."""
     return partial(_triple_peak_pdf, fit_range_low, fit_range_high)
+
+
+def _frac_to_amp_params(minuit_result, param_order):
+    """Convert fraction-parameterized Minuit values to absolute amplitudes.
+
+    Returns a tuple of parameter values in the same order as param_order,
+    but with *_frac entries replaced by frac * gaus_amp (the absolute amplitude
+    that the C++ functions expect).
+    """
+    vals = []
+    for name in param_order:
+        v = minuit_result.values[name]
+        if "_frac" in name:
+            # Determine which peak's gaus_amp to multiply by
+            suffix = name.split("_frac")[-1]  # "" or "1" or "2" or "3"
+            gaus_key = f"gaus_amp{suffix}"
+            v = v * minuit_result.values[gaus_key]
+        vals.append(v)
+    return tuple(vals)
+
+
+def _frac_to_amp_errors(minuit_result, param_order):
+    """Convert fraction-parameterized Minuit errors to absolute amplitude errors.
+
+    Uses simple product rule: err(frac * gaus_amp) ≈ frac * gaus_amp_err
+    + gaus_amp * frac_err (added in quadrature), but for plotting purposes
+    the dominant term is gaus_amp * frac_err since gaus_amp is well-determined.
+    """
+    errs = []
+    for name in param_order:
+        e = minuit_result.errors[name]
+        if "_frac" in name:
+            suffix = name.split("_frac")[-1]
+            gaus_key = f"gaus_amp{suffix}"
+            gaus_amp = minuit_result.values[gaus_key]
+            gaus_err = minuit_result.errors[gaus_key]
+            frac = minuit_result.values[name]
+            e = np.sqrt((gaus_amp * e)**2 + (frac * gaus_err)**2)
+        errs.append(e)
+    return tuple(errs)
+
+
+# C++ parameter order (absolute amplitudes, not fractions)
+_SINGLE_PEAK_CPP_ORDER = [
+    "mu", "sigma", "gaus_amp", "step_amp", "low_exp_amp", "low_exp_decay",
+    "low_lin_amp", "low_lin_slope", "high_exp_amp", "high_exp_decay",
+    "bkg_constant", "lin_bkg_slope"
+]
+
+_DOUBLE_PEAK_CPP_ORDER = [
+    "mu1", "sigma1", "gaus_amp1", "step_amp1", "low_exp_amp1",
+    "low_exp_decay1", "low_lin_amp1", "low_lin_slope1", "high_exp_amp1",
+    "high_exp_decay1", "mu2", "sigma2", "gaus_amp2", "step_amp2",
+    "low_exp_amp2", "low_exp_decay2", "low_lin_amp2", "low_lin_slope2",
+    "high_exp_amp2", "high_exp_decay2", "bkg_constant", "lin_bkg_slope"
+]
 
 
 def plot_single_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
@@ -519,32 +754,34 @@ def plot_single_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
     n_events = hist.Integral(bin_low, bin_high)
     bin_width = hist.GetBinWidth(1)
 
-    params = tuple(minuit_result.values[name]
-                   for name in _SINGLE_PEAK_PARAM_ORDER)
-    norm, _ = quad(_peak_function, fit_range_low, fit_range_high, args=params)
+    # Convert fracs → absolute amps for norm computation and C++ TF1
+    abs_params = _frac_to_amp_params(minuit_result, _SINGLE_PEAK_PARAM_ORDER)
+    abs_errors = _frac_to_amp_errors(minuit_result, _SINGLE_PEAK_PARAM_ORDER)
+    norm = _analytic_norm_single(fit_range_low, fit_range_high, *abs_params)
     scale = n_events * bin_width / norm
 
     # Indices of amplitude parameters (linear in the function value).
     # Shape params (mu, sigma, exp_decay, lin_slope) are unchanged.
     amp_indices = {2, 3, 4, 6, 8, 10, 11}
 
-    def _active(name):
-        return (not minuit_result.fixed[name]
-                and abs(minuit_result.values[name]) > 1e-6)
+    def _active(frac_name):
+        return (not minuit_result.fixed[frac_name]
+                and abs(minuit_result.values[frac_name]) > 1e-6)
 
     fitter = ROOT.FittingUtils(hist, fit_range_low, fit_range_high, False,
-                               _active("step_amp"), _active("low_exp_amp"),
-                               _active("low_lin_amp"), _active("high_exp_amp"))
+                               _active("step_frac"), _active("low_exp_frac"),
+                               _active("low_lin_frac"),
+                               _active("high_exp_frac"))
     tf1 = fitter.GetFitFunction()
-    for i, name in enumerate(_SINGLE_PEAK_PARAM_ORDER):
-        val = minuit_result.values[name]
-        err = minuit_result.errors[name]
+    for i in range(len(_SINGLE_PEAK_PARAM_ORDER)):
+        val = abs_params[i]
+        err = abs_errors[i]
         if i in amp_indices:
             val *= scale
             err *= scale
         tf1.SetParameter(i, val)
         tf1.SetParError(i, err)
-        if minuit_result.fixed[name]:
+        if minuit_result.fixed[_SINGLE_PEAK_PARAM_ORDER[i]]:
             tf1.FixParameter(i, val)
 
     # Chi2/ndf from binned data
@@ -581,38 +818,36 @@ def plot_double_peak_fit(hist, minuit_result, fit_range_low, fit_range_high,
     n_events = hist.Integral(bin_low, bin_high)
     bin_width = hist.GetBinWidth(1)
 
-    params = tuple(minuit_result.values[name]
-                   for name in _DOUBLE_PEAK_PARAM_ORDER)
-    norm, _ = quad(_double_peak_function,
-                   fit_range_low,
-                   fit_range_high,
-                   args=params)
+    # Convert fracs → absolute amps for norm computation and C++ TF1
+    abs_params = _frac_to_amp_params(minuit_result, _DOUBLE_PEAK_PARAM_ORDER)
+    abs_errors = _frac_to_amp_errors(minuit_result, _DOUBLE_PEAK_PARAM_ORDER)
+    norm = _analytic_norm_double(fit_range_low, fit_range_high, *abs_params)
     scale = n_events * bin_width / norm
 
     amp_indices = {2, 3, 4, 6, 8, 12, 13, 14, 16, 18, 20, 21}
 
-    def _active(name):
-        return (not minuit_result.fixed[name]
-                and abs(minuit_result.values[name]) > 1e-6)
+    def _active(frac_name):
+        return (not minuit_result.fixed[frac_name]
+                and abs(minuit_result.values[frac_name]) > 1e-6)
 
     fitter = ROOT.FittingUtils(
         hist, fit_range_low, fit_range_high, False,
-        _active("step_amp1") or _active("step_amp2"),
-        _active("low_exp_amp1") or _active("low_exp_amp2"),
-        _active("low_lin_amp1") or _active("low_lin_amp2"),
-        _active("high_exp_amp1") or _active("high_exp_amp2"))
+        _active("step_frac1") or _active("step_frac2"),
+        _active("low_exp_frac1") or _active("low_exp_frac2"),
+        _active("low_lin_frac1") or _active("low_lin_frac2"),
+        _active("high_exp_frac1") or _active("high_exp_frac2"))
 
     tf1 = ROOT.TF1("DoublePeak", ROOT.FittingFunctions.DoublePeakFunction,
                    fit_range_low, fit_range_high, 22)
-    for i, name in enumerate(_DOUBLE_PEAK_PARAM_ORDER):
-        val = minuit_result.values[name]
-        err = minuit_result.errors[name]
+    for i in range(len(_DOUBLE_PEAK_PARAM_ORDER)):
+        val = abs_params[i]
+        err = abs_errors[i]
         if i in amp_indices:
             val *= scale
             err *= scale
         tf1.SetParameter(i, val)
         tf1.SetParError(i, err)
-        if minuit_result.fixed[name]:
+        if minuit_result.fixed[_DOUBLE_PEAK_PARAM_ORDER[i]]:
             tf1.FixParameter(i, val)
     fitter.SetFitFunction(tf1)
 
@@ -714,22 +949,22 @@ def fit_single_peak(df_column,
     print(f"Initial fit: NLL = {best_nll:.2f}")
 
     print("Testing low-side group (step + low exp tail + low lin tail)...")
-    m.fixed["step_amp"] = False
-    m.limits["step_amp"] = (0, gaus_amp * 2)
-    m.values["step_amp"] = gaus_amp * 0.1
+    m.fixed["step_frac"] = False
+    m.limits["step_frac"] = (0, _MAX_SUBSIDIARY_FRAC)
+    m.values["step_frac"] = 0.1
 
-    m.fixed["low_exp_amp"] = False
+    m.fixed["low_exp_frac"] = False
     m.fixed["low_exp_decay"] = False
-    m.limits["low_exp_amp"] = (0, gaus_amp * 2)
+    m.limits["low_exp_frac"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits["low_exp_decay"] = (0.1, 50)
-    m.values["low_exp_amp"] = gaus_amp * 0.15
+    m.values["low_exp_frac"] = 0.15
     m.values["low_exp_decay"] = 1.0
 
-    m.fixed["low_lin_amp"] = False
+    m.fixed["low_lin_frac"] = False
     m.fixed["low_lin_slope"] = False
-    m.limits["low_lin_amp"] = (0, gaus_amp * 2)
+    m.limits["low_lin_frac"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits["low_lin_slope"] = (-1, 1)
-    m.values["low_lin_amp"] = gaus_amp * 0.15
+    m.values["low_lin_frac"] = 0.15
     m.values["low_lin_slope"] = 0.0
 
     m.migrad()
@@ -738,85 +973,27 @@ def fit_single_peak(df_column,
     )
 
     if m.fval < best_nll - 1:
-        print("  Low-side group ACCEPTED — pruning individual components...")
+        print("  Low-side group ACCEPTED")
         best_nll = m.fval
-
-        saved = m.values["step_amp"]
-        m.fixed["step_amp"] = True
-        m.values["step_amp"] = 0.0
-        m.migrad()
-        print(
-            f"  Without step: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  Step PRUNED")
-        else:
-            m.fixed["step_amp"] = False
-            m.values["step_amp"] = saved
-            m.migrad()
-            print("  Step KEPT")
-
-        saved_amp = m.values["low_exp_amp"]
-        saved_decay = m.values["low_exp_decay"]
-        m.fixed["low_exp_amp"] = True
-        m.fixed["low_exp_decay"] = True
-        m.values["low_exp_amp"] = 0.0
-        m.values["low_exp_decay"] = 1.0
-        m.migrad()
-        print(
-            f"  Without low exp tail: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  Low exp tail PRUNED")
-        else:
-            m.fixed["low_exp_amp"] = False
-            m.fixed["low_exp_decay"] = False
-            m.values["low_exp_amp"] = saved_amp
-            m.values["low_exp_decay"] = saved_decay
-            m.migrad()
-            print("  Low exp tail KEPT")
-
-        saved_amp = m.values["low_lin_amp"]
-        saved_slope = m.values["low_lin_slope"]
-        m.fixed["low_lin_amp"] = True
-        m.fixed["low_lin_slope"] = True
-        m.values["low_lin_amp"] = 0.0
-        m.values["low_lin_slope"] = 0.0
-        m.migrad()
-        print(
-            f"  Without low lin tail: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  Low lin tail PRUNED")
-        else:
-            m.fixed["low_lin_amp"] = False
-            m.fixed["low_lin_slope"] = False
-            m.values["low_lin_amp"] = saved_amp
-            m.values["low_lin_slope"] = saved_slope
-            m.migrad()
-            print("  Low lin tail KEPT")
     else:
         print("  Low-side group REJECTED — re-fixing all")
-        m.fixed["step_amp"] = True
-        m.values["step_amp"] = 0.0
-        m.fixed["low_exp_amp"] = True
+        m.fixed["step_frac"] = True
+        m.values["step_frac"] = 0.0
+        m.fixed["low_exp_frac"] = True
         m.fixed["low_exp_decay"] = True
-        m.values["low_exp_amp"] = 0.0
+        m.values["low_exp_frac"] = 0.0
         m.values["low_exp_decay"] = 1.0
-        m.fixed["low_lin_amp"] = True
+        m.fixed["low_lin_frac"] = True
         m.fixed["low_lin_slope"] = True
-        m.values["low_lin_amp"] = 0.0
+        m.values["low_lin_frac"] = 0.0
         m.values["low_lin_slope"] = 0.0
 
     print("Testing high exponential tail...")
-    m.fixed["high_exp_amp"] = False
+    m.fixed["high_exp_frac"] = False
     m.fixed["high_exp_decay"] = False
-    m.limits["high_exp_amp"] = (0, gaus_amp * 2)
+    m.limits["high_exp_frac"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits["high_exp_decay"] = (0.1, 50)
-    m.values["high_exp_amp"] = gaus_amp * 0.15
+    m.values["high_exp_frac"] = 0.15
     m.values["high_exp_decay"] = 1.0
     m.migrad()
     print(f"  High tail NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})")
@@ -824,9 +1001,9 @@ def fit_single_peak(df_column,
         best_nll = m.fval
         print("  High tail ACCEPTED")
     else:
-        m.fixed["high_exp_amp"] = True
+        m.fixed["high_exp_frac"] = True
         m.fixed["high_exp_decay"] = True
-        m.values["high_exp_amp"] = 0.0
+        m.values["high_exp_frac"] = 0.0
         m.values["high_exp_decay"] = 1.0
         print("  High tail REJECTED")
 
@@ -841,27 +1018,27 @@ def fit_single_peak(df_column,
 
 
 def _test_low_side_group(m, suffix, gaus_amp, best_nll):
-    """Test and prune low-side components for a single peak within a
+    """Test and accept/reject low-side components for a single peak within a
     multi-peak fit. Returns updated best_nll."""
     s = suffix
     print(f"Testing low-side group for peak{s}...")
 
-    m.fixed[f"step_amp{s}"] = False
-    m.limits[f"step_amp{s}"] = (0, gaus_amp * 2)
-    m.values[f"step_amp{s}"] = gaus_amp * 0.1
+    m.fixed[f"step_frac{s}"] = False
+    m.limits[f"step_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
+    m.values[f"step_frac{s}"] = 0.1
 
-    m.fixed[f"low_exp_amp{s}"] = False
+    m.fixed[f"low_exp_frac{s}"] = False
     m.fixed[f"low_exp_decay{s}"] = False
-    m.limits[f"low_exp_amp{s}"] = (0, gaus_amp * 2)
+    m.limits[f"low_exp_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits[f"low_exp_decay{s}"] = (0.1, 50)
-    m.values[f"low_exp_amp{s}"] = gaus_amp * 0.15
+    m.values[f"low_exp_frac{s}"] = 0.15
     m.values[f"low_exp_decay{s}"] = 1.0
 
-    m.fixed[f"low_lin_amp{s}"] = False
+    m.fixed[f"low_lin_frac{s}"] = False
     m.fixed[f"low_lin_slope{s}"] = False
-    m.limits[f"low_lin_amp{s}"] = (0, gaus_amp * 2)
+    m.limits[f"low_lin_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits[f"low_lin_slope{s}"] = (-1, 1)
-    m.values[f"low_lin_amp{s}"] = gaus_amp * 0.15
+    m.values[f"low_lin_frac{s}"] = 0.15
     m.values[f"low_lin_slope{s}"] = 0.0
 
     m.migrad()
@@ -870,77 +1047,19 @@ def _test_low_side_group(m, suffix, gaus_amp, best_nll):
     )
 
     if m.fval < best_nll - 1:
-        print(f"  Low-side group peak{s} ACCEPTED — pruning...")
+        print(f"  Low-side group peak{s} ACCEPTED")
         best_nll = m.fval
-
-        saved = m.values[f"step_amp{s}"]
-        m.fixed[f"step_amp{s}"] = True
-        m.values[f"step_amp{s}"] = 0.0
-        m.migrad()
-        print(
-            f"  Without step{s}: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print(f"  Step{s} PRUNED")
-        else:
-            m.fixed[f"step_amp{s}"] = False
-            m.values[f"step_amp{s}"] = saved
-            m.migrad()
-            print(f"  Step{s} KEPT")
-
-        saved_amp = m.values[f"low_exp_amp{s}"]
-        saved_decay = m.values[f"low_exp_decay{s}"]
-        m.fixed[f"low_exp_amp{s}"] = True
-        m.fixed[f"low_exp_decay{s}"] = True
-        m.values[f"low_exp_amp{s}"] = 0.0
-        m.values[f"low_exp_decay{s}"] = 1.0
-        m.migrad()
-        print(
-            f"  Without low exp tail{s}: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print(f"  Low exp tail{s} PRUNED")
-        else:
-            m.fixed[f"low_exp_amp{s}"] = False
-            m.fixed[f"low_exp_decay{s}"] = False
-            m.values[f"low_exp_amp{s}"] = saved_amp
-            m.values[f"low_exp_decay{s}"] = saved_decay
-            m.migrad()
-            print(f"  Low exp tail{s} KEPT")
-
-        saved_amp = m.values[f"low_lin_amp{s}"]
-        saved_slope = m.values[f"low_lin_slope{s}"]
-        m.fixed[f"low_lin_amp{s}"] = True
-        m.fixed[f"low_lin_slope{s}"] = True
-        m.values[f"low_lin_amp{s}"] = 0.0
-        m.values[f"low_lin_slope{s}"] = 0.0
-        m.migrad()
-        print(
-            f"  Without low lin tail{s}: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print(f"  Low lin tail{s} PRUNED")
-        else:
-            m.fixed[f"low_lin_amp{s}"] = False
-            m.fixed[f"low_lin_slope{s}"] = False
-            m.values[f"low_lin_amp{s}"] = saved_amp
-            m.values[f"low_lin_slope{s}"] = saved_slope
-            m.migrad()
-            print(f"  Low lin tail{s} KEPT")
     else:
         print(f"  Low-side group peak{s} REJECTED — re-fixing all")
-        m.fixed[f"step_amp{s}"] = True
-        m.values[f"step_amp{s}"] = 0.0
-        m.fixed[f"low_exp_amp{s}"] = True
+        m.fixed[f"step_frac{s}"] = True
+        m.values[f"step_frac{s}"] = 0.0
+        m.fixed[f"low_exp_frac{s}"] = True
         m.fixed[f"low_exp_decay{s}"] = True
-        m.values[f"low_exp_amp{s}"] = 0.0
+        m.values[f"low_exp_frac{s}"] = 0.0
         m.values[f"low_exp_decay{s}"] = 1.0
-        m.fixed[f"low_lin_amp{s}"] = True
+        m.fixed[f"low_lin_frac{s}"] = True
         m.fixed[f"low_lin_slope{s}"] = True
-        m.values[f"low_lin_amp{s}"] = 0.0
+        m.values[f"low_lin_frac{s}"] = 0.0
         m.values[f"low_lin_slope{s}"] = 0.0
 
     return best_nll
@@ -950,11 +1069,11 @@ def _test_high_tail(m, suffix, gaus_amp, best_nll):
     """Test high exponential tail for a single peak. Returns updated best_nll."""
     s = suffix
     print(f"Testing high exponential tail for peak{s}...")
-    m.fixed[f"high_exp_amp{s}"] = False
+    m.fixed[f"high_exp_frac{s}"] = False
     m.fixed[f"high_exp_decay{s}"] = False
-    m.limits[f"high_exp_amp{s}"] = (0, gaus_amp * 2)
+    m.limits[f"high_exp_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits[f"high_exp_decay{s}"] = (0.1, 50)
-    m.values[f"high_exp_amp{s}"] = gaus_amp * 0.15
+    m.values[f"high_exp_frac{s}"] = 0.15
     m.values[f"high_exp_decay{s}"] = 1.0
     m.migrad()
     print(
@@ -963,9 +1082,9 @@ def _test_high_tail(m, suffix, gaus_amp, best_nll):
         best_nll = m.fval
         print(f"  High tail{s} ACCEPTED")
     else:
-        m.fixed[f"high_exp_amp{s}"] = True
+        m.fixed[f"high_exp_frac{s}"] = True
         m.fixed[f"high_exp_decay{s}"] = True
-        m.values[f"high_exp_amp{s}"] = 0.0
+        m.values[f"high_exp_frac{s}"] = 0.0
         m.values[f"high_exp_decay{s}"] = 1.0
         print(f"  High tail{s} REJECTED")
     return best_nll
@@ -981,30 +1100,30 @@ def _test_inter_peak_group(m, gaus_amp1, gaus_amp2, best_nll):
     print("Testing inter-peak group (peak1 high tail + peak2 low-side)...")
 
     # Release peak1 high tail
-    m.fixed["high_exp_amp1"] = False
+    m.fixed["high_exp_frac1"] = False
     m.fixed["high_exp_decay1"] = False
-    m.limits["high_exp_amp1"] = (0, gaus_amp1 * 2)
+    m.limits["high_exp_frac1"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits["high_exp_decay1"] = (0.1, 50)
-    m.values["high_exp_amp1"] = gaus_amp1 * 0.15
+    m.values["high_exp_frac1"] = 0.15
     m.values["high_exp_decay1"] = 1.0
 
     # Release peak2 low-side group
-    m.fixed["step_amp2"] = False
-    m.limits["step_amp2"] = (0, gaus_amp2 * 2)
-    m.values["step_amp2"] = gaus_amp2 * 0.1
+    m.fixed["step_frac2"] = False
+    m.limits["step_frac2"] = (0, _MAX_SUBSIDIARY_FRAC)
+    m.values["step_frac2"] = 0.1
 
-    m.fixed["low_exp_amp2"] = False
+    m.fixed["low_exp_frac2"] = False
     m.fixed["low_exp_decay2"] = False
-    m.limits["low_exp_amp2"] = (0, gaus_amp2 * 2)
+    m.limits["low_exp_frac2"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits["low_exp_decay2"] = (0.1, 50)
-    m.values["low_exp_amp2"] = gaus_amp2 * 0.15
+    m.values["low_exp_frac2"] = 0.15
     m.values["low_exp_decay2"] = 1.0
 
-    m.fixed["low_lin_amp2"] = False
+    m.fixed["low_lin_frac2"] = False
     m.fixed["low_lin_slope2"] = False
-    m.limits["low_lin_amp2"] = (0, gaus_amp2 * 2)
+    m.limits["low_lin_frac2"] = (0, _MAX_SUBSIDIARY_FRAC)
     m.limits["low_lin_slope2"] = (-1, 1)
-    m.values["low_lin_amp2"] = gaus_amp2 * 0.15
+    m.values["low_lin_frac2"] = 0.15
     m.values["low_lin_slope2"] = 0.0
 
     m.migrad()
@@ -1013,106 +1132,23 @@ def _test_inter_peak_group(m, gaus_amp1, gaus_amp2, best_nll):
     )
 
     if m.fval < best_nll - 1:
-        print("  Inter-peak group ACCEPTED — pruning...")
+        print("  Inter-peak group ACCEPTED")
         best_nll = m.fval
-
-        # Prune peak1 high tail
-        saved_amp = m.values["high_exp_amp1"]
-        saved_decay = m.values["high_exp_decay1"]
-        m.fixed["high_exp_amp1"] = True
-        m.fixed["high_exp_decay1"] = True
-        m.values["high_exp_amp1"] = 0.0
-        m.values["high_exp_decay1"] = 1.0
-        m.migrad()
-        print(
-            f"  Without high tail1: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  High tail1 PRUNED")
-        else:
-            m.fixed["high_exp_amp1"] = False
-            m.fixed["high_exp_decay1"] = False
-            m.values["high_exp_amp1"] = saved_amp
-            m.values["high_exp_decay1"] = saved_decay
-            m.migrad()
-            print("  High tail1 KEPT")
-
-        # Prune peak2 step
-        saved = m.values["step_amp2"]
-        m.fixed["step_amp2"] = True
-        m.values["step_amp2"] = 0.0
-        m.migrad()
-        print(
-            f"  Without step2: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  Step2 PRUNED")
-        else:
-            m.fixed["step_amp2"] = False
-            m.values["step_amp2"] = saved
-            m.migrad()
-            print("  Step2 KEPT")
-
-        # Prune peak2 low exp tail
-        saved_amp = m.values["low_exp_amp2"]
-        saved_decay = m.values["low_exp_decay2"]
-        m.fixed["low_exp_amp2"] = True
-        m.fixed["low_exp_decay2"] = True
-        m.values["low_exp_amp2"] = 0.0
-        m.values["low_exp_decay2"] = 1.0
-        m.migrad()
-        print(
-            f"  Without low exp tail2: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  Low exp tail2 PRUNED")
-        else:
-            m.fixed["low_exp_amp2"] = False
-            m.fixed["low_exp_decay2"] = False
-            m.values["low_exp_amp2"] = saved_amp
-            m.values["low_exp_decay2"] = saved_decay
-            m.migrad()
-            print("  Low exp tail2 KEPT")
-
-        # Prune peak2 low lin tail
-        saved_amp = m.values["low_lin_amp2"]
-        saved_slope = m.values["low_lin_slope2"]
-        m.fixed["low_lin_amp2"] = True
-        m.fixed["low_lin_slope2"] = True
-        m.values["low_lin_amp2"] = 0.0
-        m.values["low_lin_slope2"] = 0.0
-        m.migrad()
-        print(
-            f"  Without low lin tail2: NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-        )
-        if m.fval < best_nll - 1:
-            best_nll = m.fval
-            print("  Low lin tail2 PRUNED")
-        else:
-            m.fixed["low_lin_amp2"] = False
-            m.fixed["low_lin_slope2"] = False
-            m.values["low_lin_amp2"] = saved_amp
-            m.values["low_lin_slope2"] = saved_slope
-            m.migrad()
-            print("  Low lin tail2 KEPT")
     else:
         print("  Inter-peak group REJECTED — re-fixing all")
-        m.fixed["high_exp_amp1"] = True
+        m.fixed["high_exp_frac1"] = True
         m.fixed["high_exp_decay1"] = True
-        m.values["high_exp_amp1"] = 0.0
+        m.values["high_exp_frac1"] = 0.0
         m.values["high_exp_decay1"] = 1.0
-        m.fixed["step_amp2"] = True
-        m.values["step_amp2"] = 0.0
-        m.fixed["low_exp_amp2"] = True
+        m.fixed["step_frac2"] = True
+        m.values["step_frac2"] = 0.0
+        m.fixed["low_exp_frac2"] = True
         m.fixed["low_exp_decay2"] = True
-        m.values["low_exp_amp2"] = 0.0
+        m.values["low_exp_frac2"] = 0.0
         m.values["low_exp_decay2"] = 1.0
-        m.fixed["low_lin_amp2"] = True
+        m.fixed["low_lin_frac2"] = True
         m.fixed["low_lin_slope2"] = True
-        m.values["low_lin_amp2"] = 0.0
+        m.values["low_lin_frac2"] = 0.0
         m.values["low_lin_slope2"] = 0.0
 
     return best_nll
@@ -1170,9 +1206,9 @@ def fit_double_peak(df_column,
     if m.values["mu1"] > m.values["mu2"]:
         print("Warning: mu1 > mu2 after fit, swapping peak parameters")
         for base in [
-                "mu", "sigma", "gaus_amp", "step_amp", "low_exp_amp",
-                "low_exp_decay", "low_lin_amp", "low_lin_slope",
-                "high_exp_amp", "high_exp_decay"
+                "mu", "sigma", "gaus_amp", "step_frac", "low_exp_frac",
+                "low_exp_decay", "low_lin_frac", "low_lin_slope",
+                "high_exp_frac", "high_exp_decay"
         ]:
             v1, v2 = m.values[f"{base}1"], m.values[f"{base}2"]
             m.values[f"{base}1"] = v2
