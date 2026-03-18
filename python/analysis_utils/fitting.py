@@ -12,7 +12,7 @@ _SQRT2 = np.sqrt(2.0)
 _SQRT_2_OVER_PI = np.sqrt(2.0 / np.pi)
 _SQRT_PI_OVER_2 = np.sqrt(np.pi / 2.0)
 _INV_SQRT_2PI = 1.0 / np.sqrt(2.0 * np.pi)
-_MAX_SUBSIDIARY_FRAC = 0.25
+_MAX_SUBSIDIARY_FRAC = 0.15
 
 # ---------------------------------------------------------------------------------
 # Analytic integrals for normalization computed using integral calculator the goat
@@ -366,7 +366,7 @@ def _estimate_single_peak(data,
     values[f"sigma{suffix}"] = range_width * 0.01
     limits[f"sigma{suffix}"] = (range_width * 0.001, range_width * 0.5)
     values[f"gaus_amp{suffix}"] = peak_height * 0.999
-    limits[f"gaus_amp{suffix}"] = (0, peak_height * 2.0)
+    limits[f"gaus_amp{suffix}"] = (0, peak_height * 5.0)
 
     # Step fraction
     if use_step:
@@ -447,7 +447,7 @@ def estimate_peak_params(data,
 
     # Background (shared, no suffix)
     values["bkg_constant"] = bkg_estimate
-    limits["bkg_constant"] = (0, peak_height * 2.0)
+    limits["bkg_constant"] = (0, peak_height * 5.0)
 
     if use_flat_background:
         values["lin_bkg_slope"] = 0.0
@@ -507,7 +507,7 @@ def estimate_double_peak_params(data,
     fixed = {**f1, **f2}
 
     values["bkg_constant"] = bkg_estimate
-    limits["bkg_constant"] = (0, peak_height * 2.0)
+    limits["bkg_constant"] = (0, peak_height * 5.0)
     if use_flat_background:
         values["lin_bkg_slope"] = 0.0
         fixed["lin_bkg_slope"] = True
@@ -577,7 +577,7 @@ def estimate_triple_peak_params(data,
     fixed = {**f1, **f2, **f3}
 
     values["bkg_constant"] = bkg_estimate
-    limits["bkg_constant"] = (0, peak_height * 2.0)
+    limits["bkg_constant"] = (0, peak_height * 5.0)
     if use_flat_background:
         values["lin_bkg_slope"] = 0.0
         fixed["lin_bkg_slope"] = True
@@ -1008,61 +1008,15 @@ def fit_single_peak(df_column,
         print("  High tail REJECTED")
 
     print("Final fit with selected components...")
-    m.migrad()
-    m.hesse()
+    for _ in range(10):
+        m.migrad(ncall=100000)
+        if m.valid:
+            break
     print(f"Final NLL = {m.fval:.2f}")
     print(m)
     if cache_path:
         _save_minuit_state(m, cache_path)
     return m
-
-
-def _test_low_side_group(m, suffix, gaus_amp, best_nll):
-    """Test and accept/reject low-side components for a single peak within a
-    multi-peak fit. Returns updated best_nll."""
-    s = suffix
-    print(f"Testing low-side group for peak{s}...")
-
-    m.fixed[f"step_frac{s}"] = False
-    m.limits[f"step_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.values[f"step_frac{s}"] = 0.1
-
-    m.fixed[f"low_exp_frac{s}"] = False
-    m.fixed[f"low_exp_decay{s}"] = False
-    m.limits[f"low_exp_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.limits[f"low_exp_decay{s}"] = (0.1, 50)
-    m.values[f"low_exp_frac{s}"] = 0.15
-    m.values[f"low_exp_decay{s}"] = 1.0
-
-    m.fixed[f"low_lin_frac{s}"] = False
-    m.fixed[f"low_lin_slope{s}"] = False
-    m.limits[f"low_lin_frac{s}"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.limits[f"low_lin_slope{s}"] = (-1, 1)
-    m.values[f"low_lin_frac{s}"] = 0.15
-    m.values[f"low_lin_slope{s}"] = 0.0
-
-    m.migrad()
-    print(
-        f"  Low-side group NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-    )
-
-    if m.fval < best_nll - 1:
-        print(f"  Low-side group peak{s} ACCEPTED")
-        best_nll = m.fval
-    else:
-        print(f"  Low-side group peak{s} REJECTED — re-fixing all")
-        m.fixed[f"step_frac{s}"] = True
-        m.values[f"step_frac{s}"] = 0.0
-        m.fixed[f"low_exp_frac{s}"] = True
-        m.fixed[f"low_exp_decay{s}"] = True
-        m.values[f"low_exp_frac{s}"] = 0.0
-        m.values[f"low_exp_decay{s}"] = 1.0
-        m.fixed[f"low_lin_frac{s}"] = True
-        m.fixed[f"low_lin_slope{s}"] = True
-        m.values[f"low_lin_frac{s}"] = 0.0
-        m.values[f"low_lin_slope{s}"] = 0.0
-
-    return best_nll
 
 
 def _test_high_tail(m, suffix, gaus_amp, best_nll):
@@ -1087,70 +1041,6 @@ def _test_high_tail(m, suffix, gaus_amp, best_nll):
         m.values[f"high_exp_frac{s}"] = 0.0
         m.values[f"high_exp_decay{s}"] = 1.0
         print(f"  High tail{s} REJECTED")
-    return best_nll
-
-
-def _test_inter_peak_group(m, gaus_amp1, gaus_amp2, best_nll):
-    """Test peak1 high tail and peak2 low-side group together.
-
-    These components overlap in the inter-peak region, so they must be tested
-    jointly to avoid one absorbing the contribution of the other.
-    Returns updated best_nll.
-    """
-    print("Testing inter-peak group (peak1 high tail + peak2 low-side)...")
-
-    # Release peak1 high tail
-    m.fixed["high_exp_frac1"] = False
-    m.fixed["high_exp_decay1"] = False
-    m.limits["high_exp_frac1"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.limits["high_exp_decay1"] = (0.1, 50)
-    m.values["high_exp_frac1"] = 0.15
-    m.values["high_exp_decay1"] = 1.0
-
-    # Release peak2 low-side group
-    m.fixed["step_frac2"] = False
-    m.limits["step_frac2"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.values["step_frac2"] = 0.1
-
-    m.fixed["low_exp_frac2"] = False
-    m.fixed["low_exp_decay2"] = False
-    m.limits["low_exp_frac2"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.limits["low_exp_decay2"] = (0.1, 50)
-    m.values["low_exp_frac2"] = 0.15
-    m.values["low_exp_decay2"] = 1.0
-
-    m.fixed["low_lin_frac2"] = False
-    m.fixed["low_lin_slope2"] = False
-    m.limits["low_lin_frac2"] = (0, _MAX_SUBSIDIARY_FRAC)
-    m.limits["low_lin_slope2"] = (-1, 1)
-    m.values["low_lin_frac2"] = 0.15
-    m.values["low_lin_slope2"] = 0.0
-
-    m.migrad()
-    print(
-        f"  Inter-peak group NLL = {m.fval:.2f} (delta = {m.fval - best_nll:.2f})"
-    )
-
-    if m.fval < best_nll - 1:
-        print("  Inter-peak group ACCEPTED")
-        best_nll = m.fval
-    else:
-        print("  Inter-peak group REJECTED — re-fixing all")
-        m.fixed["high_exp_frac1"] = True
-        m.fixed["high_exp_decay1"] = True
-        m.values["high_exp_frac1"] = 0.0
-        m.values["high_exp_decay1"] = 1.0
-        m.fixed["step_frac2"] = True
-        m.values["step_frac2"] = 0.0
-        m.fixed["low_exp_frac2"] = True
-        m.fixed["low_exp_decay2"] = True
-        m.values["low_exp_frac2"] = 0.0
-        m.values["low_exp_decay2"] = 1.0
-        m.fixed["low_lin_frac2"] = True
-        m.fixed["low_lin_slope2"] = True
-        m.values["low_lin_frac2"] = 0.0
-        m.values["low_lin_slope2"] = 0.0
-
     return best_nll
 
 
@@ -1186,21 +1076,10 @@ def fit_double_peak(df_column,
         _restore_minuit_state(m, cache_path)
         return m
 
-    m.migrad()
-    best_nll = m.fval
-    gaus_amp1 = m.values["gaus_amp1"]
-    gaus_amp2 = m.values["gaus_amp2"]
-    print(f"Initial fit: NLL = {best_nll:.2f}")
-
-    # Outer components (no inter-peak overlap)
-    best_nll = _test_low_side_group(m, "1", gaus_amp1, best_nll)
-    best_nll = _test_high_tail(m, "2", gaus_amp2, best_nll)
-    # Inter-peak components tested jointly: peak1 high tail + peak2 low-side
-    best_nll = _test_inter_peak_group(m, gaus_amp1, gaus_amp2, best_nll)
-
-    print("Final fit with selected components...")
-    m.migrad()
-    m.hesse()
+    for _ in range(10):
+        m.migrad(ncall=100000)
+        if m.valid:
+            break
 
     # Ensure mu1 < mu2
     if m.values["mu1"] > m.values["mu2"]:
