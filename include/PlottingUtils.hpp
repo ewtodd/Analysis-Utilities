@@ -42,6 +42,7 @@ public:
 
   static TCanvas *GetConfiguredCanvas(Bool_t logy = kFALSE);
   static void SaveFigure(TCanvas *canvas, TString output_filename,
+                         TString output_subdirectory = "",
                          PlotSaveOptions save_options = PlotSaveOptions::kBOTH);
 
   static TLegend *AddLegend(Double_t x1 = 0.7, Double_t x2 = 0.9,
