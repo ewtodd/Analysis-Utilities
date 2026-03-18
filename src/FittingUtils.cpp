@@ -582,7 +582,7 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
   if (label.Length() > 0) {
     PlottingUtils::AddText(label, 0.85, 0.85);
   }
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
                             PlotSaveOptions::kLOG);
 }
 
@@ -766,12 +766,13 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   if (label.Length() > 0) {
     PlottingUtils::AddText(label, 0.85, 0.85);
   }
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
                             PlotSaveOptions::kLOG);
 }
 
 void FittingUtils::PlotFitTriplePeak(const TString input_name,
-                                     const TString peak_name) {
+                                     const TString peak_name,
+                                     const TString label) {
   TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
@@ -987,7 +988,7 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
 
   pad1->cd();
   pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name,
+  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
                             PlotSaveOptions::kLOG);
 }
 
@@ -1331,7 +1332,8 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
               << (fit_function_->GetParameter(8) > 1e-6 ? "YES" : "NO")
               << std::endl;
 
-    PlotFitSinglePeak(input_name, peak_name);
+    TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
+    PlotFitSinglePeak(input_name, peak_name, chi2label);
 
     PeakFitResult peak;
     peak.mu = fit_function_->GetParameter(0);
@@ -1650,8 +1652,9 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   //  Inter-peak group: peak1 high tail + peak2 low-side (both affect the
   //  region between the two peaks, so they must be tested jointly)
   {
-    std::cout << "Testing inter-peak group (peak1 high tail + peak2 low-side)..."
-              << std::endl;
+    std::cout
+        << "Testing inter-peak group (peak1 high tail + peak2 low-side)..."
+        << std::endl;
 
     // Release peak1 high tail
     fit_function_->ReleaseParameter(8);
@@ -1822,7 +1825,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     std::cout << "Double peak fit converged successfully" << std::endl;
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
 
-    PlotFitDoublePeak(input_name, peak_name);
+    TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
+    PlotFitDoublePeak(input_name, peak_name, chi2label);
 
     for (Int_t pk = 0; pk < 2; pk++) {
       Int_t o = pk * 10;
@@ -2488,7 +2492,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     std::cout << "Triple peak fit converged successfully" << std::endl;
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
 
-    PlotFitTriplePeak(input_name, peak_name);
+    TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
+    PlotFitTriplePeak(input_name, peak_name, chi2label);
 
     for (Int_t pk = 0; pk < 3; pk++) {
       Int_t o = pk * 10;

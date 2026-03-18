@@ -66,8 +66,6 @@
           propagatedBuildInputs = with pkgs.python3Packages; [
             numpy
             pandas
-            iminuit
-            numba
             scipy
           ];
           doCheck = false;
@@ -87,8 +85,6 @@
               python-pkgs: with python-pkgs; [
                 numpy
                 pandas
-                iminuit
-                numba
                 scipy
               ]
             ))

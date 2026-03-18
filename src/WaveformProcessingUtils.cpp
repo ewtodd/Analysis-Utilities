@@ -5,8 +5,7 @@ WaveformProcessingUtils::WaveformProcessingUtils()
       pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
       sample_waveforms_to_save_(0), sample_waveforms_saved_(0),
       output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
-      save_waveform_(new TArrayF()),
-      input_format_(InputFormat::kCOMPASS) {}
+      save_waveform_(new TArrayF()), input_format_(InputFormat::kCOMPASS) {}
 
 WaveformProcessingUtils::WaveformProcessingUtils(
     const FileProcessingConfig &config)
@@ -98,10 +97,6 @@ void WaveformProcessingUtils::SaveSampleWaveform(const TArrayF &waveform) {
 
   std::lock_guard<std::mutex> lock(canvas_mutex_);
 
-  if (gSystem->AccessPathName("plots/samplewaveforms")) {
-    gSystem->mkdir("plots/samplewaveforms", kTRUE);
-  }
-
   Int_t n = waveform.GetSize();
   const Float_t *arr = waveform.GetArray();
   std::vector<Double_t> x(n), y(n);
@@ -118,11 +113,11 @@ void WaveformProcessingUtils::SaveSampleWaveform(const TArrayF &waveform) {
   PlottingUtils::ConfigureGraph(graph, kBlue + 1, ";Sample;Amplitude [ADC]");
   graph->Draw("AL");
 
-  TString output_name =
-      Form("samplewaveforms/%s_waveform_%04d", current_output_name_.Data(),
-           sample_waveforms_saved_);
+  TString output_name = Form("%s_waveform_%04d", current_output_name_.Data(),
+                             sample_waveforms_saved_);
 
-  PlottingUtils::SaveFigure(canvas, output_name, PlotSaveOptions::kLINEAR);
+  PlottingUtils::SaveFigure(canvas, output_name, "samplewaveforms",
+                            PlotSaveOptions::kLINEAR);
   delete graph;
   delete canvas;
 

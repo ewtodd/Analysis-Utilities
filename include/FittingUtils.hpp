@@ -101,7 +101,8 @@ public:
                          const TString label = "");
   void PlotFitDoublePeak(const TString input_name, const TString peak_name,
                          const TString label = "");
-  void PlotFitTriplePeak(const TString input_name, const TString peak_name);
+  void PlotFitTriplePeak(const TString input_name, const TString peak_name,
+                         const TString label = "");
 
   FitResult FitSinglePeak(const TString input_name, const TString peak_name);
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,

@@ -162,6 +162,7 @@ TCanvas *PlottingUtils::GetConfiguredCanvas(Bool_t logy) {
 }
 
 void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
+                               TString output_subdirectory,
                                PlotSaveOptions save_options) {
   WarnIfNotConfigured("SaveFigure");
   canvas->SetLogy(kFALSE);
@@ -171,14 +172,23 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
   TString extension = (save_format_ == PlotSaveFormat::kPNG) ? ".png" : ".pdf";
   TString output_filename = output_name + extension;
 
+  TString subdirectory =
+      output_subdirectory == "" ? "" : output_subdirectory + "/";
+
+  if (output_subdirectory != "") {
+    if (gSystem->AccessPathName("plots/" + output_subdirectory)) {
+      gSystem->mkdir("plots/" + output_subdirectory, kTRUE);
+    }
+  }
+
   if (save_options != PlotSaveOptions::kLOG)
-    canvas->Print("plots/" + output_filename);
+    canvas->Print("plots/" + subdirectory + output_filename);
 
   if (save_options != PlotSaveOptions::kLINEAR) {
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
-    canvas->Print("plots/log_" + output_filename);
+    canvas->Print("plots/" + subdirectory + "log_" + output_filename);
 
     canvas->SetLogy(kFALSE);
     canvas->Modified();
