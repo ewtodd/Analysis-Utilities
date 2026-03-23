@@ -59,7 +59,7 @@
           format = "pyproject";
           nativeBuildInputs = [ pkgs.python3Packages.setuptools ];
           postPatch = ''
-            substituteInPlace analysis_utils/__init__.py \
+            substituteInPlace analysis_utilities/__init__.py \
               --replace-fail '@VERSION@' "${version}"
             substituteInPlace pyproject.toml \
               --replace-fail '@VERSION@' "${version}"
