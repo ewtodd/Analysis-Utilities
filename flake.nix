@@ -56,7 +56,8 @@
           pname = "analysis-utilities";
           inherit version;
           src = ./python;
-          format = "pyproject";
+          pyproject = true;
+
           nativeBuildInputs = [ pkgs.python3Packages.setuptools ];
           postPatch = ''
             substituteInPlace analysis_utilities/__init__.py \
