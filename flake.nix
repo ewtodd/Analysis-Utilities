@@ -51,6 +51,7 @@
 
           setupHook = ./setup-hook.sh;
         };
+
         pythonPackage = pkgs.python3Packages.buildPythonPackage {
           pname = "analysis-utils";
           inherit version;
@@ -86,6 +87,7 @@
                 numpy
                 pandas
                 scipy
+                pythonPackage
               ]
             ))
           ];
