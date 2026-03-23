@@ -53,7 +53,7 @@
         };
 
         pythonPackage = pkgs.python3Packages.buildPythonPackage {
-          pname = "analysis-utils";
+          pname = "analysis-utilities";
           inherit version;
           src = ./python;
           format = "pyproject";
