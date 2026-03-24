@@ -27,7 +27,7 @@ This creates a development environment with access to the libraries.
 Compile local code with the included Makefile and run macros with `root -l macro.cpp+`.
 <!---->
 ```bash
-# Python template — includes analysis-utils Python package and ML libraries
+# Python template — includes analysis-utilities Python package and ML libraries
 nix flake init -t github:ewtodd/Analysis-Utilities#python --refresh
 nix develop
 ```
@@ -85,6 +85,8 @@ A component is kept only if it improves the reduced chi-squared.
 <!---->
 All fits produce structured results (`FitResult` containing `PeakFitResult` entries) with parameter values, errors, and reduced chi-squared.
 Failed fits return -1 for all parameters.
+Reduced chi-squared is displayed on fit plots by default.
+Individual peak components are plotted summed with the background for readability, and multi-peak fits use distinct line styles per peak.
 <!---->
 **References**:
 - Boggs SE, Pike SN.
@@ -123,7 +125,7 @@ Note: argument order is the extremely sane `(x1, x2, y1, y2)`, not the ROOT defa
 Optional `angle` (default 0) sets text rotation in degrees.
 <!---->
 **Output**:
-- `SaveFigure(canvas, name, PlotSaveOptions)` - Saves to `plots/` directory using the format set in `SetStylePreferences`.
+- `SaveFigure(canvas, name, subdirectory, PlotSaveOptions)` - Saves to `plots/` directory (or `plots/<subdirectory>/` if specified) using the format set in `SetStylePreferences`.
 `PlotSaveOptions` controls linear (`kLINEAR`), log (`kLOG`), or both (`kBOTH`, default).
 Log variants are prefixed with `log_`.
 <!---->
@@ -140,7 +142,7 @@ Initialization and file conversion utilities.
 <!---->
 ## Python Package
 <!---->
-The `analysis-utils` Python package provides two things: a bridge to use PlottingUtils from Python scripts, and a loader for efficiently reading ROOT TTrees into numpy arrays and pandas DataFrames for use with machine learning libraries.
+The `analysis-utilities` Python package provides two things: a bridge to use PlottingUtils from Python scripts, and a loader for efficiently reading ROOT TTrees into numpy arrays and pandas DataFrames for use with machine learning libraries.
 <!---->
 ### Setup
 <!---->
@@ -151,14 +153,14 @@ To use the Python package in a downstream project, add the `pythonPackage` outpu
 let
   pkgs = nixpkgs.legacyPackages.${system};
   analysis-utils = utils.packages.${system}.default;
-  analysis-utils-py = utils.packages.${system}.pythonPackage;
+  analysis-utilities-py = utils.packages.${system}.pythonPackage;
 in
 {
   devShells.default = pkgs.mkShell {
     buildInputs = [
       analysis-utils
       (pkgs.python3.withPackages (ps: [
-        analysis-utils-py
+        analysis-utilities-py
         ps.numpy
         ps.pandas
         # add ML libraries here, e.g. ps.scikit-learn
@@ -178,7 +180,7 @@ in
 `load_cpp_library()` loads the C++ shared library into ROOT and declares the PlottingUtils header, making the full PlottingUtils API available through PyROOT:
 <!---->
 ```python
-from analysis_utils import load_cpp_library
+from analysis_utilities import load_cpp_library
 #
 ROOT = load_cpp_library()
 #
@@ -195,7 +197,7 @@ Results are automatically cached to disk (as pickle/npy files) so that subsequen
 The cache is invalidated when any source ROOT file is newer than the cached file.
 <!---->
 ```python
-from analysis_utils.io import load_tree_data
+from analysis_utilities.io import load_tree_data
 #
 # Load scalar branches into a DataFrame (cached to df_cache/ by default)
 df = load_tree_data("output.root", tree_name="features")
