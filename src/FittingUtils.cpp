@@ -311,7 +311,7 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   else
     fit_function_->FixParameter(4, 0);
 
-  fit_function_->SetParLimits(5, 0.1, 50);
+  fit_function_->SetParLimits(5, 1, 100);
   if (use_low_exp_tail_)
     fit_function_->SetParameter(5, 0.2);
   else
@@ -337,7 +337,7 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   else
     fit_function_->FixParameter(8, 0);
 
-  fit_function_->SetParLimits(9, 0.1, 50);
+  fit_function_->SetParLimits(9, 1, 100);
   if (use_high_exp_tail_)
     fit_function_->SetParameter(9, 0.2);
   else
@@ -1242,7 +1242,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
       fit_function_->ReleaseParameter(4);
       fit_function_->ReleaseParameter(5);
       fit_function_->SetParLimits(4, 0, peak_height * 0.999);
-      fit_function_->SetParLimits(5, 0.1, 50);
+      fit_function_->SetParLimits(5, 1, 100);
       if (!use_manual_init_) {
         fit_function_->SetParameter(
             4, TMath::Min(gaus_amp * 0.15, peak_height * 0.25));
@@ -1320,7 +1320,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
             fit_function_->ReleaseParameter(4);
             fit_function_->ReleaseParameter(5);
             fit_function_->SetParLimits(4, 0, peak_height * 0.999);
-            fit_function_->SetParLimits(5, 0.1, 50);
+            fit_function_->SetParLimits(5, 1, 100);
             for (Int_t i = 0; i < npar; i++) {
               fit_function_->SetParameter(i, best_params[i]);
               fit_function_->SetParError(i, best_errors[i]);
@@ -1398,7 +1398,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
     fit_function_->ReleaseParameter(8);
     fit_function_->ReleaseParameter(9);
     fit_function_->SetParLimits(8, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(9, 0.1, 50);
+    fit_function_->SetParLimits(9, 1, 100);
 
     if (!use_manual_init_) {
       Double_t tail_amp_init = TMath::Min(gaus_amp * 0.15, peak_height * 0.25);
@@ -1570,12 +1570,12 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(2, 0, peak_height * 0.999);
   fit_function_->SetParLimits(3, 0, peak_height * 0.999);
   fit_function_->SetParLimits(4, 0, peak_height);
-  fit_function_->SetParLimits(5, 0.1, 50);
+  fit_function_->SetParLimits(5, 1, 100);
   fit_function_->SetParLimits(6, 0, peak_height);
   fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(8, 0, peak_height);
-  fit_function_->SetParLimits(9, 0.1, 50);
+  fit_function_->SetParLimits(9, 1, 100);
 
   fit_function_->SetParameter(0, mu1_init);
   fit_function_->SetParameter(1, sigma_init);
@@ -1594,12 +1594,12 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(12, 0, peak_height * 0.999);
   fit_function_->SetParLimits(13, 0, peak_height * 0.999);
   fit_function_->SetParLimits(14, 0, peak_height);
-  fit_function_->SetParLimits(15, 0.1, 50);
+  fit_function_->SetParLimits(15, 1, 100);
   fit_function_->SetParLimits(16, 0, peak_height);
   fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(18, 0, peak_height);
-  fit_function_->SetParLimits(19, 0.1, 50);
+  fit_function_->SetParLimits(19, 1, 100);
 
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
@@ -1657,7 +1657,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->ReleaseParameter(4);
     fit_function_->ReleaseParameter(5);
     fit_function_->SetParLimits(4, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(5, 0.1, 50);
+    fit_function_->SetParLimits(5, 1, 100);
     fit_function_->SetParameter(
         4, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(5, 1);
@@ -1716,7 +1716,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         fit_function_->ReleaseParameter(4);
         fit_function_->ReleaseParameter(5);
         fit_function_->SetParLimits(4, 0, peak_height * 0.999);
-        fit_function_->SetParLimits(5, 0.1, 50);
+        fit_function_->SetParLimits(5, 1, 100);
         for (Int_t i = 0; i < npar; i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -1765,7 +1765,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->ReleaseParameter(18);
     fit_function_->ReleaseParameter(19);
     fit_function_->SetParLimits(18, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(19, 0.1, 50);
+    fit_function_->SetParLimits(19, 1, 100);
     fit_function_->SetParameter(
         18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(19, 1);
@@ -1801,7 +1801,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->ReleaseParameter(8);
     fit_function_->ReleaseParameter(9);
     fit_function_->SetParLimits(8, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(9, 0.1, 50);
+    fit_function_->SetParLimits(9, 1, 100);
     fit_function_->SetParameter(
         8, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(9, 1);
@@ -1814,7 +1814,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->ReleaseParameter(14);
     fit_function_->ReleaseParameter(15);
     fit_function_->SetParLimits(14, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(15, 0.1, 50);
+    fit_function_->SetParLimits(15, 1, 100);
     fit_function_->SetParameter(
         14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(15, 1);
@@ -1854,7 +1854,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         fit_function_->ReleaseParameter(8);
         fit_function_->ReleaseParameter(9);
         fit_function_->SetParLimits(8, 0, peak_height * 0.999);
-        fit_function_->SetParLimits(9, 0.1, 50);
+        fit_function_->SetParLimits(9, 1, 100);
         for (Int_t i = 0; i < npar; i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -1895,7 +1895,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         fit_function_->ReleaseParameter(14);
         fit_function_->ReleaseParameter(15);
         fit_function_->SetParLimits(14, 0, peak_height * 0.999);
-        fit_function_->SetParLimits(15, 0.1, 50);
+        fit_function_->SetParLimits(15, 1, 100);
         for (Int_t i = 0; i < npar; i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -2072,12 +2072,12 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(12, 0, peak_height * 0.999);
   fit_function_->SetParLimits(13, 0, peak_height * 0.999);
   fit_function_->SetParLimits(14, 0, peak_height);
-  fit_function_->SetParLimits(15, 0.1, 50);
+  fit_function_->SetParLimits(15, 1, 100);
   fit_function_->SetParLimits(16, 0, peak_height);
   fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(18, 0, peak_height);
-  fit_function_->SetParLimits(19, 0.1, 50);
+  fit_function_->SetParLimits(19, 1, 100);
 
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
@@ -2135,7 +2135,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->ReleaseParameter(14);
     fit_function_->ReleaseParameter(15);
     fit_function_->SetParLimits(14, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(15, 0.1, 50);
+    fit_function_->SetParLimits(15, 1, 100);
     fit_function_->SetParameter(
         14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(15, 1);
@@ -2194,7 +2194,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         fit_function_->ReleaseParameter(14);
         fit_function_->ReleaseParameter(15);
         fit_function_->SetParLimits(14, 0, peak_height * 0.999);
-        fit_function_->SetParLimits(15, 0.1, 50);
+        fit_function_->SetParLimits(15, 1, 100);
         for (Int_t i = 0; i < npar; i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -2243,7 +2243,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->ReleaseParameter(18);
     fit_function_->ReleaseParameter(19);
     fit_function_->SetParLimits(18, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(19, 0.1, 50);
+    fit_function_->SetParLimits(19, 1, 100);
     fit_function_->SetParameter(
         18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(19, 1);
@@ -2421,12 +2421,12 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   fit_function_->SetParLimits(22, 0, peak_height * 0.999);
   fit_function_->SetParLimits(23, 0, peak_height * 0.999);
   fit_function_->SetParLimits(24, 0, peak_height);
-  fit_function_->SetParLimits(25, 0.1, 50);
+  fit_function_->SetParLimits(25, 1, 100);
   fit_function_->SetParLimits(26, 0, peak_height);
   fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
                               0.5 * bkg_estimate / range_width);
   fit_function_->SetParLimits(28, 0, peak_height);
-  fit_function_->SetParLimits(29, 0.1, 50);
+  fit_function_->SetParLimits(29, 1, 100);
 
   fit_function_->SetParameter(20, mu3_init);
   fit_function_->SetParameter(21, sigma_init);
@@ -2483,7 +2483,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     fit_function_->ReleaseParameter(24);
     fit_function_->ReleaseParameter(25);
     fit_function_->SetParLimits(24, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(25, 0.1, 50);
+    fit_function_->SetParLimits(25, 1, 100);
     fit_function_->SetParameter(
         24, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(25, 1);
@@ -2542,7 +2542,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
         fit_function_->ReleaseParameter(24);
         fit_function_->ReleaseParameter(25);
         fit_function_->SetParLimits(24, 0, peak_height * 0.999);
-        fit_function_->SetParLimits(25, 0.1, 50);
+        fit_function_->SetParLimits(25, 1, 100);
         for (Int_t i = 0; i < npar; i++) {
           fit_function_->SetParameter(i, best_params[i]);
           fit_function_->SetParError(i, best_errors[i]);
@@ -2591,7 +2591,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     fit_function_->ReleaseParameter(28);
     fit_function_->ReleaseParameter(29);
     fit_function_->SetParLimits(28, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(29, 0.1, 50);
+    fit_function_->SetParLimits(29, 1, 100);
     fit_function_->SetParameter(
         28, TMath::Min(gaus_amp3 * 0.15, peak_height * 0.25));
     fit_function_->SetParameter(29, 1);
