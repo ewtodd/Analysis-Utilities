@@ -11,11 +11,13 @@
 InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
                                            TF1 *fit_func, Double_t range_low,
                                            Double_t range_high,
-                                           Int_t num_peaks)
+                                           Int_t num_peaks,
+                                           const TString &info_label)
     : TGMainFrame(parent, 1400, 900) {
 
   hist_ = hist;
   fit_func_ = fit_func;
+  info_label_text_ = info_label;
   range_low_ = range_low;
   range_high_ = range_high;
   original_range_low_ = range_low;
@@ -143,6 +145,16 @@ void InteractiveFitEditor::BuildGUI() {
   main_frame->AddFrame(
       controls, new TGLayoutHints(kLHintsExpandY | kLHintsRight, 2, 2, 2, 2));
 
+
+  if (info_label_text_.Length() > 0) {
+    TGGroupFrame *info_grp =
+        new TGGroupFrame(controls, "Info", kVerticalFrame);
+    controls->AddFrame(info_grp,
+                       new TGLayoutHints(kLHintsExpandX, 3, 3, 3, 3));
+    TGLabel *info_label = new TGLabel(info_grp, info_label_text_);
+    info_grp->AddFrame(info_label,
+                       new TGLayoutHints(kLHintsCenterX, 4, 4, 4, 4));
+  }
 
   TGGroupFrame *range_grp =
       new TGGroupFrame(controls, "Fit Range", kVerticalFrame);
@@ -1023,7 +1035,8 @@ Int_t InteractiveFitEditor::PeakStyle(Int_t peak_idx) {
 
 Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
                                   Double_t range_low, Double_t range_high,
-                                  Int_t num_peaks) {
+                                  Int_t num_peaks,
+                                  const TString &info_label) {
   if (!gClient) {
     std::cerr << "InteractiveFitEditor: GUI not available (gClient is null). "
               << "Make sure you are not in batch mode." << std::endl;
@@ -1031,7 +1044,8 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
   }
 
   InteractiveFitEditor *editor = new InteractiveFitEditor(
-      gClient->GetRoot(), hist, fit_func, range_low, range_high, num_peaks);
+      gClient->GetRoot(), hist, fit_func, range_low, range_high, num_peaks,
+      info_label);
 
   while (!editor->IsDone()) {
     gSystem->ProcessEvents();
