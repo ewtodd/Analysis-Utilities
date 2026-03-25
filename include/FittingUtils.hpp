@@ -2,6 +2,7 @@
 #define FITTINGUTILS_H
 
 #include "PlottingUtils.hpp"
+#include <TROOT.h>
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TFile.h>
@@ -11,6 +12,11 @@
 #include <TPad.h>
 #include <TSystem.h>
 #include <TTree.h>
+
+// Forward declaration (defined in InteractiveFitEditor.hpp)
+Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
+                                  Double_t range_low, Double_t range_high,
+                                  Int_t num_peaks);
 
 namespace FittingFunctions {
 Double_t Gaussian(Double_t *x, Double_t *par);
@@ -58,10 +64,16 @@ private:
   Bool_t use_high_exp_tail_;
 
   Bool_t use_manual_init_;
+  Bool_t interactive_;
   std::vector<Double_t> manual_params_;
 
   Double_t EstimateBackground();
   Double_t ClampToBounds(Int_t param_index, Double_t value);
+
+  void SaveInteractiveParams(const TString &input_name,
+                             const TString &peak_name);
+  Bool_t LoadInteractiveParams(const TString &input_name,
+                               const TString &peak_name);
 
   void SwapDoublePeakParameters();
 
@@ -85,6 +97,9 @@ public:
   }
   void SetHighExpTail(Bool_t use_high_exp_tail = kTRUE) {
     use_high_exp_tail_ = use_high_exp_tail;
+  }
+  void SetInteractive(Bool_t interactive = kTRUE) {
+    interactive_ = interactive;
   }
 
   void SetManualParameters(const std::vector<Double_t> &params);
