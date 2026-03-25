@@ -1040,7 +1040,6 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
 
   Bool_t result = editor->WasAccepted();
 
-  // Stop timer before teardown
   editor->GetRedrawTimer()->TurnOff();
 
   // Remove the embedded TCanvas from ROOT's global list so it doesn't
@@ -1048,13 +1047,7 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
   TCanvas *ecanvas = editor->GetEmbeddedCanvas()->GetCanvas();
   gROOT->GetListOfCanvases()->Remove(ecanvas);
 
-  // Hide window and flush pending X11 events before destroying
   editor->UnmapWindow();
-  gSystem->ProcessEvents();
-  gSystem->ProcessEvents();
-
-  // Detach subwindows from the display before deleting
-  editor->Cleanup();
   delete editor;
   return result;
 }
