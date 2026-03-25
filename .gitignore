@@ -2,7 +2,6 @@ docs/
 *.h5
 *.root
 *.pkl
-*.png
 *.pdf 
 *.svg 
 *.o
