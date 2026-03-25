@@ -36,6 +36,7 @@ private:
 
   TH1 *hist_;
   TF1 *fit_func_;
+  TString info_label_text_;
   Double_t range_low_;
   Double_t range_high_;
   Double_t original_range_low_;
@@ -116,7 +117,8 @@ private:
 public:
   InteractiveFitEditor(const TGWindow *parent, TH1 *hist, TF1 *fit_func,
                        Double_t range_low, Double_t range_high,
-                       Int_t num_peaks);
+                       Int_t num_peaks,
+                       const TString &info_label = "");
   virtual ~InteractiveFitEditor();
 
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);
@@ -131,6 +133,7 @@ public:
 
 Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
                                   Double_t range_low, Double_t range_high,
-                                  Int_t num_peaks = 1);
+                                  Int_t num_peaks,
+                                  const TString &info_label);
 
 #endif

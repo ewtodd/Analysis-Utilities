@@ -16,7 +16,8 @@
 // Forward declaration (defined in InteractiveFitEditor.hpp)
 Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
                                   Double_t range_low, Double_t range_high,
-                                  Int_t num_peaks);
+                                  Int_t num_peaks = 1,
+                                  const TString &info_label = "");
 
 namespace FittingFunctions {
 Double_t Gaussian(Double_t *x, Double_t *par);

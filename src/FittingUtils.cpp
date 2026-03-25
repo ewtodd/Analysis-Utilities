@@ -1562,7 +1562,8 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
         Bool_t was_batch = gROOT->IsBatch();
         gROOT->SetBatch(kFALSE);
         if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
-                                       fit_range_low_, fit_range_high_, 1)) {
+                                       fit_range_low_, fit_range_high_, 1,
+                                       peak_name + " / " + input_name)) {
           // Sync range back in case user changed it
           Double_t rlo_tmp, rhi_tmp;
           fit_function_->GetRange(rlo_tmp, rhi_tmp);
@@ -2081,7 +2082,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         Bool_t was_batch = gROOT->IsBatch();
         gROOT->SetBatch(kFALSE);
         if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
-                                       fit_range_low_, fit_range_high_, 2)) {
+                                       fit_range_low_, fit_range_high_, 2,
+                                       peak_name + " / " + input_name)) {
           Double_t rlo_tmp, rhi_tmp;
           fit_function_->GetRange(rlo_tmp, rhi_tmp);
           fit_range_low_ = rlo_tmp;
@@ -2426,7 +2428,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         Bool_t was_batch = gROOT->IsBatch();
         gROOT->SetBatch(kFALSE);
         if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
-                                       fit_range_low_, fit_range_high_, 2)) {
+                                       fit_range_low_, fit_range_high_, 2,
+                                       peak_name + " / " + input_name)) {
           Double_t rlo_tmp, rhi_tmp;
           fit_function_->GetRange(rlo_tmp, rhi_tmp);
           fit_range_low_ = rlo_tmp;
@@ -2799,7 +2802,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
         Bool_t was_batch = gROOT->IsBatch();
         gROOT->SetBatch(kFALSE);
         if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
-                                       fit_range_low_, fit_range_high_, 3)) {
+                                       fit_range_low_, fit_range_high_, 3,
+                                       peak_name + " / " + input_name)) {
           Double_t rlo_tmp, rhi_tmp;
           fit_function_->GetRange(rlo_tmp, rhi_tmp);
           fit_range_low_ = rlo_tmp;
