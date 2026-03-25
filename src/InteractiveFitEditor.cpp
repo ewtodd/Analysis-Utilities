@@ -1061,7 +1061,11 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
   TCanvas *ecanvas = editor->GetEmbeddedCanvas()->GetCanvas();
   gROOT->GetListOfCanvases()->Remove(ecanvas);
 
+  // DontCallClose prevents TGMainFrame from triggering gApplication->Terminate
+  // when the window is destroyed, which would kill the whole macro
+  editor->DontCallClose();
   editor->UnmapWindow();
+  gSystem->ProcessEvents();
   delete editor;
   return result;
 }

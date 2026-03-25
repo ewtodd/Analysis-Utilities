@@ -76,7 +76,7 @@ private:
   Bool_t LoadInteractiveParams(const TString &input_name,
                                const TString &peak_name);
 
-  void SwapDoublePeakParameters();
+  void SortPeaksByMu(Int_t num_peaks);
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
