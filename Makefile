@@ -1,6 +1,6 @@
 CXX = $(shell root-config --cxx)
 CXXFLAGS = $(shell root-config --cflags) -std=c++17 -Wall -Wextra -O2 -fPIC
-ROOTLIBS = $(shell root-config --libs)
+ROOTLIBS = $(shell root-config --glibs)
 # Directories
 SRCDIR = src
 INCDIR = include

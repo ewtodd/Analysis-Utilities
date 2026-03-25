@@ -1,5 +1,74 @@
 #include "FittingUtils.hpp"
 
+#include <fstream>
+#include <iomanip>
+
+void FittingUtils::SaveInteractiveParams(const TString &input_name,
+                                         const TString &peak_name) {
+  gSystem->mkdir("plots/fits", kTRUE);
+  TString filename = "plots/fits/" + peak_name + "_" + input_name + ".fits";
+  std::ofstream out(filename.Data());
+  if (!out.is_open()) {
+    std::cerr << "WARNING: Could not save interactive params to " << filename
+              << std::endl;
+    return;
+  }
+  Int_t npar = fit_function_->GetNpar();
+  out << std::setprecision(15);
+  out << "RANGE " << fit_range_low_ << " " << fit_range_high_ << "\n";
+  for (Int_t i = 0; i < npar; i++) {
+    Double_t lo = 0, hi = 0;
+    fit_function_->GetParLimits(i, lo, hi);
+    Bool_t fixed = (lo >= hi);
+    out << fit_function_->GetParName(i) << " " << fit_function_->GetParameter(i)
+        << " " << (fixed ? 1 : 0) << "\n";
+  }
+  out.close();
+  std::cout << "Saved interactive params to " << filename << std::endl;
+}
+
+Bool_t FittingUtils::LoadInteractiveParams(const TString &input_name,
+                                           const TString &peak_name) {
+  TString filename = "plots/fits/" + peak_name + "_" + input_name + ".fits";
+  std::ifstream in(filename.Data());
+  if (!in.is_open())
+    return kFALSE;
+
+  Int_t npar = fit_function_->GetNpar();
+  std::string token;
+  Int_t idx = 0;
+
+  // First line: RANGE low high
+  in >> token;
+  if (token == "RANGE") {
+    Double_t rlo, rhi;
+    in >> rlo >> rhi;
+    fit_range_low_ = rlo;
+    fit_range_high_ = rhi;
+    fit_function_->SetRange(rlo, rhi);
+  }
+
+  // Remaining lines: name value fixed
+  Double_t value;
+  Int_t fixed;
+  while (in >> token >> value >> fixed && idx < npar) {
+    fit_function_->SetParameter(idx, value);
+    if (fixed)
+      fit_function_->FixParameter(idx, value);
+    idx++;
+  }
+  in.close();
+
+  if (idx != npar) {
+    std::cerr << "WARNING: Parameter count mismatch in " << filename
+              << " (expected " << npar << ", got " << idx << ")" << std::endl;
+    return kFALSE;
+  }
+
+  std::cout << "Loaded interactive params from " << filename << std::endl;
+  return kTRUE;
+}
+
 Double_t FittingFunctions::Gaussian(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
@@ -267,6 +336,7 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   use_low_lin_tail_ = use_low_lin_tail;
   use_high_exp_tail_ = use_high_exp_tail;
   use_manual_init_ = kFALSE;
+  interactive_ = kFALSE;
 
   fit_function_ = new TF1("PeakFunction", &FittingFunctions::PeakFunction,
                           fit_range_low_, fit_range_high_, 12);
@@ -1473,6 +1543,33 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
               << (fit_function_->GetParameter(8) > 1e-6 ? "YES" : "NO")
               << std::endl;
 
+    if (interactive_) {
+      if (LoadInteractiveParams(input_name, peak_name)) {
+        // Refit with saved params as initial guesses
+        TFitResultPtr refit =
+            working_hist_->Fit(fit_function_, "LSMRBENR+");
+        if (refit.Get() && refit->IsValid())
+          final_chi2 = refit->Chi2() / refit->Ndf();
+        std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                  << std::endl;
+      } else {
+        Bool_t was_batch = gROOT->IsBatch();
+        gROOT->SetBatch(kFALSE);
+        if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
+                                       fit_range_low_, fit_range_high_, 1)) {
+          // Sync range back in case user changed it
+          Double_t rlo_tmp, rhi_tmp;
+          fit_function_->GetRange(rlo_tmp, rhi_tmp);
+          fit_range_low_ = rlo_tmp;
+          fit_range_high_ = rhi_tmp;
+          final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
+          std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
+          SaveInteractiveParams(input_name, peak_name);
+        }
+        gROOT->SetBatch(was_batch);
+      }
+    }
+
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitSinglePeak(input_name, peak_name, chi2label);
 
@@ -1966,6 +2063,31 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     std::cout << "Double peak fit converged successfully" << std::endl;
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
 
+    if (interactive_) {
+      if (LoadInteractiveParams(input_name, peak_name)) {
+        TFitResultPtr refit =
+            working_hist_->Fit(fit_function_, "LSMRBENR+");
+        if (refit.Get() && refit->IsValid())
+          final_chi2 = refit->Chi2() / refit->Ndf();
+        std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                  << std::endl;
+      } else {
+        Bool_t was_batch = gROOT->IsBatch();
+        gROOT->SetBatch(kFALSE);
+        if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
+                                       fit_range_low_, fit_range_high_, 2)) {
+          Double_t rlo_tmp, rhi_tmp;
+          fit_function_->GetRange(rlo_tmp, rhi_tmp);
+          fit_range_low_ = rlo_tmp;
+          fit_range_high_ = rhi_tmp;
+          final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
+          std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
+          SaveInteractiveParams(input_name, peak_name);
+        }
+        gROOT->SetBatch(was_batch);
+      }
+    }
+
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitDoublePeak(input_name, peak_name, chi2label);
 
@@ -2286,7 +2408,33 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
               << std::endl;
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
 
-    PlotFitDoublePeak(input_name, peak_name);
+    if (interactive_) {
+      if (LoadInteractiveParams(input_name, peak_name)) {
+        TFitResultPtr refit =
+            working_hist_->Fit(fit_function_, "LSMRBENR+");
+        if (refit.Get() && refit->IsValid())
+          final_chi2 = refit->Chi2() / refit->Ndf();
+        std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                  << std::endl;
+      } else {
+        Bool_t was_batch = gROOT->IsBatch();
+        gROOT->SetBatch(kFALSE);
+        if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
+                                       fit_range_low_, fit_range_high_, 2)) {
+          Double_t rlo_tmp, rhi_tmp;
+          fit_function_->GetRange(rlo_tmp, rhi_tmp);
+          fit_range_low_ = rlo_tmp;
+          fit_range_high_ = rhi_tmp;
+          final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
+          std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
+          SaveInteractiveParams(input_name, peak_name);
+        }
+        gROOT->SetBatch(was_batch);
+      }
+    }
+
+    TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
+    PlotFitDoublePeak(input_name, peak_name, chi2label);
 
     for (Int_t pk = 0; pk < 2; pk++) {
       Int_t o = pk * 10;
@@ -2632,6 +2780,31 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     Double_t final_chi2 = fit_result->Chi2() / fit_result->Ndf();
     std::cout << "Triple peak fit converged successfully" << std::endl;
     std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
+
+    if (interactive_) {
+      if (LoadInteractiveParams(input_name, peak_name)) {
+        TFitResultPtr refit =
+            working_hist_->Fit(fit_function_, "LSMRBENR+");
+        if (refit.Get() && refit->IsValid())
+          final_chi2 = refit->Chi2() / refit->Ndf();
+        std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                  << std::endl;
+      } else {
+        Bool_t was_batch = gROOT->IsBatch();
+        gROOT->SetBatch(kFALSE);
+        if (LaunchInteractiveFitEditor(working_hist_, fit_function_,
+                                       fit_range_low_, fit_range_high_, 3)) {
+          Double_t rlo_tmp, rhi_tmp;
+          fit_function_->GetRange(rlo_tmp, rhi_tmp);
+          fit_range_low_ = rlo_tmp;
+          fit_range_high_ = rhi_tmp;
+          final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
+          std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
+          SaveInteractiveParams(input_name, peak_name);
+        }
+        gROOT->SetBatch(was_batch);
+      }
+    }
 
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitTriplePeak(input_name, peak_name, chi2label);
