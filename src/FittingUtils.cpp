@@ -150,12 +150,13 @@ Double_t FittingFunctions::PeakFunction(Double_t *x, Double_t *par) {
   Double_t mu = par[0];
   Double_t sigma = par[1];
   Double_t gaus_amplitude = par[2];
-  Double_t step_amplitude = par[3];
-  Double_t low_exp_tail_amplitude = par[4];
+  Double_t amp_limit = 0.5 * gaus_amplitude;
+  Double_t step_amplitude = TMath::Min(par[3], amp_limit);
+  Double_t low_exp_tail_amplitude = TMath::Min(par[4], amp_limit);
   Double_t low_exp_tail_decay = par[5];
-  Double_t low_lin_tail_amplitude = par[6];
+  Double_t low_lin_tail_amplitude = TMath::Min(par[6], amp_limit);
   Double_t low_lin_tail_slope = par[7];
-  Double_t high_exp_tail_amplitude = par[8];
+  Double_t high_exp_tail_amplitude = TMath::Min(par[8], amp_limit);
   Double_t high_exp_tail_decay = par[9];
   Double_t bkg_constant = par[10];
   Double_t lin_bkg_slope = par[11];
@@ -182,24 +183,26 @@ Double_t FittingFunctions::DoublePeakFunction(Double_t *x, Double_t *par) {
   Double_t mu1 = par[0];
   Double_t sigma1 = par[1];
   Double_t gaus_amplitude1 = par[2];
-  Double_t step_amplitude1 = par[3];
-  Double_t low_exp_tail_amplitude1 = par[4];
+  Double_t amp_limit1 = 0.5 * gaus_amplitude1;
+  Double_t step_amplitude1 = TMath::Min(par[3], amp_limit1);
+  Double_t low_exp_tail_amplitude1 = TMath::Min(par[4], amp_limit1);
   Double_t low_exp_tail_decay1 = par[5];
-  Double_t low_lin_tail_amplitude1 = par[6];
+  Double_t low_lin_tail_amplitude1 = TMath::Min(par[6], amp_limit1);
   Double_t low_lin_tail_slope1 = par[7];
-  Double_t high_exp_tail_amplitude1 = par[8];
+  Double_t high_exp_tail_amplitude1 = TMath::Min(par[8], amp_limit1);
   Double_t high_exp_tail_decay1 = par[9];
 
   // Peak 2: params 10-19
   Double_t mu2 = par[10];
   Double_t sigma2 = par[11];
   Double_t gaus_amplitude2 = par[12];
-  Double_t step_amplitude2 = par[13];
-  Double_t low_exp_tail_amplitude2 = par[14];
+  Double_t amp_limit2 = 0.5 * gaus_amplitude2;
+  Double_t step_amplitude2 = TMath::Min(par[13], amp_limit2);
+  Double_t low_exp_tail_amplitude2 = TMath::Min(par[14], amp_limit2);
   Double_t low_exp_tail_decay2 = par[15];
-  Double_t low_lin_tail_amplitude2 = par[16];
+  Double_t low_lin_tail_amplitude2 = TMath::Min(par[16], amp_limit2);
   Double_t low_lin_tail_slope2 = par[17];
-  Double_t high_exp_tail_amplitude2 = par[18];
+  Double_t high_exp_tail_amplitude2 = TMath::Min(par[18], amp_limit2);
   Double_t high_exp_tail_decay2 = par[19];
 
   // Background: params 20-21
@@ -242,36 +245,39 @@ Double_t FittingFunctions::TriplePeakFunction(Double_t *x, Double_t *par) {
   Double_t mu1 = par[0];
   Double_t sigma1 = par[1];
   Double_t gaus_amplitude1 = par[2];
-  Double_t step_amplitude1 = par[3];
-  Double_t low_exp_tail_amplitude1 = par[4];
+  Double_t amp_limit1 = 0.5 * gaus_amplitude1;
+  Double_t step_amplitude1 = TMath::Min(par[3], amp_limit1);
+  Double_t low_exp_tail_amplitude1 = TMath::Min(par[4], amp_limit1);
   Double_t low_exp_tail_decay1 = par[5];
-  Double_t low_lin_tail_amplitude1 = par[6];
+  Double_t low_lin_tail_amplitude1 = TMath::Min(par[6], amp_limit1);
   Double_t low_lin_tail_slope1 = par[7];
-  Double_t high_exp_tail_amplitude1 = par[8];
+  Double_t high_exp_tail_amplitude1 = TMath::Min(par[8], amp_limit1);
   Double_t high_exp_tail_decay1 = par[9];
 
   // Peak 2: params 10-19
   Double_t mu2 = par[10];
   Double_t sigma2 = par[11];
   Double_t gaus_amplitude2 = par[12];
-  Double_t step_amplitude2 = par[13];
-  Double_t low_exp_tail_amplitude2 = par[14];
+  Double_t amp_limit2 = 0.5 * gaus_amplitude2;
+  Double_t step_amplitude2 = TMath::Min(par[13], amp_limit2);
+  Double_t low_exp_tail_amplitude2 = TMath::Min(par[14], amp_limit2);
   Double_t low_exp_tail_decay2 = par[15];
-  Double_t low_lin_tail_amplitude2 = par[16];
+  Double_t low_lin_tail_amplitude2 = TMath::Min(par[16], amp_limit2);
   Double_t low_lin_tail_slope2 = par[17];
-  Double_t high_exp_tail_amplitude2 = par[18];
+  Double_t high_exp_tail_amplitude2 = TMath::Min(par[18], amp_limit2);
   Double_t high_exp_tail_decay2 = par[19];
 
   // Peak 3: params 20-29
   Double_t mu3 = par[20];
   Double_t sigma3 = par[21];
   Double_t gaus_amplitude3 = par[22];
-  Double_t step_amplitude3 = par[23];
-  Double_t low_exp_tail_amplitude3 = par[24];
+  Double_t amp_limit3 = 0.5 * gaus_amplitude3;
+  Double_t step_amplitude3 = TMath::Min(par[23], amp_limit3);
+  Double_t low_exp_tail_amplitude3 = TMath::Min(par[24], amp_limit3);
   Double_t low_exp_tail_decay3 = par[25];
-  Double_t low_lin_tail_amplitude3 = par[26];
+  Double_t low_lin_tail_amplitude3 = TMath::Min(par[26], amp_limit3);
   Double_t low_lin_tail_slope3 = par[27];
-  Double_t high_exp_tail_amplitude3 = par[28];
+  Double_t high_exp_tail_amplitude3 = TMath::Min(par[28], amp_limit3);
   Double_t high_exp_tail_decay3 = par[29];
 
   // Background: params 30-31
