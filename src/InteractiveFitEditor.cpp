@@ -978,11 +978,11 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     break;
   case 3: // StepAmplitude
     lo = 0;
-    hi = peak_height;
+    hi = peak_height * 0.5;
     break;
   case 4: // LowExpTailAmplitude
     lo = 0;
-    hi = peak_height;
+    hi = peak_height * 0.5;
     break;
   case 5: // LowExpTailDecay
     lo = 0.5;
@@ -990,7 +990,7 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     break;
   case 6: // LowLinTailAmplitude
     lo = 0;
-    hi = peak_height;
+    hi = peak_height * 0.5;
     break;
   case 7: // LowLinTailSlope
     lo = -1;
@@ -998,7 +998,7 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     break;
   case 8: // HighExpTailAmplitude
     lo = 0;
-    hi = peak_height;
+    hi = peak_height * 0.5;
     break;
   case 9: // HighExpTailDecay
     lo = 0.5;

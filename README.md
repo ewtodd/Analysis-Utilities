@@ -88,13 +88,20 @@ Failed fits return -1 for all parameters.
 Reduced chi-squared is displayed on fit plots by default.
 Individual peak components are plotted summed with the background for readability, and multi-peak fits use distinct line styles per peak.
 <!---->
+![Fit example](assets/FitExample.png)
+<!---->
 **Interactive fitting**:
 - `SetInteractive()` enables a GUI editor that opens after the automated fit completes.
 The editor shows the histogram, total fit, and individual components with a residual panel, all updating in real-time as parameters are adjusted via sliders and number entries.
 A fit range slider allows adjusting the fit range visually.
 Parameters can be fixed/freed via checkboxes, and a Refit button runs Minuit with the current values as initial guesses.
 Live chi-squared is displayed on the plot.
-- On accept, parameters and fit range are saved to a `.fits` file in the `plots/fits/` directory. On subsequent runs with `SetInteractive()`, saved parameters are loaded automatically and the editor is skipped, so interactive results only need to be produced once. Delete the `.fits` file to redo the interactive fit.
+<!---->
+![Interactive fit editor GUI](assets/GUI.png)
+<!---->
+- On accept, parameters and fit range are saved to a `.fits` file in the `plots/fits/` directory.
+On subsequent runs with `SetInteractive()`, saved parameters are loaded automatically and the editor is skipped, so interactive results only need to be produced once.
+Delete the `.fits` file to redo the interactive fit.
 - It is recommended to re-run the fitting macro after an interactive session, as the saved parameters serve as much better starting points for Minuit and often produce a lower chi-squared on the second pass.
 - Batch mode is temporarily disabled for the editor window and restored afterward, so plot popups are not affected.
 <!---->
@@ -112,6 +119,7 @@ doi: [10.1016/0168-9002(90)90797-A](https://doi.org/10.1016/0168-9002(90)90797-A
 <!---->
 ### PlottingUtils
 <!---->
+![Light output spectrum example with subplot text](assets/LightOutputSpectrumExample.png)
 All-static utility class for publication quality ROOT graphics with consistent styling.
 No object instantiation required.
 <!---->
