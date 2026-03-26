@@ -251,6 +251,10 @@ df = load_tree_data("output.root", cache_dir=None)
 <!---->
 Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `UShort_t`, `Long64_t`, `ULong64_t`, `UChar_t`.
 <!---->
+## A note on AI-assisted development
+
+Parts of this codebase — primarily the interactive GUI editor and routine boilerplate — were written with the help of [Claude Code](https://claude.ai/claude-code). All changes to the core analysis logic (fitting models, signal processing, result extraction) are human-reviewed and approved before being committed. The physics is never on autopilot.
+
 ## Roadmap
 <!---->
 - [x] Implement support for converting CoMPASS binary files to ROOT

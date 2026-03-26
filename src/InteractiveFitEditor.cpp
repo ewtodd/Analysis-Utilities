@@ -545,12 +545,13 @@ void InteractiveFitEditor::UpdateCompPoints() {
     Double_t mu = fit_func_->GetParameter(off + 0);
     Double_t sigma = fit_func_->GetParameter(off + 1);
     Double_t gaus_amp = fit_func_->GetParameter(off + 2);
-    Double_t step_amp = fit_func_->GetParameter(off + 3);
-    Double_t lexp_amp = fit_func_->GetParameter(off + 4);
+    // Amplitude params are ratios; convert to absolute for component drawing
+    Double_t step_amp = fit_func_->GetParameter(off + 3) * gaus_amp;
+    Double_t lexp_amp = fit_func_->GetParameter(off + 4) * gaus_amp;
     Double_t lexp_dec = fit_func_->GetParameter(off + 5);
-    Double_t llin_amp = fit_func_->GetParameter(off + 6);
+    Double_t llin_amp = fit_func_->GetParameter(off + 6) * gaus_amp;
     Double_t llin_slp = fit_func_->GetParameter(off + 7);
-    Double_t hexp_amp = fit_func_->GetParameter(off + 8);
+    Double_t hexp_amp = fit_func_->GetParameter(off + 8) * gaus_amp;
     Double_t hexp_dec = fit_func_->GetParameter(off + 9);
 
     for (Int_t i = 0; i < kNDrawPts; i++) {
@@ -988,29 +989,29 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     lo = 0;
     hi = peak_height * 2;
     break;
-  case 3: // StepAmplitude
+  case 3: // StepAmplitude ratio
     lo = 0;
-    hi = peak_height * 0.5;
+    hi = 0.5;
     break;
-  case 4: // LowExpTailAmplitude
+  case 4: // LowExpTailAmplitude ratio
     lo = 0;
-    hi = peak_height * 0.5;
+    hi = 0.5;
     break;
   case 5: // LowExpTailDecay
     lo = 0.5;
     hi = 100;
     break;
-  case 6: // LowLinTailAmplitude
+  case 6: // LowLinTailAmplitude ratio
     lo = 0;
-    hi = peak_height * 0.5;
+    hi = 0.5;
     break;
   case 7: // LowLinTailSlope
     lo = -1;
     hi = 1;
     break;
-  case 8: // HighExpTailAmplitude
+  case 8: // HighExpTailAmplitude ratio
     lo = 0;
-    hi = peak_height * 0.5;
+    hi = 0.5;
     break;
   case 9: // HighExpTailDecay
     lo = 0.5;
@@ -1070,12 +1071,6 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
   // when the window is destroyed, which would kill the whole macro
   editor->DontCallClose();
   editor->UnmapWindow();
-
-  // Detach and destroy all child widgets while the parent X11 window still
-  // exists. Without this, ~TGMainFrame destroys children in arbitrary order,
-  // causing BadWindow errors when one widget references a sibling's already-
-  // destroyed X11 window.
-  editor->Cleanup();
   gSystem->ProcessEvents();
   delete editor;
   return result;
