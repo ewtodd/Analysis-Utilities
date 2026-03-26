@@ -542,14 +542,28 @@ void FittingUtils::PlotResidualHistogram(TGraph *residuals,
     pull_hist->Fill(y[i]);
   }
 
+  TH1D *gauss_ref =
+      new TH1D("gauss_ref", "", 82, -5.5, 5.5);
+  for (Int_t i = 1; i <= gauss_ref->GetNbinsX(); i++) {
+    Double_t lo = gauss_ref->GetBinLowEdge(i);
+    Double_t hi = lo + gauss_ref->GetBinWidth(i);
+    gauss_ref->SetBinContent(
+        i, npoints * (TMath::Freq(hi) - TMath::Freq(lo)));
+  }
+
+  Double_t ks_pvalue = pull_hist->KolmogorovTest(gauss_ref);
+
   TCanvas *hist_canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
   PlottingUtils::ConfigureAndDrawHistogram(pull_hist, kAzure);
+  PlottingUtils::AddText(TString::Format("KS p = %.3f", ks_pvalue), 0.85,
+                         0.85);
 
   PlottingUtils::SaveFigure(hist_canvas,
                             "residuals_" + peak_name + "_" + input_name,
                             "fits/residual_hists", PlotSaveOptions::kLINEAR);
 
   delete hist_canvas;
+  delete gauss_ref;
   delete pull_hist;
 }
 
