@@ -397,8 +397,7 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   else
     fit_function_->FixParameter(6, 0);
 
-  fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                              0.5 * bkg_estimate / range_width);
+  fit_function_->SetParLimits(7, -0.1, 0.1);
   if (use_low_lin_tail_)
     fit_function_->SetParameter(7, 0);
   else
@@ -422,8 +421,7 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   fit_function_->SetParameter(10, bkg_estimate);
 
   if (!use_flat_background_)
-    fit_function_->SetParLimits(11, -0.5 * bkg_estimate / range_width,
-                                0.5 * bkg_estimate / range_width);
+    fit_function_->SetParLimits(11, -0.1, 0.1);
   else
     fit_function_->FixParameter(11, 0);
 
@@ -540,21 +538,18 @@ void FittingUtils::PlotResidualHistogram(TGraph *residuals,
     pull_hist->Fill(y[i]);
   }
 
-  TH1D *gauss_ref =
-      new TH1D("gauss_ref", "", 82, -5.5, 5.5);
+  TH1D *gauss_ref = new TH1D("gauss_ref", "", 82, -5.5, 5.5);
   for (Int_t i = 1; i <= gauss_ref->GetNbinsX(); i++) {
     Double_t lo = gauss_ref->GetBinLowEdge(i);
     Double_t hi = lo + gauss_ref->GetBinWidth(i);
-    gauss_ref->SetBinContent(
-        i, npoints * (TMath::Freq(hi) - TMath::Freq(lo)));
+    gauss_ref->SetBinContent(i, npoints * (TMath::Freq(hi) - TMath::Freq(lo)));
   }
 
   Double_t ks_pvalue = pull_hist->KolmogorovTest(gauss_ref);
 
   TCanvas *hist_canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
   PlottingUtils::ConfigureAndDrawHistogram(pull_hist, kAzure);
-  PlottingUtils::AddText(TString::Format("KS p = %.3f", ks_pvalue), 0.85,
-                         0.85);
+  PlottingUtils::AddText(TString::Format("KS p = %.3f", ks_pvalue), 0.85, 0.85);
 
   PlottingUtils::SaveFigure(hist_canvas,
                             "residuals_" + peak_name + "_" + input_name,
@@ -1436,8 +1431,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
         fit_function_->ReleaseParameter(6);
         fit_function_->ReleaseParameter(7);
         fit_function_->SetParLimits(6, 0, 0.5);
-        fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                                    0.5 * bkg_estimate / range_width);
+        fit_function_->SetParLimits(7, -0.1, 0.1);
         if (!use_manual_init_) {
           fit_function_->SetParameter(6, 0.15);
           fit_function_->SetParameter(7, 0);
@@ -1529,8 +1523,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
               fit_function_->ReleaseParameter(6);
               fit_function_->ReleaseParameter(7);
               fit_function_->SetParLimits(6, 0, 0.5);
-              fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                                          0.5 * bkg_estimate / range_width);
+              fit_function_->SetParLimits(7, -0.1, 0.1);
               for (Int_t i = 0; i < npar; i++) {
                 fit_function_->SetParameter(i, best_params[i]);
                 fit_function_->SetParError(i, best_errors[i]);
@@ -1745,8 +1738,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->SetParLimits(o + 4, 0, 0.5);
     fit_function_->SetParLimits(o + 5, 0.5, 100);
     fit_function_->SetParLimits(o + 6, 0, 0.5);
-    fit_function_->SetParLimits(o + 7, -0.5 * bkg_estimate / range_width,
-                                0.5 * bkg_estimate / range_width);
+    fit_function_->SetParLimits(o + 7, -0.1, 0.1);
     fit_function_->SetParLimits(o + 8, 0, 0.5);
     fit_function_->SetParLimits(o + 9, 0.5, 100);
   }
@@ -1889,8 +1881,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->ReleaseParameter(6);
       fit_function_->ReleaseParameter(7);
       fit_function_->SetParLimits(6, 0, 0.5);
-      fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
+      fit_function_->SetParLimits(7, -0.1, 0.1);
       fit_function_->SetParameter(6, 0.15);
       fit_function_->SetParameter(7, 0);
 
@@ -1961,8 +1952,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           fit_function_->ReleaseParameter(6);
           fit_function_->ReleaseParameter(7);
           fit_function_->SetParLimits(6, 0, 0.5);
-          fit_function_->SetParLimits(7, -0.5 * bkg_estimate / range_width,
-                                      0.5 * bkg_estimate / range_width);
+          fit_function_->SetParLimits(7, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2042,8 +2032,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->ReleaseParameter(16);
       fit_function_->ReleaseParameter(17);
       fit_function_->SetParLimits(16, 0, 0.5);
-      fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
+      fit_function_->SetParLimits(17, -0.1, 0.1);
       fit_function_->SetParameter(16, 0.15);
       fit_function_->SetParameter(17, 0);
 
@@ -2136,8 +2125,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           fit_function_->ReleaseParameter(16);
           fit_function_->ReleaseParameter(17);
           fit_function_->SetParLimits(16, 0, 0.5);
-          fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                                      0.5 * bkg_estimate / range_width);
+          fit_function_->SetParLimits(17, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2285,13 +2273,16 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->SetParameter(2, cp.gaus_amplitude);
 
     fit_function_->FixParameter(3, cp.step_amplitude / cp.gaus_amplitude);
-    fit_function_->FixParameter(4, cp.low_exp_tail_amplitude / cp.gaus_amplitude);
+    fit_function_->FixParameter(4,
+                                cp.low_exp_tail_amplitude / cp.gaus_amplitude);
     fit_function_->FixParameter(
         5, cp.low_exp_tail_decay > 0 ? cp.low_exp_tail_decay : 1);
-    fit_function_->FixParameter(6, cp.low_lin_tail_amplitude / cp.gaus_amplitude);
+    fit_function_->FixParameter(6,
+                                cp.low_lin_tail_amplitude / cp.gaus_amplitude);
     fit_function_->FixParameter(7, cp.low_lin_tail_slope);
 
-    fit_function_->FixParameter(8, cp.high_exp_tail_amplitude / cp.gaus_amplitude);
+    fit_function_->FixParameter(8,
+                                cp.high_exp_tail_amplitude / cp.gaus_amplitude);
     fit_function_->FixParameter(
         9, cp.high_exp_tail_decay > 0 ? cp.high_exp_tail_decay : 1);
   }
@@ -2304,8 +2295,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(14, 0, 0.5);
   fit_function_->SetParLimits(15, 0.5, 100);
   fit_function_->SetParLimits(16, 0, 0.5);
-  fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                              0.5 * bkg_estimate / range_width);
+  fit_function_->SetParLimits(17, -0.1, 0.1);
   fit_function_->SetParLimits(18, 0, 0.5);
   fit_function_->SetParLimits(19, 0.5, 100);
 
@@ -2433,8 +2423,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->ReleaseParameter(16);
       fit_function_->ReleaseParameter(17);
       fit_function_->SetParLimits(16, 0, 0.5);
-      fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
+      fit_function_->SetParLimits(17, -0.1, 0.1);
       fit_function_->SetParameter(16, 0.15);
       fit_function_->SetParameter(17, 0);
 
@@ -2505,8 +2494,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           fit_function_->ReleaseParameter(16);
           fit_function_->ReleaseParameter(17);
           fit_function_->SetParLimits(16, 0, 0.5);
-          fit_function_->SetParLimits(17, -0.5 * bkg_estimate / range_width,
-                                      0.5 * bkg_estimate / range_width);
+          fit_function_->SetParLimits(17, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2701,14 +2689,18 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     fit_function_->SetParLimits(o + 2, 0, peak_height * 2);
     fit_function_->SetParameter(o + 2, cp.gaus_amplitude);
 
-    // Fix all amplitude ratios and shape params — they scale with gaus_amplitude
+    // Fix all amplitude ratios and shape params — they scale with
+    // gaus_amplitude
     fit_function_->FixParameter(o + 3, cp.step_amplitude / cp.gaus_amplitude);
-    fit_function_->FixParameter(o + 4, cp.low_exp_tail_amplitude / cp.gaus_amplitude);
+    fit_function_->FixParameter(o + 4,
+                                cp.low_exp_tail_amplitude / cp.gaus_amplitude);
     fit_function_->FixParameter(
         o + 5, cp.low_exp_tail_decay > 0 ? cp.low_exp_tail_decay : 1);
-    fit_function_->FixParameter(o + 6, cp.low_lin_tail_amplitude / cp.gaus_amplitude);
+    fit_function_->FixParameter(o + 6,
+                                cp.low_lin_tail_amplitude / cp.gaus_amplitude);
     fit_function_->FixParameter(o + 7, cp.low_lin_tail_slope);
-    fit_function_->FixParameter(o + 8, cp.high_exp_tail_amplitude / cp.gaus_amplitude);
+    fit_function_->FixParameter(o + 8,
+                                cp.high_exp_tail_amplitude / cp.gaus_amplitude);
     fit_function_->FixParameter(
         o + 9, cp.high_exp_tail_decay > 0 ? cp.high_exp_tail_decay : 1);
   }
@@ -2721,8 +2713,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   fit_function_->SetParLimits(24, 0, 0.5);
   fit_function_->SetParLimits(25, 0.5, 100);
   fit_function_->SetParLimits(26, 0, 0.5);
-  fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
-                              0.5 * bkg_estimate / range_width);
+  fit_function_->SetParLimits(27, -0.1, 0.1);
   fit_function_->SetParLimits(28, 0, 0.5);
   fit_function_->SetParLimits(29, 0.5, 100);
 
@@ -2849,8 +2840,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
       fit_function_->ReleaseParameter(26);
       fit_function_->ReleaseParameter(27);
       fit_function_->SetParLimits(26, 0, 0.5);
-      fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
-                                  0.5 * bkg_estimate / range_width);
+      fit_function_->SetParLimits(27, -0.1, 0.1);
       fit_function_->SetParameter(26, 0.15);
       fit_function_->SetParameter(27, 0);
 
@@ -2921,8 +2911,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
           fit_function_->ReleaseParameter(26);
           fit_function_->ReleaseParameter(27);
           fit_function_->SetParLimits(26, 0, 0.5);
-          fit_function_->SetParLimits(27, -0.5 * bkg_estimate / range_width,
-                                      0.5 * bkg_estimate / range_width);
+          fit_function_->SetParLimits(27, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
