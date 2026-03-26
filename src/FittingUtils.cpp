@@ -378,7 +378,10 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
 
   // Step parameters
   fit_function_->SetParLimits(3, 0, peak_height * 0.999);
-  fit_function_->SetParameter(3, 0);
+  if (use_step_)
+    fit_function_->SetParameter(3, 0);
+  else
+    fit_function_->FixParameter(3, 0);
 
   // Low tail parameters
   fit_function_->SetParLimits(4, 0, peak_height * 0.999);
@@ -1302,41 +1305,6 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
   FitResult results;
   results.peaks.emplace_back(); // 1 peak, default -1
 
-  // Fix all optional components to disabled state
-  fit_function_->FixParameter(3, 0); // StepAmplitude
-  fit_function_->FixParameter(4, 0); // LowExpTailAmplitude
-  fit_function_->FixParameter(5, 1); // LowExpTailDecay
-  fit_function_->FixParameter(6, 0); // LowLinTailAmplitude
-  fit_function_->FixParameter(7, 0); // LowLinTailSlope
-  fit_function_->FixParameter(8, 0); // HighExpTailAmplitude
-  fit_function_->FixParameter(9, 1); // HighExpTailDecay
-
-  if (use_flat_background_) {
-    fit_function_->FixParameter(11, 0);
-  }
-
-  if (use_manual_init_) {
-    std::cout << "Using manually initialized parameters" << std::endl;
-    for (size_t i = 0; i < manual_params_.size(); i++) {
-      fit_function_->SetParameter(i, manual_params_[i]);
-    }
-    std::cout << "Skipping auto-initialization, using provided values"
-              << std::endl;
-  } else {
-    if (!use_flat_background_) {
-      TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
-                              fit_range_low_, fit_range_high_, 2);
-      Double_t exclude_low =
-          fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
-      working_hist_->Fit(bkg_only, "QN0R", "", fit_range_low_, exclude_low);
-      fit_function_->SetParameter(10,
-                                  ClampToBounds(10, bkg_only->GetParameter(0)));
-      fit_function_->SetParameter(11,
-                                  ClampToBounds(11, bkg_only->GetParameter(1)));
-      delete bkg_only;
-    }
-  }
-
   Bool_t fit_valid = kFALSE;
   Double_t final_chi2 = 0;
 
@@ -1367,6 +1335,41 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
     }
   } else {
     // Automated fitting: initial fit, component testing, final fit
+
+    // Fix all optional components to disabled state for baseline fit
+    fit_function_->FixParameter(3, 0); // StepAmplitude
+    fit_function_->FixParameter(4, 0); // LowExpTailAmplitude
+    fit_function_->FixParameter(5, 1); // LowExpTailDecay
+    fit_function_->FixParameter(6, 0); // LowLinTailAmplitude
+    fit_function_->FixParameter(7, 0); // LowLinTailSlope
+    fit_function_->FixParameter(8, 0); // HighExpTailAmplitude
+    fit_function_->FixParameter(9, 1); // HighExpTailDecay
+
+    if (use_flat_background_) {
+      fit_function_->FixParameter(11, 0);
+    }
+
+    if (use_manual_init_) {
+      std::cout << "Using manually initialized parameters" << std::endl;
+      for (size_t i = 0; i < manual_params_.size(); i++) {
+        fit_function_->SetParameter(i, manual_params_[i]);
+      }
+      std::cout << "Skipping auto-initialization, using provided values"
+                << std::endl;
+    } else {
+      if (!use_flat_background_) {
+        TF1 *bkg_only = new TF1("bkg_temp", FittingFunctions::LinearBackground,
+                                fit_range_low_, fit_range_high_, 2);
+        Double_t exclude_low =
+            fit_function_->GetParameter(0) - 3 * fit_function_->GetParameter(1);
+        working_hist_->Fit(bkg_only, "QN0R", "", fit_range_low_, exclude_low);
+        fit_function_->SetParameter(
+            10, ClampToBounds(10, bkg_only->GetParameter(0)));
+        fit_function_->SetParameter(
+            11, ClampToBounds(11, bkg_only->GetParameter(1)));
+        delete bkg_only;
+      }
+    }
 
     // Initial fit with just Gaussian + Background
     TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
@@ -1739,13 +1742,6 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParameter(0, mu1_init);
   fit_function_->SetParameter(1, sigma_init);
   fit_function_->SetParameter(2, peak_height * 0.999);
-  fit_function_->FixParameter(3, 0);
-  fit_function_->FixParameter(4, 0);
-  fit_function_->FixParameter(5, 1);
-  fit_function_->FixParameter(6, 0);
-  fit_function_->FixParameter(7, 0);
-  fit_function_->FixParameter(8, 0);
-  fit_function_->FixParameter(9, 1);
 
   // Peak 2 limits and initial values (offset 10)
   fit_function_->SetParLimits(10, fit_range_low_, fit_range_high_);
@@ -1763,13 +1759,38 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
   fit_function_->SetParameter(12, peak_height * 0.999);
-  fit_function_->FixParameter(13, 0);
-  fit_function_->FixParameter(14, 0);
-  fit_function_->FixParameter(15, 1);
-  fit_function_->FixParameter(16, 0);
-  fit_function_->FixParameter(17, 0);
-  fit_function_->FixParameter(18, 0);
-  fit_function_->FixParameter(19, 1);
+
+  // Fix disabled optional components on both peaks
+  for (Int_t o : {0, 10}) {
+    if (use_step_)
+      fit_function_->SetParameter(o + 3, 0);
+    else
+      fit_function_->FixParameter(o + 3, 0);
+
+    if (use_low_exp_tail_) {
+      fit_function_->SetParameter(o + 4, 0);
+      fit_function_->SetParameter(o + 5, 1);
+    } else {
+      fit_function_->FixParameter(o + 4, 0);
+      fit_function_->FixParameter(o + 5, 1);
+    }
+
+    if (use_low_lin_tail_) {
+      fit_function_->SetParameter(o + 6, 0);
+      fit_function_->SetParameter(o + 7, 0);
+    } else {
+      fit_function_->FixParameter(o + 6, 0);
+      fit_function_->FixParameter(o + 7, 0);
+    }
+
+    if (use_high_exp_tail_) {
+      fit_function_->SetParameter(o + 8, 0);
+      fit_function_->SetParameter(o + 9, 1);
+    } else {
+      fit_function_->FixParameter(o + 8, 0);
+      fit_function_->FixParameter(o + 9, 1);
+    }
+  }
 
   // Background
   fit_function_->SetParLimits(20, 0, peak_height * 0.999);
@@ -1812,6 +1833,22 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       gROOT->SetBatch(was_batch);
     }
   } else {
+    // Fix all optional components for baseline fit
+    fit_function_->FixParameter(3, 0);
+    fit_function_->FixParameter(4, 0);
+    fit_function_->FixParameter(5, 1);
+    fit_function_->FixParameter(6, 0);
+    fit_function_->FixParameter(7, 0);
+    fit_function_->FixParameter(8, 0);
+    fit_function_->FixParameter(9, 1);
+    fit_function_->FixParameter(13, 0);
+    fit_function_->FixParameter(14, 0);
+    fit_function_->FixParameter(15, 1);
+    fit_function_->FixParameter(16, 0);
+    fit_function_->FixParameter(17, 0);
+    fit_function_->FixParameter(18, 0);
+    fit_function_->FixParameter(19, 1);
+
     // Initial fit
     TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
@@ -2301,13 +2338,36 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
   fit_function_->SetParameter(12, peak_height * 0.999);
-  fit_function_->FixParameter(13, 0);
-  fit_function_->FixParameter(14, 0);
-  fit_function_->FixParameter(15, 1);
-  fit_function_->FixParameter(16, 0);
-  fit_function_->FixParameter(17, 0);
-  fit_function_->FixParameter(18, 0);
-  fit_function_->FixParameter(19, 1);
+
+  // Fix disabled optional components on free peak 2
+  if (use_step_)
+    fit_function_->SetParameter(13, 0);
+  else
+    fit_function_->FixParameter(13, 0);
+
+  if (use_low_exp_tail_) {
+    fit_function_->SetParameter(14, 0);
+    fit_function_->SetParameter(15, 1);
+  } else {
+    fit_function_->FixParameter(14, 0);
+    fit_function_->FixParameter(15, 1);
+  }
+
+  if (use_low_lin_tail_) {
+    fit_function_->SetParameter(16, 0);
+    fit_function_->SetParameter(17, 0);
+  } else {
+    fit_function_->FixParameter(16, 0);
+    fit_function_->FixParameter(17, 0);
+  }
+
+  if (use_high_exp_tail_) {
+    fit_function_->SetParameter(18, 0);
+    fit_function_->SetParameter(19, 1);
+  } else {
+    fit_function_->FixParameter(18, 0);
+    fit_function_->FixParameter(19, 1);
+  }
 
   // Background
   fit_function_->SetParLimits(20, 0, peak_height * 0.999);
@@ -2350,6 +2410,15 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       gROOT->SetBatch(was_batch);
     }
   } else {
+    // Fix all optional components on peak 2 for baseline fit
+    fit_function_->FixParameter(13, 0);
+    fit_function_->FixParameter(14, 0);
+    fit_function_->FixParameter(15, 1);
+    fit_function_->FixParameter(16, 0);
+    fit_function_->FixParameter(17, 0);
+    fit_function_->FixParameter(18, 0);
+    fit_function_->FixParameter(19, 1);
+
     // Initial fit
     TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 
@@ -2697,7 +2766,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
         o + 9, cp.high_exp_tail_decay > 0 ? cp.high_exp_tail_decay : 1);
   }
 
-  // Free peak 3 (offset 20, all optional components fixed to 0)
+  // Free peak 3 (offset 20)
   fit_function_->SetParLimits(20, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(21, range_width * 0.001, range_width * 0.5);
   fit_function_->SetParLimits(22, 0, peak_height * 0.999);
@@ -2713,13 +2782,36 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   fit_function_->SetParameter(20, mu3_init);
   fit_function_->SetParameter(21, sigma_init);
   fit_function_->SetParameter(22, peak_height * 0.999);
-  fit_function_->FixParameter(23, 0);
-  fit_function_->FixParameter(24, 0);
-  fit_function_->FixParameter(25, 1);
-  fit_function_->FixParameter(26, 0);
-  fit_function_->FixParameter(27, 0);
-  fit_function_->FixParameter(28, 0);
-  fit_function_->FixParameter(29, 1);
+
+  // Fix disabled optional components on free peak 3
+  if (use_step_)
+    fit_function_->SetParameter(23, 0);
+  else
+    fit_function_->FixParameter(23, 0);
+
+  if (use_low_exp_tail_) {
+    fit_function_->SetParameter(24, 0);
+    fit_function_->SetParameter(25, 1);
+  } else {
+    fit_function_->FixParameter(24, 0);
+    fit_function_->FixParameter(25, 1);
+  }
+
+  if (use_low_lin_tail_) {
+    fit_function_->SetParameter(26, 0);
+    fit_function_->SetParameter(27, 0);
+  } else {
+    fit_function_->FixParameter(26, 0);
+    fit_function_->FixParameter(27, 0);
+  }
+
+  if (use_high_exp_tail_) {
+    fit_function_->SetParameter(28, 0);
+    fit_function_->SetParameter(29, 1);
+  } else {
+    fit_function_->FixParameter(28, 0);
+    fit_function_->FixParameter(29, 1);
+  }
 
   // Background
   fit_function_->SetParLimits(30, 0, peak_height * 0.999);
@@ -2762,6 +2854,15 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
       gROOT->SetBatch(was_batch);
     }
   } else {
+    // Fix all optional components on peak 3 for baseline fit
+    fit_function_->FixParameter(23, 0);
+    fit_function_->FixParameter(24, 0);
+    fit_function_->FixParameter(25, 1);
+    fit_function_->FixParameter(26, 0);
+    fit_function_->FixParameter(27, 0);
+    fit_function_->FixParameter(28, 0);
+    fit_function_->FixParameter(29, 1);
+
     // Initial fit
     TFitResultPtr initial_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
 

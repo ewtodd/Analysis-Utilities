@@ -1056,15 +1056,26 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
 
   editor->GetRedrawTimer()->TurnOff();
 
-  // Remove the embedded TCanvas from ROOT's global list so it doesn't
-  // try to destroy the X11 window again during EndOfProcessCleanups
+  // Prevent TCanvas::Close() from doing X11 operations during teardown.
+  // When TGMainFrame destroys children, sibling widget X11 windows may
+  // already be gone, causing BadWindow errors from SetDrawMode().
+  // Setting batch mode on the canvas disables all X11 drawing calls.
   TCanvas *ecanvas = editor->GetEmbeddedCanvas()->GetCanvas();
-  gROOT->GetListOfCanvases()->Remove(ecanvas);
+  if (ecanvas) {
+    gROOT->GetListOfCanvases()->Remove(ecanvas);
+    ecanvas->SetBatch(kTRUE);
+  }
 
   // DontCallClose prevents TGMainFrame from triggering gApplication->Terminate
   // when the window is destroyed, which would kill the whole macro
   editor->DontCallClose();
   editor->UnmapWindow();
+
+  // Detach and destroy all child widgets while the parent X11 window still
+  // exists. Without this, ~TGMainFrame destroys children in arbitrary order,
+  // causing BadWindow errors when one widget references a sibling's already-
+  // destroyed X11 window.
+  editor->Cleanup();
   gSystem->ProcessEvents();
   delete editor;
   return result;
