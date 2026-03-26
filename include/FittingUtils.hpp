@@ -77,6 +77,8 @@ private:
                                const TString &peak_name);
 
   void SortPeaksByMu(Int_t num_peaks);
+  void PlotResidualHistogram(TGraph *residuals, const TString &input_name,
+                             const TString &peak_name);
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,

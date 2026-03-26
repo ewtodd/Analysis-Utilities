@@ -458,9 +458,9 @@ void FittingUtils::SortPeaksByMu(Int_t num_peaks) {
       Double_t mu_j = fit_function_->GetParameter(j * 10);
       Double_t mu_next = fit_function_->GetParameter((j + 1) * 10);
       if (mu_j > mu_next) {
-        std::cout << "Sorting peaks: swapping peak " << j + 1 << " (mu="
-                  << mu_j << ") and peak " << j + 2 << " (mu=" << mu_next
-                  << ")" << std::endl;
+        std::cout << "Sorting peaks: swapping peak " << j + 1 << " (mu=" << mu_j
+                  << ") and peak " << j + 2 << " (mu=" << mu_next << ")"
+                  << std::endl;
         for (Int_t k = 0; k < 10; k++) {
           Int_t idx_a = j * 10 + k;
           Int_t idx_b = (j + 1) * 10 + k;
@@ -473,8 +473,7 @@ void FittingUtils::SortPeaksByMu(Int_t num_peaks) {
 
           fit_function_->SetParameter(idx_a,
                                       fit_function_->GetParameter(idx_b));
-          fit_function_->SetParError(idx_a,
-                                     fit_function_->GetParError(idx_b));
+          fit_function_->SetParError(idx_a, fit_function_->GetParError(idx_b));
           fit_function_->SetParLimits(idx_a, lo_b, hi_b);
 
           fit_function_->SetParameter(idx_b, tmp_val);
@@ -526,6 +525,32 @@ void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
 
   std::cout << "Set Par[" << index << "] " << fit_function_->GetParName(index)
             << " = " << value << std::endl;
+}
+
+void FittingUtils::PlotResidualHistogram(TGraph *residuals,
+                                         const TString &input_name,
+                                         const TString &peak_name) {
+  Int_t npoints = residuals->GetN();
+  if (npoints == 0)
+    return;
+
+  TH1D *pull_hist =
+      new TH1D("pull_hist", ";#delta/#sigma;Counts", 82, -5.5, 5.5);
+
+  Double_t *y = residuals->GetY();
+  for (Int_t i = 0; i < npoints; i++) {
+    pull_hist->Fill(y[i]);
+  }
+
+  TCanvas *hist_canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
+  PlottingUtils::ConfigureAndDrawHistogram(pull_hist, kAzure);
+
+  PlottingUtils::SaveFigure(hist_canvas,
+                            "residuals_" + peak_name + "_" + input_name,
+                            "fits/residual_hists", PlotSaveOptions::kLINEAR);
+
+  delete hist_canvas;
+  delete pull_hist;
 }
 
 void FittingUtils::PlotFitSinglePeak(const TString input_name,
@@ -697,6 +722,8 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
   }
   PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
                             PlotSaveOptions::kLOG);
+
+  PlotResidualHistogram(residuals, input_name, peak_name);
 }
 
 void FittingUtils::PlotFitDoublePeak(const TString input_name,
@@ -928,6 +955,8 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   }
   PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
                             PlotSaveOptions::kLOG);
+
+  PlotResidualHistogram(residuals, input_name, peak_name);
 }
 
 void FittingUtils::PlotFitTriplePeak(const TString input_name,
@@ -1225,6 +1254,8 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
   pad1->SetLogy(kTRUE);
   PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
                             PlotSaveOptions::kLOG);
+
+  PlotResidualHistogram(residuals, input_name, peak_name);
 }
 
 Double_t FittingUtils::EstimateBackground() {
@@ -1297,8 +1328,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
 
   if (interactive_) {
     if (LoadInteractiveParams(input_name, peak_name)) {
-      TFitResultPtr refit =
-          working_hist_->Fit(fit_function_, "LSMRBENR+");
+      TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
@@ -1747,7 +1777,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
-      std::cout << "Refit from saved params chi2/ndf = " << final_chi2 << std::endl;
+      std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                << std::endl;
       fit_valid = kTRUE;
     } else {
       Bool_t was_batch = gROOT->IsBatch();
@@ -1785,18 +1816,18 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       best_params[i] = fit_function_->GetParameter(i);
       best_errors[i] = fit_function_->GetParError(i);
     }
-  
+
     Double_t best_chi2 = initial_fit->Chi2() / initial_fit->Ndf();
     std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
-  
+
     //  Low-side group for peak 1 (offset 0)
     {
       std::cout << "Testing low-side group for peak1..." << std::endl;
-  
+
       fit_function_->ReleaseParameter(3);
       fit_function_->SetParLimits(3, 0, peak_height);
       fit_function_->SetParameter(3, gaus_amp1);
-  
+
       fit_function_->ReleaseParameter(4);
       fit_function_->ReleaseParameter(5);
       fit_function_->SetParLimits(4, 0, peak_height * 0.999);
@@ -1804,7 +1835,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->SetParameter(
           4, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
       fit_function_->SetParameter(5, 1);
-  
+
       fit_function_->ReleaseParameter(6);
       fit_function_->ReleaseParameter(7);
       fit_function_->SetParLimits(6, 0, peak_height * 0.999);
@@ -1813,9 +1844,9 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->SetParameter(
           6, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
       fit_function_->SetParameter(7, 0);
-  
+
       TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-  
+
       if (group_fit.Get() && group_fit->IsValid() &&
           group_fit->Chi2() / group_fit->Ndf() < best_chi2) {
         std::cout << "Low-side group peak1 ACCEPTED, pruning..." << std::endl;
@@ -1824,7 +1855,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           best_params[i] = fit_function_->GetParameter(i);
           best_errors[i] = fit_function_->GetParError(i);
         }
-  
+
         // Prune step1
         fit_function_->FixParameter(3, 0);
         TFitResultPtr p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
@@ -1843,7 +1874,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
             fit_function_->SetParError(i, best_errors[i]);
           }
         }
-  
+
         // Prune low exp tail1
         fit_function_->FixParameter(4, 0);
         fit_function_->FixParameter(5, 1);
@@ -1865,7 +1896,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
             fit_function_->SetParError(i, best_errors[i]);
           }
         }
-  
+
         // Prune low lin tail1
         fit_function_->FixParameter(6, 0);
         fit_function_->FixParameter(7, 0);
@@ -1901,7 +1932,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         }
       }
     }
-  
+
     //  High tail for peak 2 (outer component, no inter-peak overlap)
     {
       std::cout << "Testing high tail for peak2..." << std::endl;
@@ -1912,7 +1943,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->SetParameter(
           18, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
       fit_function_->SetParameter(19, 1);
-  
+
       TFitResultPtr ht_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
       if (ht_fit.Get() && ht_fit->IsValid() &&
           ht_fit->Chi2() / ht_fit->Ndf() < best_chi2) {
@@ -1932,14 +1963,14 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         }
       }
     }
-  
+
     //  Inter-peak group: peak1 high tail + peak2 low-side (both affect the
     //  region between the two peaks, so they must be tested jointly)
     {
       std::cout
           << "Testing inter-peak group (peak1 high tail + peak2 low-side)..."
           << std::endl;
-  
+
       // Release peak1 high tail
       fit_function_->ReleaseParameter(8);
       fit_function_->ReleaseParameter(9);
@@ -1948,12 +1979,12 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->SetParameter(
           8, TMath::Min(gaus_amp1 * 0.15, peak_height * 0.25));
       fit_function_->SetParameter(9, 1);
-  
+
       // Release peak2 low-side group
       fit_function_->ReleaseParameter(13);
       fit_function_->SetParLimits(13, 0, peak_height);
       fit_function_->SetParameter(13, gaus_amp2);
-  
+
       fit_function_->ReleaseParameter(14);
       fit_function_->ReleaseParameter(15);
       fit_function_->SetParLimits(14, 0, peak_height * 0.999);
@@ -1961,7 +1992,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->SetParameter(
           14, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
       fit_function_->SetParameter(15, 1);
-  
+
       fit_function_->ReleaseParameter(16);
       fit_function_->ReleaseParameter(17);
       fit_function_->SetParLimits(16, 0, peak_height * 0.999);
@@ -1970,9 +2001,9 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       fit_function_->SetParameter(
           16, TMath::Min(gaus_amp2 * 0.15, peak_height * 0.25));
       fit_function_->SetParameter(17, 0);
-  
+
       TFitResultPtr group_fit = working_hist_->Fit(fit_function_, "LSMBNQ0R");
-  
+
       if (group_fit.Get() && group_fit->IsValid() &&
           group_fit->Chi2() / group_fit->Ndf() < best_chi2) {
         std::cout << "Inter-peak group ACCEPTED, pruning..." << std::endl;
@@ -1981,7 +2012,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           best_params[i] = fit_function_->GetParameter(i);
           best_errors[i] = fit_function_->GetParError(i);
         }
-  
+
         // Prune peak1 high tail
         fit_function_->FixParameter(8, 0);
         fit_function_->FixParameter(9, 1);
@@ -2003,7 +2034,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
             fit_function_->SetParError(i, best_errors[i]);
           }
         }
-  
+
         // Prune step2
         fit_function_->FixParameter(13, 0);
         p = working_hist_->Fit(fit_function_, "LSMBNQ0R");
@@ -2022,7 +2053,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
             fit_function_->SetParError(i, best_errors[i]);
           }
         }
-  
+
         // Prune low exp tail2
         fit_function_->FixParameter(14, 0);
         fit_function_->FixParameter(15, 1);
@@ -2044,7 +2075,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
             fit_function_->SetParError(i, best_errors[i]);
           }
         }
-  
+
         // Prune low lin tail2
         fit_function_->FixParameter(16, 0);
         fit_function_->FixParameter(17, 0);
@@ -2219,9 +2250,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     } else {
       fit_function_->FixParameter(4, 0);
     }
-    fit_function_->FixParameter(5, cp.low_exp_tail_decay > 0
-                                       ? cp.low_exp_tail_decay
-                                       : 1);
+    fit_function_->FixParameter(
+        5, cp.low_exp_tail_decay > 0 ? cp.low_exp_tail_decay : 1);
 
     if (cp.low_lin_tail_amplitude > 0) {
       fit_function_->SetParLimits(6, 0, peak_height);
@@ -2237,9 +2267,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     } else {
       fit_function_->FixParameter(8, 0);
     }
-    fit_function_->FixParameter(9, cp.high_exp_tail_decay > 0
-                                       ? cp.high_exp_tail_decay
-                                       : 1);
+    fit_function_->FixParameter(
+        9, cp.high_exp_tail_decay > 0 ? cp.high_exp_tail_decay : 1);
   }
 
   // Free peak 2 (all optional components fixed to 0)
@@ -2286,7 +2315,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
-      std::cout << "Refit from saved params chi2/ndf = " << final_chi2 << std::endl;
+      std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                << std::endl;
       fit_valid = kTRUE;
     } else {
       Bool_t was_batch = gROOT->IsBatch();
@@ -2602,7 +2632,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   // to float with [0, ...] bounds. Disable components that were off in the
   // background fit.
   const PeakFitResult *cpeaks[2] = {&constrained_peaks.peaks[0],
-                                     &constrained_peaks.peaks[1]};
+                                    &constrained_peaks.peaks[1]};
   for (Int_t pk = 0; pk < 2; pk++) {
     Int_t o = pk * 10;
     const PeakFitResult &cp = *cpeaks[pk];
@@ -2630,9 +2660,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     } else {
       fit_function_->FixParameter(o + 4, 0);
     }
-    fit_function_->FixParameter(o + 5, cp.low_exp_tail_decay > 0
-                                           ? cp.low_exp_tail_decay
-                                           : 1);
+    fit_function_->FixParameter(
+        o + 5, cp.low_exp_tail_decay > 0 ? cp.low_exp_tail_decay : 1);
 
     // Low lin tail: amplitude free if enabled, slope fixed (shape)
     if (cp.low_lin_tail_amplitude > 0) {
@@ -2650,9 +2679,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
     } else {
       fit_function_->FixParameter(o + 8, 0);
     }
-    fit_function_->FixParameter(o + 9, cp.high_exp_tail_decay > 0
-                                           ? cp.high_exp_tail_decay
-                                           : 1);
+    fit_function_->FixParameter(
+        o + 9, cp.high_exp_tail_decay > 0 ? cp.high_exp_tail_decay : 1);
   }
 
   // Free peak 3 (offset 20, all optional components fixed to 0)
@@ -2699,7 +2727,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
-      std::cout << "Refit from saved params chi2/ndf = " << final_chi2 << std::endl;
+      std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+                << std::endl;
       fit_valid = kTRUE;
     } else {
       Bool_t was_batch = gROOT->IsBatch();
