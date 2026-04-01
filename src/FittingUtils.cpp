@@ -372,26 +372,26 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
   fit_function_->SetParameter(2, peak_height * 0.999);
 
   // Step ratio (fraction of gaussian amplitude)
-  fit_function_->SetParLimits(3, 0, 0.5);
+  fit_function_->SetParLimits(3, 0, 0.2);
   if (use_step_)
     fit_function_->SetParameter(3, 0);
   else
     fit_function_->FixParameter(3, 0);
 
   // Low tail parameters (amplitudes as ratios of gaussian)
-  fit_function_->SetParLimits(4, 0, 0.5);
+  fit_function_->SetParLimits(4, 0, 0.2);
   if (use_low_exp_tail_)
     fit_function_->SetParameter(4, 0.1);
   else
     fit_function_->FixParameter(4, 0);
 
-  fit_function_->SetParLimits(5, 0.5, 100);
+  fit_function_->SetParLimits(5, 0.9, 100);
   if (use_low_exp_tail_)
     fit_function_->SetParameter(5, 1);
   else
     fit_function_->FixParameter(5, 1);
 
-  fit_function_->SetParLimits(6, 0, 0.5);
+  fit_function_->SetParLimits(6, 0, 0.2);
   if (use_low_lin_tail_)
     fit_function_->SetParameter(6, 0.1);
   else
@@ -404,13 +404,13 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
     fit_function_->FixParameter(7, 0);
 
   // High tail parameters (amplitude as ratio of gaussian)
-  fit_function_->SetParLimits(8, 0, 0.5);
+  fit_function_->SetParLimits(8, 0, 0.2);
   if (use_high_exp_tail_)
     fit_function_->SetParameter(8, 0.1);
   else
     fit_function_->FixParameter(8, 0);
 
-  fit_function_->SetParLimits(9, 0.5, 100);
+  fit_function_->SetParLimits(9, 0.9, 100);
   if (use_high_exp_tail_)
     fit_function_->SetParameter(9, 1);
   else
@@ -1413,15 +1413,15 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
 
       if (use_step_) {
         fit_function_->ReleaseParameter(3);
-        fit_function_->SetParLimits(3, 0, 0.5);
+        fit_function_->SetParLimits(3, 0, 0.2);
         if (!use_manual_init_)
           fit_function_->SetParameter(3, 0.15);
       }
       if (use_low_exp_tail_) {
         fit_function_->ReleaseParameter(4);
         fit_function_->ReleaseParameter(5);
-        fit_function_->SetParLimits(4, 0, 0.5);
-        fit_function_->SetParLimits(5, 0.5, 100);
+        fit_function_->SetParLimits(4, 0, 0.2);
+        fit_function_->SetParLimits(5, 0.9, 100);
         if (!use_manual_init_) {
           fit_function_->SetParameter(4, 0.15);
           fit_function_->SetParameter(5, 1);
@@ -1430,7 +1430,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
       if (use_low_lin_tail_) {
         fit_function_->ReleaseParameter(6);
         fit_function_->ReleaseParameter(7);
-        fit_function_->SetParLimits(6, 0, 0.5);
+        fit_function_->SetParLimits(6, 0, 0.2);
         fit_function_->SetParLimits(7, -0.1, 0.1);
         if (!use_manual_init_) {
           fit_function_->SetParameter(6, 0.15);
@@ -1469,7 +1469,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
             } else {
               std::cout << "  Step retained" << std::endl;
               fit_function_->ReleaseParameter(3);
-              fit_function_->SetParLimits(3, 0, 0.5);
+              fit_function_->SetParLimits(3, 0, 0.2);
               for (Int_t i = 0; i < npar; i++) {
                 fit_function_->SetParameter(i, best_params[i]);
                 fit_function_->SetParError(i, best_errors[i]);
@@ -1495,8 +1495,8 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
               std::cout << "  Low exp tail retained" << std::endl;
               fit_function_->ReleaseParameter(4);
               fit_function_->ReleaseParameter(5);
-              fit_function_->SetParLimits(4, 0, 0.5);
-              fit_function_->SetParLimits(5, 0.5, 100);
+              fit_function_->SetParLimits(4, 0, 0.2);
+              fit_function_->SetParLimits(5, 0.9, 100);
               for (Int_t i = 0; i < npar; i++) {
                 fit_function_->SetParameter(i, best_params[i]);
                 fit_function_->SetParError(i, best_errors[i]);
@@ -1522,7 +1522,7 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
               std::cout << "  Low lin tail retained" << std::endl;
               fit_function_->ReleaseParameter(6);
               fit_function_->ReleaseParameter(7);
-              fit_function_->SetParLimits(6, 0, 0.5);
+              fit_function_->SetParLimits(6, 0, 0.2);
               fit_function_->SetParLimits(7, -0.1, 0.1);
               for (Int_t i = 0; i < npar; i++) {
                 fit_function_->SetParameter(i, best_params[i]);
@@ -1572,8 +1572,8 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
 
       fit_function_->ReleaseParameter(8);
       fit_function_->ReleaseParameter(9);
-      fit_function_->SetParLimits(8, 0, 0.5);
-      fit_function_->SetParLimits(9, 0.5, 100);
+      fit_function_->SetParLimits(8, 0, 0.2);
+      fit_function_->SetParLimits(9, 0.9, 100);
 
       if (!use_manual_init_) {
         fit_function_->SetParameter(8, 0.15);
@@ -1734,13 +1734,13 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     fit_function_->SetParLimits(o + 0, fit_range_low_, fit_range_high_);
     fit_function_->SetParLimits(o + 1, range_width * 0.001, range_width * 0.5);
     fit_function_->SetParLimits(o + 2, 0, peak_height * 0.999);
-    fit_function_->SetParLimits(o + 3, 0, 0.5);
-    fit_function_->SetParLimits(o + 4, 0, 0.5);
-    fit_function_->SetParLimits(o + 5, 0.5, 100);
-    fit_function_->SetParLimits(o + 6, 0, 0.5);
+    fit_function_->SetParLimits(o + 3, 0, 0.2);
+    fit_function_->SetParLimits(o + 4, 0, 0.2);
+    fit_function_->SetParLimits(o + 5, 0.9, 100);
+    fit_function_->SetParLimits(o + 6, 0, 0.2);
     fit_function_->SetParLimits(o + 7, -0.1, 0.1);
-    fit_function_->SetParLimits(o + 8, 0, 0.5);
-    fit_function_->SetParLimits(o + 9, 0.5, 100);
+    fit_function_->SetParLimits(o + 8, 0, 0.2);
+    fit_function_->SetParLimits(o + 9, 0.9, 100);
   }
 
   fit_function_->SetParameter(0, mu1_init);
@@ -1868,19 +1868,19 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       std::cout << "Testing low-side group for peak1..." << std::endl;
 
       fit_function_->ReleaseParameter(3);
-      fit_function_->SetParLimits(3, 0, 0.5);
+      fit_function_->SetParLimits(3, 0, 0.2);
       fit_function_->SetParameter(3, 0.15);
 
       fit_function_->ReleaseParameter(4);
       fit_function_->ReleaseParameter(5);
-      fit_function_->SetParLimits(4, 0, 0.5);
-      fit_function_->SetParLimits(5, 0.5, 100);
+      fit_function_->SetParLimits(4, 0, 0.2);
+      fit_function_->SetParLimits(5, 0.9, 100);
       fit_function_->SetParameter(4, 0.15);
       fit_function_->SetParameter(5, 1);
 
       fit_function_->ReleaseParameter(6);
       fit_function_->ReleaseParameter(7);
-      fit_function_->SetParLimits(6, 0, 0.5);
+      fit_function_->SetParLimits(6, 0, 0.2);
       fit_function_->SetParLimits(7, -0.1, 0.1);
       fit_function_->SetParameter(6, 0.15);
       fit_function_->SetParameter(7, 0);
@@ -1908,7 +1908,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           }
         } else {
           fit_function_->ReleaseParameter(3);
-          fit_function_->SetParLimits(3, 0, 0.5);
+          fit_function_->SetParLimits(3, 0, 0.2);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -1929,8 +1929,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(4);
           fit_function_->ReleaseParameter(5);
-          fit_function_->SetParLimits(4, 0, 0.5);
-          fit_function_->SetParLimits(5, 0.5, 100);
+          fit_function_->SetParLimits(4, 0, 0.2);
+          fit_function_->SetParLimits(5, 0.9, 100);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -1951,7 +1951,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(6);
           fit_function_->ReleaseParameter(7);
-          fit_function_->SetParLimits(6, 0, 0.5);
+          fit_function_->SetParLimits(6, 0, 0.2);
           fit_function_->SetParLimits(7, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
@@ -1977,8 +1977,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       std::cout << "Testing high tail for peak2..." << std::endl;
       fit_function_->ReleaseParameter(18);
       fit_function_->ReleaseParameter(19);
-      fit_function_->SetParLimits(18, 0, 0.5);
-      fit_function_->SetParLimits(19, 0.5, 100);
+      fit_function_->SetParLimits(18, 0, 0.2);
+      fit_function_->SetParLimits(19, 0.9, 100);
       fit_function_->SetParameter(18, 0.15);
       fit_function_->SetParameter(19, 1);
 
@@ -2012,26 +2012,26 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       // Release peak1 high tail
       fit_function_->ReleaseParameter(8);
       fit_function_->ReleaseParameter(9);
-      fit_function_->SetParLimits(8, 0, 0.5);
-      fit_function_->SetParLimits(9, 0.5, 100);
+      fit_function_->SetParLimits(8, 0, 0.2);
+      fit_function_->SetParLimits(9, 0.9, 100);
       fit_function_->SetParameter(8, 0.15);
       fit_function_->SetParameter(9, 1);
 
       // Release peak2 low-side group
       fit_function_->ReleaseParameter(13);
-      fit_function_->SetParLimits(13, 0, 0.5);
+      fit_function_->SetParLimits(13, 0, 0.2);
       fit_function_->SetParameter(13, 0.15);
 
       fit_function_->ReleaseParameter(14);
       fit_function_->ReleaseParameter(15);
-      fit_function_->SetParLimits(14, 0, 0.5);
-      fit_function_->SetParLimits(15, 0.5, 100);
+      fit_function_->SetParLimits(14, 0, 0.2);
+      fit_function_->SetParLimits(15, 0.9, 100);
       fit_function_->SetParameter(14, 0.15);
       fit_function_->SetParameter(15, 1);
 
       fit_function_->ReleaseParameter(16);
       fit_function_->ReleaseParameter(17);
-      fit_function_->SetParLimits(16, 0, 0.5);
+      fit_function_->SetParLimits(16, 0, 0.2);
       fit_function_->SetParLimits(17, -0.1, 0.1);
       fit_function_->SetParameter(16, 0.15);
       fit_function_->SetParameter(17, 0);
@@ -2061,8 +2061,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(8);
           fit_function_->ReleaseParameter(9);
-          fit_function_->SetParLimits(8, 0, 0.5);
-          fit_function_->SetParLimits(9, 0.5, 100);
+          fit_function_->SetParLimits(8, 0, 0.2);
+          fit_function_->SetParLimits(9, 0.9, 100);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2081,7 +2081,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           }
         } else {
           fit_function_->ReleaseParameter(13);
-          fit_function_->SetParLimits(13, 0, 0.5);
+          fit_function_->SetParLimits(13, 0, 0.2);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2102,8 +2102,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(14);
           fit_function_->ReleaseParameter(15);
-          fit_function_->SetParLimits(14, 0, 0.5);
-          fit_function_->SetParLimits(15, 0.5, 100);
+          fit_function_->SetParLimits(14, 0, 0.2);
+          fit_function_->SetParLimits(15, 0.9, 100);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2124,7 +2124,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(16);
           fit_function_->ReleaseParameter(17);
-          fit_function_->SetParLimits(16, 0, 0.5);
+          fit_function_->SetParLimits(16, 0, 0.2);
           fit_function_->SetParLimits(17, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
@@ -2291,13 +2291,13 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   fit_function_->SetParLimits(10, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(11, range_width * 0.001, range_width * 0.5);
   fit_function_->SetParLimits(12, 0, peak_height * 0.999);
-  fit_function_->SetParLimits(13, 0, 0.5);
-  fit_function_->SetParLimits(14, 0, 0.5);
-  fit_function_->SetParLimits(15, 0.5, 100);
-  fit_function_->SetParLimits(16, 0, 0.5);
+  fit_function_->SetParLimits(13, 0, 0.2);
+  fit_function_->SetParLimits(14, 0, 0.2);
+  fit_function_->SetParLimits(15, 0.9, 100);
+  fit_function_->SetParLimits(16, 0, 0.2);
   fit_function_->SetParLimits(17, -0.1, 0.1);
-  fit_function_->SetParLimits(18, 0, 0.5);
-  fit_function_->SetParLimits(19, 0.5, 100);
+  fit_function_->SetParLimits(18, 0, 0.2);
+  fit_function_->SetParLimits(19, 0.9, 100);
 
   fit_function_->SetParameter(10, mu2_init);
   fit_function_->SetParameter(11, sigma_init);
@@ -2410,19 +2410,19 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       std::cout << "Testing low-side group for peak2..." << std::endl;
 
       fit_function_->ReleaseParameter(13);
-      fit_function_->SetParLimits(13, 0, 0.5);
+      fit_function_->SetParLimits(13, 0, 0.2);
       fit_function_->SetParameter(13, 0.15);
 
       fit_function_->ReleaseParameter(14);
       fit_function_->ReleaseParameter(15);
-      fit_function_->SetParLimits(14, 0, 0.5);
-      fit_function_->SetParLimits(15, 0.5, 100);
+      fit_function_->SetParLimits(14, 0, 0.2);
+      fit_function_->SetParLimits(15, 0.9, 100);
       fit_function_->SetParameter(14, 0.15);
       fit_function_->SetParameter(15, 1);
 
       fit_function_->ReleaseParameter(16);
       fit_function_->ReleaseParameter(17);
-      fit_function_->SetParLimits(16, 0, 0.5);
+      fit_function_->SetParLimits(16, 0, 0.2);
       fit_function_->SetParLimits(17, -0.1, 0.1);
       fit_function_->SetParameter(16, 0.15);
       fit_function_->SetParameter(17, 0);
@@ -2450,7 +2450,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
           }
         } else {
           fit_function_->ReleaseParameter(13);
-          fit_function_->SetParLimits(13, 0, 0.5);
+          fit_function_->SetParLimits(13, 0, 0.2);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2471,8 +2471,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(14);
           fit_function_->ReleaseParameter(15);
-          fit_function_->SetParLimits(14, 0, 0.5);
-          fit_function_->SetParLimits(15, 0.5, 100);
+          fit_function_->SetParLimits(14, 0, 0.2);
+          fit_function_->SetParLimits(15, 0.9, 100);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2493,7 +2493,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(16);
           fit_function_->ReleaseParameter(17);
-          fit_function_->SetParLimits(16, 0, 0.5);
+          fit_function_->SetParLimits(16, 0, 0.2);
           fit_function_->SetParLimits(17, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
@@ -2519,8 +2519,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       std::cout << "Testing high tail for peak2..." << std::endl;
       fit_function_->ReleaseParameter(18);
       fit_function_->ReleaseParameter(19);
-      fit_function_->SetParLimits(18, 0, 0.5);
-      fit_function_->SetParLimits(19, 0.5, 100);
+      fit_function_->SetParLimits(18, 0, 0.2);
+      fit_function_->SetParLimits(19, 0.9, 100);
       fit_function_->SetParameter(18, 0.15);
       fit_function_->SetParameter(19, 1);
 
@@ -2709,13 +2709,13 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   fit_function_->SetParLimits(20, fit_range_low_, fit_range_high_);
   fit_function_->SetParLimits(21, range_width * 0.001, range_width * 0.5);
   fit_function_->SetParLimits(22, 0, peak_height * 0.999);
-  fit_function_->SetParLimits(23, 0, 0.5);
-  fit_function_->SetParLimits(24, 0, 0.5);
-  fit_function_->SetParLimits(25, 0.5, 100);
-  fit_function_->SetParLimits(26, 0, 0.5);
+  fit_function_->SetParLimits(23, 0, 0.2);
+  fit_function_->SetParLimits(24, 0, 0.2);
+  fit_function_->SetParLimits(25, 0.9, 100);
+  fit_function_->SetParLimits(26, 0, 0.2);
   fit_function_->SetParLimits(27, -0.1, 0.1);
-  fit_function_->SetParLimits(28, 0, 0.5);
-  fit_function_->SetParLimits(29, 0.5, 100);
+  fit_function_->SetParLimits(28, 0, 0.2);
+  fit_function_->SetParLimits(29, 0.9, 100);
 
   fit_function_->SetParameter(20, mu3_init);
   fit_function_->SetParameter(21, sigma_init);
@@ -2827,19 +2827,19 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
       std::cout << "Testing low-side group for peak3..." << std::endl;
 
       fit_function_->ReleaseParameter(23);
-      fit_function_->SetParLimits(23, 0, 0.5);
+      fit_function_->SetParLimits(23, 0, 0.2);
       fit_function_->SetParameter(23, 0.15);
 
       fit_function_->ReleaseParameter(24);
       fit_function_->ReleaseParameter(25);
-      fit_function_->SetParLimits(24, 0, 0.5);
-      fit_function_->SetParLimits(25, 0.5, 100);
+      fit_function_->SetParLimits(24, 0, 0.2);
+      fit_function_->SetParLimits(25, 0.9, 100);
       fit_function_->SetParameter(24, 0.15);
       fit_function_->SetParameter(25, 1);
 
       fit_function_->ReleaseParameter(26);
       fit_function_->ReleaseParameter(27);
-      fit_function_->SetParLimits(26, 0, 0.5);
+      fit_function_->SetParLimits(26, 0, 0.2);
       fit_function_->SetParLimits(27, -0.1, 0.1);
       fit_function_->SetParameter(26, 0.15);
       fit_function_->SetParameter(27, 0);
@@ -2867,7 +2867,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
           }
         } else {
           fit_function_->ReleaseParameter(23);
-          fit_function_->SetParLimits(23, 0, 0.5);
+          fit_function_->SetParLimits(23, 0, 0.2);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2888,8 +2888,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(24);
           fit_function_->ReleaseParameter(25);
-          fit_function_->SetParLimits(24, 0, 0.5);
-          fit_function_->SetParLimits(25, 0.5, 100);
+          fit_function_->SetParLimits(24, 0, 0.2);
+          fit_function_->SetParLimits(25, 0.9, 100);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
             fit_function_->SetParError(i, best_errors[i]);
@@ -2910,7 +2910,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
         } else {
           fit_function_->ReleaseParameter(26);
           fit_function_->ReleaseParameter(27);
-          fit_function_->SetParLimits(26, 0, 0.5);
+          fit_function_->SetParLimits(26, 0, 0.2);
           fit_function_->SetParLimits(27, -0.1, 0.1);
           for (Int_t i = 0; i < npar; i++) {
             fit_function_->SetParameter(i, best_params[i]);
@@ -2936,8 +2936,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
       std::cout << "Testing high tail for peak3..." << std::endl;
       fit_function_->ReleaseParameter(28);
       fit_function_->ReleaseParameter(29);
-      fit_function_->SetParLimits(28, 0, 0.5);
-      fit_function_->SetParLimits(29, 0.5, 100);
+      fit_function_->SetParLimits(28, 0, 0.2);
+      fit_function_->SetParLimits(29, 0.9, 100);
       fit_function_->SetParameter(28, 0.15);
       fit_function_->SetParameter(29, 1);
 
