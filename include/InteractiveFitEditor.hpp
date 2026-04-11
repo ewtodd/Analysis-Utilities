@@ -33,6 +33,8 @@ private:
   static const Int_t kRangeSlider = 7000;
   static const Int_t kRangeLoEntry = 7001;
   static const Int_t kRangeHiEntry = 7002;
+  static const Int_t kToggleLow2Base = 8000;
+  static const Int_t kToggleHigh2Base = 8100;
 
   TH1 *hist_;
   TF1 *fit_func_;
@@ -44,6 +46,8 @@ private:
   Double_t hist_x_min_;
   Double_t hist_x_max_;
   Int_t num_peaks_;
+  Int_t params_per_peak_;
+  Bool_t is_hyper_emg_;
   Int_t num_params_;
 
   Double_t *original_params_;
@@ -68,6 +72,9 @@ private:
   TGNumberEntry *range_lo_entry_;
   TGNumberEntry *range_hi_entry_;
 
+  TGCheckButton *toggle_low2_[3];
+  TGCheckButton *toggle_high2_[3];
+
   TH1 *hist_draw_;
   TGraph *comp_graphs_[3][4];
   TF1 *bkg_draw_;
@@ -84,12 +91,14 @@ private:
 
   void BuildGUI();
   void BuildPeakTab(TGCompositeFrame *parent, Int_t peak_idx);
+  void BuildHyperEMGPeakTab(TGCompositeFrame *parent, Int_t peak_idx);
   void BuildBackgroundTab(TGCompositeFrame *parent);
   void AddParamRow(TGCompositeFrame *parent, Int_t param_idx, const char *name);
 
   void InitDrawing();
   void UpdateCanvas();
   void UpdateCompPoints();
+  void UpdateHyperEMGCompPoints();
   void UpdateResPoints();
 
   void SyncAllWidgets();
@@ -100,6 +109,8 @@ private:
   void OnBoundsChanged(Int_t param_idx);
   void OnFixToggled(Int_t param_idx);
   void OnRangeChanged();
+  void OnToggleLow2(Int_t peak_idx);
+  void OnToggleHigh2(Int_t peak_idx);
 
   void DoRefit();
   void DoAccept();
@@ -110,8 +121,8 @@ private:
   Double_t SliderToVal(Int_t param_idx, Int_t pos);
   Bool_t IsFixed(Int_t param_idx);
   void GetDefaultBounds(Int_t param_idx, Double_t &lo, Double_t &hi);
-  Int_t BkgConstIdx() { return num_peaks_ * 10; }
-  Int_t BkgSlopeIdx() { return num_peaks_ * 10 + 1; }
+  Int_t BkgConstIdx() { return num_peaks_ * params_per_peak_; }
+  Int_t BkgSlopeIdx() { return num_peaks_ * params_per_peak_ + 1; }
   static Int_t PeakStyle(Int_t peak_idx);
 
 public:
