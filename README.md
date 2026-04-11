@@ -82,6 +82,7 @@ A component is kept only if it improves the reduced chi-squared.
 **Multi-peak fitting**:
 - Double and triple peak variants with all components enabled by default
 - Constrained fitting using results from previous fits
+- Multipeak fits enforce sigma ordering: peak with higher mu must have wider sigma
 <!---->
 All fits produce structured results (`FitResult` containing `PeakFitResult` entries) with parameter values, errors, and reduced chi-squared.
 Failed fits return -1 for all parameters.
@@ -90,12 +91,37 @@ Individual peak components are plotted summed with the background for readabilit
 <!---->
 ![Fit example](assets/FitExample.png)
 <!---->
+**Hyper-EMG peak shape** (`FittingFunctions` namespace):
+<!---->
+An alternative peak model for CZT and other detectors where the asymmetric tailing is faster-than-exponential near the peak and slower far from it.
+Models the photopeak as a sum of exponentially-modified Gaussians (EMGs), where the Gaussian mean mu is the physical gamma-ray energy, decoupled from the tail shape.
+This avoids the centroid bias that arises when a single exponential tail cannot capture the full tail profile.
+<!---->
+Each peak has up to 4 EMG components (2 low-side, 2 high-side) with 11 parameters:
+| Parameter | Description |
+|-----------|-------------|
+| `mu` | Gaussian mean (physical energy) |
+| `sigma` | Gaussian width (shared across all components) |
+| `amplitude` | Overall peak height |
+| `w_low1`, `tau_low1` | Weight and decay constant for fast low-side tail |
+| `w_low2`, `tau_low2` | Weight and decay for slow low-side tail (fix `w_low2=0` to disable) |
+| `w_high1`, `tau_high1` | Weight and decay for primary high-side tail |
+| `w_high2`, `tau_high2` | Weight and decay for secondary high-side tail (fix `w_high2=0` to disable) |
+<!---->
+Weights are normalized internally (`w_i / sum(w_i)`), so disabling a component by fixing its weight to 0 automatically redistributes weight to the remaining components.
+Default configuration is 2 low + 1 high (`w_high2` fixed to 0).
+<!---->
+The namespace provides `HyperEMGPeak`, `DoublePeakHyperEMG`, and `TriplePeakHyperEMG` as TF1-compatible functions, plus orchestration functions (`FitSingleHyperEMG`, `FitDoubleHyperEMG`, `FitTripleHyperEMG`) that handle parameter setup, interactive editing, param save/load (`.hemg` files), and residual plotting.
+Helper functions `SetHyperEMGParLimits`, `SetHyperEMGInitialParams`, and `SetHyperEMGParNames` configure a TF1 for direct use.
+Results are returned as `HyperEMGFitResult` containing `HyperEMGPeakFitResult` entries.
+<!---->
 **Interactive fitting**:
 - `SetInteractive()` enables a GUI editor that opens after the automated fit completes.
 The editor shows the histogram, total fit, and individual components with a residual panel, all updating in real-time as parameters are adjusted via sliders and number entries.
 A fit range slider allows adjusting the fit range visually.
 Parameters can be fixed/freed via checkboxes, and a Refit button runs Minuit with the current values as initial guesses.
 Live chi-squared is displayed on the plot.
+The editor auto-detects hyper-EMG functions from the parameter count and provides Enable/Disable toggles for the optional Low2 and High2 tail components.
 <!---->
 ![Interactive fit editor GUI](assets/GUI.png)
 <!---->
@@ -111,6 +137,11 @@ Analytical fitting of gamma-ray photopeaks in germanium cross strip detectors.
 *Experimental Astronomy*.
 2023;56(2-3):403-420.
 doi: [10.1007/s10686-023-09914-8](https://doi.org/10.1007/s10686-023-09914-8).
+- Purushothaman S, et al.
+Hyper-EMG: A new probability distribution function composed of Exponentially Modified Gaussian distributions to analyze asymmetric peak shapes in high-resolution time-of-flight mass spectrometry.
+*International Journal of Mass Spectrometry*.
+2017;421:245-254.
+doi: [10.1016/j.ijms.2017.07.014](https://doi.org/10.1016/j.ijms.2017.07.014).
 - Longoria LC, Naboulsi AH, Gray PW, MacMahon TD.
 Analytical peak fitting for gamma-ray spectrum analysis with Ge detectors.
 *Nuclear Instruments and Methods in Physics Research A*.
