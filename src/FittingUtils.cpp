@@ -520,13 +520,13 @@ void FittingFunctions::SetHyperEMGParLimits(TF1 *func, Int_t peak_offset) {
   func->SetParLimits(peak_offset + 1, 0.3, 5.0);
   func->SetParLimits(peak_offset + 2, 0, 1e6);
   func->SetParLimits(peak_offset + 3, 0.05, 0.95);
-  func->SetParLimits(peak_offset + 4, 0.1, 3.0);
+  func->SetParLimits(peak_offset + 4, 0.1, 10.0);
   func->SetParLimits(peak_offset + 5, 0.01, 0.90);
-  func->SetParLimits(peak_offset + 6, 1.0, 20.0);
+  func->SetParLimits(peak_offset + 6, 0.1, 50.0);
   func->SetParLimits(peak_offset + 7, 0.01, 1.0);
-  func->SetParLimits(peak_offset + 8, 0.1, 5.0);
+  func->SetParLimits(peak_offset + 8, 0.1, 10.0);
   func->SetParLimits(peak_offset + 9, 0.0, 1.0);
-  func->SetParLimits(peak_offset + 10, 0.1, 10.0);
+  func->SetParLimits(peak_offset + 10, 0.1, 50.0);
 }
 
 void FittingFunctions::SetHyperEMGInitialParams(TF1 *func, Int_t peak_offset,

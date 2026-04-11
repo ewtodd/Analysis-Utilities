@@ -924,7 +924,7 @@ void InteractiveFitEditor::OnToggleLow2(Int_t peak_idx) {
     current_bounds_high_[off + 5] = 1.0;
 
     fit_func_->ReleaseParameter(off + 6);
-    fit_func_->SetParLimits(off + 6, 1.0, 20.0);
+    fit_func_->SetParLimits(off + 6, 0.1, 50.0);
     fit_func_->SetParameter(off + 6, 5.0);
     current_bounds_low_[off + 6] = 1.0;
     current_bounds_high_[off + 6] = 20.0;
@@ -951,7 +951,7 @@ void InteractiveFitEditor::OnToggleHigh2(Int_t peak_idx) {
     current_bounds_high_[off + 9] = 1.0;
 
     fit_func_->ReleaseParameter(off + 10);
-    fit_func_->SetParLimits(off + 10, 0.1, 10.0);
+    fit_func_->SetParLimits(off + 10, 0.1, 50.0);
     fit_func_->SetParameter(off + 10, 3.0);
     current_bounds_low_[off + 10] = 0.1;
     current_bounds_high_[off + 10] = 10.0;
@@ -1179,15 +1179,15 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
       break;
     case 4: // tau_low1
       lo = 0.1;
-      hi = 3.0;
+      hi = 10.0;
       break;
     case 5: // w_low2
       lo = 0.0;
       hi = 1.0;
       break;
     case 6: // tau_low2
-      lo = 1.0;
-      hi = 20.0;
+      lo = 0.1;
+      hi = 50.0;
       break;
     case 7: // w_high1
       lo = 0.01;
@@ -1195,7 +1195,7 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
       break;
     case 8: // tau_high1
       lo = 0.1;
-      hi = 5.0;
+      hi = 10.0;
       break;
     case 9: // w_high2
       lo = 0.0;
@@ -1203,7 +1203,7 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
       break;
     case 10: // tau_high2
       lo = 0.1;
-      hi = 10.0;
+      hi = 50.0;
       break;
     default:
       lo = -1000;
