@@ -540,7 +540,7 @@ void InteractiveFitEditor::InitDrawing() {
   res_graph_->GetYaxis()->SetNdivisions(505);
   res_graph_->GetXaxis()->SetNdivisions(510);
   res_graph_->GetYaxis()->CenterTitle(kTRUE);
-  res_graph_->GetYaxis()->SetRangeUser(-3.5, 3.5);
+  res_graph_->GetYaxis()->SetRangeUser(-5.5, 5.5);
   res_graph_->Draw("AP");
 
   zero_line_ = new TF1("zero_editor", "0", ax_min, ax_max);
@@ -595,7 +595,7 @@ void InteractiveFitEditor::UpdateCanvas() {
   zero_line_->SetRange(0.9 * range_low_, 1.1 * range_high_);
 
   // Lock residual Y range
-  res_graph_->GetYaxis()->SetRangeUser(-3.5, 3.5);
+  res_graph_->GetYaxis()->SetRangeUser(-5.5, 5.5);
 
   TCanvas *canvas = embedded_canvas_->GetCanvas();
   main_pad_->Modified();
