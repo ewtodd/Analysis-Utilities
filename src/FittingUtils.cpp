@@ -830,7 +830,7 @@ void FittingFunctions::PlotHyperEMGFit(TH1 *hist, TF1 *func,
   residuals->GetYaxis()->SetNdivisions(505);
   residuals->GetXaxis()->SetNdivisions(510);
   residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
+  residuals->GetYaxis()->SetRangeUser(-3.5, 3.5);
   residuals->Draw("AP");
 
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
@@ -1301,14 +1301,14 @@ void FittingUtils::PlotResidualHistogram(TGraph *residuals,
     return;
 
   TH1D *pull_hist =
-      new TH1D("pull_hist", ";#delta/#sigma;Counts", 82, -5.5, 5.5);
+      new TH1D("pull_hist", ";#delta/#sigma;Counts", 50, -3.5, 3.5);
 
   Double_t *y = residuals->GetY();
   for (Int_t i = 0; i < npoints; i++) {
     pull_hist->Fill(y[i]);
   }
 
-  TH1D *gauss_ref = new TH1D("gauss_ref", "", 82, -5.5, 5.5);
+  TH1D *gauss_ref = new TH1D("gauss_ref", "", 50, -3.5, 3.5);
   for (Int_t i = 1; i <= gauss_ref->GetNbinsX(); i++) {
     Double_t lo = gauss_ref->GetBinLowEdge(i);
     Double_t hi = lo + gauss_ref->GetBinWidth(i);
@@ -1485,7 +1485,7 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
   residuals->GetYaxis()->SetNdivisions(505);
   residuals->GetXaxis()->SetNdivisions(510);
   residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
+  residuals->GetYaxis()->SetRangeUser(-3.5, 3.5);
   residuals->Draw("AP");
 
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
@@ -1723,7 +1723,7 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   residuals->GetYaxis()->SetNdivisions(505);
   residuals->GetXaxis()->SetNdivisions(510);
   residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
+  residuals->GetYaxis()->SetRangeUser(-3.5, 3.5);
   residuals->Draw("AP");
 
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
@@ -2031,7 +2031,7 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
   residuals->GetYaxis()->SetNdivisions(505);
   residuals->GetXaxis()->SetNdivisions(510);
   residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
+  residuals->GetYaxis()->SetRangeUser(-3.5, 3.5);
   residuals->Draw("AP");
 
   TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
