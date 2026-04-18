@@ -25,17 +25,7 @@ InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
   hist_x_min_ = hist->GetXaxis()->GetXmin();
   hist_x_max_ = hist->GetXaxis()->GetXmax();
   num_peaks_ = num_peaks;
-
-  // Detect function type from parameter count
-  Int_t npar = fit_func->GetNpar();
-  if (npar == num_peaks * FittingFunctions::kHyperEMGParamsPerPeak + 2) {
-    params_per_peak_ = FittingFunctions::kHyperEMGParamsPerPeak;
-    is_hyper_emg_ = kTRUE;
-  } else {
-    params_per_peak_ = 10;
-    is_hyper_emg_ = kFALSE;
-  }
-  num_params_ = num_peaks * params_per_peak_ + 2;
+  num_params_ = num_peaks * 10 + 2;
 
   accepted_ = kFALSE;
   done_ = kFALSE;
@@ -83,11 +73,6 @@ InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
   lo_bound_entries_ = new TGNumberEntry *[num_params_];
   hi_bound_entries_ = new TGNumberEntry *[num_params_];
 
-
-  for (Int_t p = 0; p < 3; p++) {
-    toggle_low2_[p] = nullptr;
-    toggle_high2_[p] = nullptr;
-  }
 
   hist_draw_ = nullptr;
   bkg_draw_ = nullptr;
@@ -222,10 +207,7 @@ void InteractiveFitEditor::BuildGUI() {
   for (Int_t p = 0; p < num_peaks_; p++) {
     TString tab_name = TString::Format("Peak %d", p + 1);
     TGCompositeFrame *tab_frame = tabs->AddTab(tab_name);
-    if (is_hyper_emg_)
-      BuildHyperEMGPeakTab(tab_frame, p);
-    else
-      BuildPeakTab(tab_frame, p);
+    BuildPeakTab(tab_frame, p);
   }
 
   TGCompositeFrame *bkg_tab = tabs->AddTab("Background");
@@ -298,65 +280,6 @@ void InteractiveFitEditor::BuildPeakTab(TGCompositeFrame *parent,
   AddParamRow(htail_grp, offset + 9, "Exp Decay");
 }
 
-void InteractiveFitEditor::BuildHyperEMGPeakTab(TGCompositeFrame *parent,
-                                                Int_t peak_idx) {
-  Int_t offset = peak_idx * params_per_peak_;
-
-  TGGroupFrame *core_grp =
-      new TGGroupFrame(parent, "Peak Shape", kVerticalFrame);
-  parent->AddFrame(core_grp,
-                   new TGLayoutHints(kLHintsExpandX, 3, 3, 3, 1));
-  AddParamRow(core_grp, offset + 0, "Mu");
-  AddParamRow(core_grp, offset + 1, "Sigma");
-  AddParamRow(core_grp, offset + 2, "Amplitude");
-
-  TGGroupFrame *low1_grp =
-      new TGGroupFrame(parent, "Low-Side Tail 1", kVerticalFrame);
-  parent->AddFrame(low1_grp,
-                   new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 1));
-  AddParamRow(low1_grp, offset + 3, "w_low1");
-  AddParamRow(low1_grp, offset + 4, "tau_low1");
-
-  TGGroupFrame *low2_grp =
-      new TGGroupFrame(parent, "Low-Side Tail 2", kVerticalFrame);
-  parent->AddFrame(low2_grp,
-                   new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 1));
-
-  Bool_t low2_on = !(original_fixed_[offset + 5] &&
-                      TMath::Abs(original_params_[offset + 5]) < 1e-10);
-  toggle_low2_[peak_idx] =
-      new TGCheckButton(low2_grp, "Enable", kToggleLow2Base + peak_idx);
-  toggle_low2_[peak_idx]->Associate(this);
-  toggle_low2_[peak_idx]->SetState(low2_on ? kButtonDown : kButtonUp);
-  low2_grp->AddFrame(toggle_low2_[peak_idx],
-                     new TGLayoutHints(kLHintsLeft, 4, 4, 2, 2));
-  AddParamRow(low2_grp, offset + 5, "w_low2");
-  AddParamRow(low2_grp, offset + 6, "tau_low2");
-
-  TGGroupFrame *high1_grp =
-      new TGGroupFrame(parent, "High-Side Tail 1", kVerticalFrame);
-  parent->AddFrame(high1_grp,
-                   new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 1));
-  AddParamRow(high1_grp, offset + 7, "w_high1");
-  AddParamRow(high1_grp, offset + 8, "tau_high1");
-
-  TGGroupFrame *high2_grp =
-      new TGGroupFrame(parent, "High-Side Tail 2", kVerticalFrame);
-  parent->AddFrame(high2_grp,
-                   new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 3));
-
-  Bool_t high2_on = !(original_fixed_[offset + 9] &&
-                       TMath::Abs(original_params_[offset + 9]) < 1e-10);
-  toggle_high2_[peak_idx] =
-      new TGCheckButton(high2_grp, "Enable", kToggleHigh2Base + peak_idx);
-  toggle_high2_[peak_idx]->Associate(this);
-  toggle_high2_[peak_idx]->SetState(high2_on ? kButtonDown : kButtonUp);
-  high2_grp->AddFrame(toggle_high2_[peak_idx],
-                      new TGLayoutHints(kLHintsLeft, 4, 4, 2, 2));
-  AddParamRow(high2_grp, offset + 9, "w_high2");
-  AddParamRow(high2_grp, offset + 10, "tau_high2");
-}
-
 void InteractiveFitEditor::BuildBackgroundTab(TGCompositeFrame *parent) {
   TGGroupFrame *bkg_grp =
       new TGGroupFrame(parent, "Background", kVerticalFrame);
@@ -375,11 +298,13 @@ void InteractiveFitEditor::AddParamRow(TGCompositeFrame *parent,
   Double_t val = fit_func_->GetParameter(param_idx);
   Bool_t fixed = original_fixed_[param_idx];
 
+  // Label
   TGLabel *label = new TGLabel(row, name);
   row->AddFrame(label,
                 new TGLayoutHints(kLHintsCenterY, 2, 4, 2, 2));
   label->Resize(90, 20);
 
+  // Slider
   TGHSlider *slider =
       new TGHSlider(row, 140, kSlider1, kSliderBase + param_idx);
   slider->SetRange(0, kSliderRes);
@@ -389,6 +314,7 @@ void InteractiveFitEditor::AddParamRow(TGCompositeFrame *parent,
                 new TGLayoutHints(kLHintsExpandX | kLHintsCenterY, 2, 2, 2, 2));
   sliders_[param_idx] = slider;
 
+  // Value entry
   TGNumberEntry *entry = new TGNumberEntry(
       row, val, 8, kEntryBase + param_idx,
       TGNumberFormat::kNESReal, TGNumberFormat::kNEAAnyNumber,
@@ -397,6 +323,7 @@ void InteractiveFitEditor::AddParamRow(TGCompositeFrame *parent,
   row->AddFrame(entry, new TGLayoutHints(kLHintsCenterY, 2, 2, 2, 2));
   value_entries_[param_idx] = entry;
 
+  // Fix checkbox
   TGCheckButton *fix_cb =
       new TGCheckButton(row, "Fix", kFixBase + param_idx);
   fix_cb->Associate(this);
@@ -607,11 +534,6 @@ void InteractiveFitEditor::UpdateCanvas() {
 }
 
 void InteractiveFitEditor::UpdateCompPoints() {
-  if (is_hyper_emg_) {
-    UpdateHyperEMGCompPoints();
-    return;
-  }
-
   Double_t x_step = (range_high_ - range_low_) / (kNDrawPts - 1);
 
   Double_t bkg_const = fit_func_->GetParameter(BkgConstIdx());
@@ -623,6 +545,7 @@ void InteractiveFitEditor::UpdateCompPoints() {
     Double_t mu = fit_func_->GetParameter(off + 0);
     Double_t sigma = fit_func_->GetParameter(off + 1);
     Double_t gaus_amp = fit_func_->GetParameter(off + 2);
+    // Amplitude params are ratios; convert to absolute for component drawing
     Double_t step_amp = fit_func_->GetParameter(off + 3) * gaus_amp;
     Double_t lexp_amp = fit_func_->GetParameter(off + 4) * gaus_amp;
     Double_t lexp_dec = fit_func_->GetParameter(off + 5);
@@ -653,54 +576,6 @@ void InteractiveFitEditor::UpdateCompPoints() {
       Double_t ht_par[4] = {mu, sigma, hexp_amp, hexp_dec};
       comp_graphs_[p][3]->SetPoint(
           i, x, FittingFunctions::HighTail(x_arr, ht_par) + bkg_val);
-    }
-  }
-}
-
-void InteractiveFitEditor::UpdateHyperEMGCompPoints() {
-  Double_t x_step = (range_high_ - range_low_) / (kNDrawPts - 1);
-
-  Double_t bkg_const = fit_func_->GetParameter(BkgConstIdx());
-  Double_t bkg_slope = fit_func_->GetParameter(BkgSlopeIdx());
-
-  for (Int_t p = 0; p < num_peaks_; p++) {
-    Int_t off = p * params_per_peak_;
-
-    Double_t mu = fit_func_->GetParameter(off + 0);
-    Double_t sigma = fit_func_->GetParameter(off + 1);
-    Double_t amp = fit_func_->GetParameter(off + 2);
-    Double_t w_low1 = fit_func_->GetParameter(off + 3);
-    Double_t tau_low1 = fit_func_->GetParameter(off + 4);
-    Double_t w_low2 = fit_func_->GetParameter(off + 5);
-    Double_t tau_low2 = fit_func_->GetParameter(off + 6);
-    Double_t w_high1 = fit_func_->GetParameter(off + 7);
-    Double_t tau_high1 = fit_func_->GetParameter(off + 8);
-    Double_t w_high2 = fit_func_->GetParameter(off + 9);
-    Double_t tau_high2 = fit_func_->GetParameter(off + 10);
-
-    Double_t w_total = w_low1 + w_low2 + w_high1 + w_high2;
-    Double_t inv_w = (w_total > 0) ? 1.0 / w_total : 0;
-
-    for (Int_t i = 0; i < kNDrawPts; i++) {
-      Double_t x = range_low_ + i * x_step;
-
-      Double_t bkg_val = bkg_slope * x + bkg_const;
-
-      Double_t low_val = amp * inv_w *
-          (FittingFunctions::EMGLowComponent(x, mu, sigma, w_low1, tau_low1) +
-           FittingFunctions::EMGLowComponent(x, mu, sigma, w_low2, tau_low2));
-      comp_graphs_[p][0]->SetPoint(i, x, low_val + bkg_val);
-
-      Double_t high1_val = amp * inv_w *
-          FittingFunctions::EMGHighComponent(x, mu, sigma, w_high1, tau_high1);
-      comp_graphs_[p][1]->SetPoint(i, x, high1_val + bkg_val);
-
-      Double_t high2_val = amp * inv_w *
-          FittingFunctions::EMGHighComponent(x, mu, sigma, w_high2, tau_high2);
-      comp_graphs_[p][2]->SetPoint(i, x, high2_val + bkg_val);
-
-      comp_graphs_[p][3]->SetPoint(i, x,
-                                   low_val + high1_val + high2_val + bkg_val);
     }
   }
 }
@@ -911,61 +786,10 @@ void InteractiveFitEditor::OnRangeChanged() {
   needs_redraw_ = kTRUE;
 }
 
-void InteractiveFitEditor::OnToggleLow2(Int_t peak_idx) {
-  Int_t off = peak_idx * params_per_peak_;
-  Bool_t enabled =
-      (toggle_low2_[peak_idx]->GetState() == kButtonDown);
-
-  if (enabled) {
-    fit_func_->ReleaseParameter(off + 5);
-    fit_func_->SetParLimits(off + 5, 0.01, 1.0);
-    fit_func_->SetParameter(off + 5, 0.2);
-    current_bounds_low_[off + 5] = 0.01;
-    current_bounds_high_[off + 5] = 1.0;
-
-    fit_func_->ReleaseParameter(off + 6);
-    fit_func_->SetParLimits(off + 6, 0.1, 50.0);
-    fit_func_->SetParameter(off + 6, 5.0);
-    current_bounds_low_[off + 6] = 1.0;
-    current_bounds_high_[off + 6] = 20.0;
-  } else {
-    fit_func_->FixParameter(off + 5, 0);
-    fit_func_->FixParameter(off + 6, 5.0);
-  }
-
-  SyncWidget(off + 5);
-  SyncWidget(off + 6);
-  needs_redraw_ = kTRUE;
-}
-
-void InteractiveFitEditor::OnToggleHigh2(Int_t peak_idx) {
-  Int_t off = peak_idx * params_per_peak_;
-  Bool_t enabled =
-      (toggle_high2_[peak_idx]->GetState() == kButtonDown);
-
-  if (enabled) {
-    fit_func_->ReleaseParameter(off + 9);
-    fit_func_->SetParLimits(off + 9, 0.01, 1.0);
-    fit_func_->SetParameter(off + 9, 0.1);
-    current_bounds_low_[off + 9] = 0.01;
-    current_bounds_high_[off + 9] = 1.0;
-
-    fit_func_->ReleaseParameter(off + 10);
-    fit_func_->SetParLimits(off + 10, 0.1, 50.0);
-    fit_func_->SetParameter(off + 10, 3.0);
-    current_bounds_low_[off + 10] = 0.1;
-    current_bounds_high_[off + 10] = 10.0;
-  } else {
-    fit_func_->FixParameter(off + 9, 0);
-    fit_func_->FixParameter(off + 10, 3.0);
-  }
-
-  SyncWidget(off + 9);
-  SyncWidget(off + 10);
-  needs_redraw_ = kTRUE;
-}
+// Actions
 
 void InteractiveFitEditor::DoRefit() {
+  // Release all non-fixed parameters and use current values as initial guesses
   for (Int_t i = 0; i < num_params_; i++) {
     if (!IsFixed(i)) {
       fit_func_->SetParLimits(i, current_bounds_low_[i],
@@ -1059,12 +883,6 @@ Bool_t InteractiveFitEditor::ProcessMessage(Long_t msg, Long_t parm1,
     case kCM_CHECKBUTTON:
       if (parm1 >= kFixBase && parm1 < kFixBase + num_params_) {
         OnFixToggled(parm1 - kFixBase);
-      } else if (parm1 >= kToggleLow2Base &&
-                 parm1 < kToggleLow2Base + num_peaks_) {
-        OnToggleLow2(parm1 - kToggleLow2Base);
-      } else if (parm1 >= kToggleHigh2Base &&
-                 parm1 < kToggleHigh2Base + num_peaks_) {
-        OnToggleHigh2(parm1 - kToggleHigh2Base);
       }
       break;
     }
@@ -1157,106 +975,52 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     return;
   }
 
-  Int_t local = param_idx % params_per_peak_;
-
-  if (is_hyper_emg_) {
-    switch (local) {
-    case 0: // Mu
-      lo = range_low_;
-      hi = range_high_;
-      break;
-    case 1: // Sigma
-      lo = 0.3;
-      hi = 5.0;
-      break;
-    case 2: // Amplitude
-      lo = 0;
-      hi = peak_height * 2;
-      break;
-    case 3: // w_low1
-      lo = 0.01;
-      hi = 1.0;
-      break;
-    case 4: // tau_low1
-      lo = 0.1;
-      hi = 10.0;
-      break;
-    case 5: // w_low2
-      lo = 0.0;
-      hi = 1.0;
-      break;
-    case 6: // tau_low2
-      lo = 0.1;
-      hi = 50.0;
-      break;
-    case 7: // w_high1
-      lo = 0.01;
-      hi = 1.0;
-      break;
-    case 8: // tau_high1
-      lo = 0.1;
-      hi = 10.0;
-      break;
-    case 9: // w_high2
-      lo = 0.0;
-      hi = 1.0;
-      break;
-    case 10: // tau_high2
-      lo = 0.1;
-      hi = 50.0;
-      break;
-    default:
-      lo = -1000;
-      hi = 1000;
-      break;
-    }
-  } else {
-    switch (local) {
-    case 0: // Mu
-      lo = range_low_;
-      hi = range_high_;
-      break;
-    case 1: // Sigma
-      lo = range_width * 0.001;
-      hi = range_width * 0.5;
-      break;
-    case 2: // GausAmplitude
-      lo = 0;
-      hi = peak_height * 2;
-      break;
-    case 3: // StepAmplitude ratio
-      lo = 0;
-      hi = 0.5;
-      break;
-    case 4: // LowExpTailAmplitude ratio
-      lo = 0;
-      hi = 0.5;
-      break;
-    case 5: // LowExpTailDecay
-      lo = 0.5;
-      hi = 100;
-      break;
-    case 6: // LowLinTailAmplitude ratio
-      lo = 0;
-      hi = 0.5;
-      break;
-    case 7: // LowLinTailSlope
-      lo = -1;
-      hi = 1;
-      break;
-    case 8: // HighExpTailAmplitude ratio
-      lo = 0;
-      hi = 0.5;
-      break;
-    case 9: // HighExpTailDecay
-      lo = 0.5;
-      hi = 100;
-      break;
-    default:
-      lo = -1000;
-      hi = 1000;
-      break;
-    }
+  Int_t local = param_idx % 10;
+  switch (local) {
+  case 0: // Mu
+    lo = range_low_;
+    hi = range_high_;
+    break;
+  case 1: // Sigma
+    lo = range_width * 0.001;
+    hi = range_width * 0.5;
+    break;
+  case 2: // GausAmplitude
+    lo = 0;
+    hi = peak_height * 2;
+    break;
+  case 3: // StepAmplitude ratio
+    lo = 0;
+    hi = 0.5;
+    break;
+  case 4: // LowExpTailAmplitude ratio
+    lo = 0;
+    hi = 0.5;
+    break;
+  case 5: // LowExpTailDecay
+    lo = 0.5;
+    hi = 100;
+    break;
+  case 6: // LowLinTailAmplitude ratio
+    lo = 0;
+    hi = 0.5;
+    break;
+  case 7: // LowLinTailSlope
+    lo = -1;
+    hi = 1;
+    break;
+  case 8: // HighExpTailAmplitude ratio
+    lo = 0;
+    hi = 0.5;
+    break;
+  case 9: // HighExpTailDecay
+    lo = 0.5;
+    hi = 100;
+    break;
+  default:
+    lo = -1000;
+    hi = 1000;
+    break;
   }
 }
 
@@ -1307,16 +1071,7 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
   // when the window is destroyed, which would kill the whole macro
   editor->DontCallClose();
   editor->UnmapWindow();
-
-  // Drain all pending X11 events that reference child widget windows
-  // before destroying them. A single ProcessEvents() is not enough —
-  // the X server may still have queued events for child windows that
-  // arrive after UnmapWindow completes.
-  for (Int_t flush = 0; flush < 5; flush++) {
-    gSystem->ProcessEvents();
-    gSystem->Sleep(10);
-  }
-
+  gSystem->ProcessEvents();
   delete editor;
   return result;
 }
