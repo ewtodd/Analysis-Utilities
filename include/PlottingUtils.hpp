@@ -2,6 +2,7 @@
 #define PLOTTINGUTILS_H
 
 #include <TCanvas.h>
+#include <TF1.h>
 #include <TGaxis.h>
 #include <TGraph.h>
 #include <TGraphErrors.h>
@@ -9,6 +10,8 @@
 #include <TH2.h>
 #include <TLatex.h>
 #include <TLegend.h>
+#include <TMath.h>
+#include <TPad.h>
 #include <TROOT.h>
 #include <TRandom3.h>
 #include <TStyle.h>
@@ -45,6 +48,14 @@ public:
                          TString output_subdirectory = "",
                          PlotSaveOptions save_options = PlotSaveOptions::kBOTH);
 
+  static void
+  PlotFitWithResiduals(TH1 *hist, TGraph *total_graph,
+                       const std::vector<TGraph *> &component_graphs,
+                       Float_t fit_range_low, Float_t fit_range_high,
+                       const TString &output_name,
+                       const TString &output_subdirectory = "fits",
+                       const TString &label = "", Bool_t logy = kTRUE);
+
   static TLegend *AddLegend(Double_t x1 = 0.7, Double_t x2 = 0.9,
                             Double_t y1 = 0.7, Double_t y2 = 0.9);
   static TLatex *AddText(const TString label, Double_t x = 0.9,
@@ -60,6 +71,8 @@ private:
   static Bool_t preferences_set_;
   static Width_t line_width_;
   static void WarnIfNotConfigured(const TString method_name);
+  static void PlotPullHistogram(TGraph *residuals, const TString &output_name,
+                                const TString &output_subdirectory);
 };
 
 #endif

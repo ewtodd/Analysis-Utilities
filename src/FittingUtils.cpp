@@ -1,8 +1,5 @@
 #include "FittingUtils.hpp"
 
-#include <fstream>
-#include <iomanip>
-
 void FittingUtils::SaveInteractiveParams(const TString &input_name,
                                          const TString &peak_name) {
   gSystem->mkdir("plots/fits", kTRUE);
@@ -523,87 +520,118 @@ void FittingUtils::SetManualParameter(Int_t index, Double_t value) {
             << " = " << value << std::endl;
 }
 
-void FittingUtils::PlotResidualHistogram(TGraph *residuals,
-                                         const TString &input_name,
-                                         const TString &peak_name) {
-  Int_t npoints = residuals->GetN();
-  if (npoints == 0)
-    return;
+void FittingUtils::AppendPeakGraphs(std::vector<TGraph *> &components,
+                                    Int_t param_offset, Style_t line_style,
+                                    TF1 *background, Int_t npts,
+                                    Double_t x_step) {
+  Double_t ga = fit_function_->GetParameter(param_offset + 2);
+  Width_t line_width = PlottingUtils::GetLineWidth();
 
-  TH1D *pull_hist =
-      new TH1D("pull_hist", ";#delta/#sigma;Counts", 82, -5.5, 5.5);
-
-  Double_t *y = residuals->GetY();
-  for (Int_t i = 0; i < npoints; i++) {
-    pull_hist->Fill(y[i]);
+  TF1 *peak =
+      new TF1(PlottingUtils::GetRandomName(), FittingFunctions::Gaussian,
+              fit_range_low_, fit_range_high_, 3);
+  peak->SetParameter(0, fit_function_->GetParameter(param_offset + 0));
+  peak->SetParameter(1, fit_function_->GetParameter(param_offset + 1));
+  peak->SetParameter(2, ga);
+  TGraph *peak_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    peak_graph->SetPoint(i, x, peak->Eval(x) + background->Eval(x));
   }
+  peak_graph->SetLineColor(kBlack);
+  peak_graph->SetLineStyle(line_style);
+  peak_graph->SetLineWidth(line_width);
+  components.push_back(peak_graph);
+  delete peak;
 
-  TH1D *gauss_ref = new TH1D("gauss_ref", "", 82, -5.5, 5.5);
-  for (Int_t i = 1; i <= gauss_ref->GetNbinsX(); i++) {
-    Double_t lo = gauss_ref->GetBinLowEdge(i);
-    Double_t hi = lo + gauss_ref->GetBinWidth(i);
-    gauss_ref->SetBinContent(i, npoints * (TMath::Freq(hi) - TMath::Freq(lo)));
+  TF1 *step = new TF1(PlottingUtils::GetRandomName(), FittingFunctions::Step,
+                      fit_range_low_, fit_range_high_, 3);
+  step->SetParameter(0, fit_function_->GetParameter(param_offset + 0));
+  step->SetParameter(1, fit_function_->GetParameter(param_offset + 1));
+  step->SetParameter(2, fit_function_->GetParameter(param_offset + 3) * ga);
+  TGraph *step_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    step_graph->SetPoint(i, x, step->Eval(x) + background->Eval(x));
   }
+  step_graph->SetLineColor(kGray);
+  step_graph->SetLineStyle(line_style);
+  step_graph->SetLineWidth(line_width);
+  components.push_back(step_graph);
+  delete step;
 
-  Double_t ks_pvalue = pull_hist->KolmogorovTest(gauss_ref);
+  TF1 *low_tail =
+      new TF1(PlottingUtils::GetRandomName(), FittingFunctions::LowTail,
+              fit_range_low_, fit_range_high_, 6);
+  low_tail->SetParameter(0, fit_function_->GetParameter(param_offset + 0));
+  low_tail->SetParameter(1, fit_function_->GetParameter(param_offset + 1));
+  low_tail->SetParameter(2, fit_function_->GetParameter(param_offset + 4) * ga);
+  low_tail->SetParameter(3, fit_function_->GetParameter(param_offset + 5));
+  low_tail->SetParameter(4, fit_function_->GetParameter(param_offset + 6) * ga);
+  low_tail->SetParameter(5, fit_function_->GetParameter(param_offset + 7));
+  TGraph *low_tail_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    low_tail_graph->SetPoint(i, x, low_tail->Eval(x) + background->Eval(x));
+  }
+  low_tail_graph->SetLineColor(kRed);
+  low_tail_graph->SetLineStyle(line_style);
+  low_tail_graph->SetLineWidth(line_width);
+  components.push_back(low_tail_graph);
+  delete low_tail;
 
-  TCanvas *hist_canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
-  PlottingUtils::ConfigureAndDrawHistogram(pull_hist, kAzure);
-  PlottingUtils::AddText(TString::Format("KS p = %.3f", ks_pvalue), 0.85, 0.85);
-
-  PlottingUtils::SaveFigure(hist_canvas,
-                            "residuals_" + peak_name + "_" + input_name,
-                            "fits/residual_hists", PlotSaveOptions::kLINEAR);
-
-  delete hist_canvas;
-  delete gauss_ref;
-  delete pull_hist;
+  TF1 *high_tail =
+      new TF1(PlottingUtils::GetRandomName(), FittingFunctions::HighTail,
+              fit_range_low_, fit_range_high_, 4);
+  high_tail->SetParameter(0, fit_function_->GetParameter(param_offset + 0));
+  high_tail->SetParameter(1, fit_function_->GetParameter(param_offset + 1));
+  high_tail->SetParameter(2,
+                          fit_function_->GetParameter(param_offset + 8) * ga);
+  high_tail->SetParameter(3, fit_function_->GetParameter(param_offset + 9));
+  TGraph *high_tail_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    high_tail_graph->SetPoint(i, x, high_tail->Eval(x) + background->Eval(x));
+  }
+  high_tail_graph->SetLineColor(kOrange);
+  high_tail_graph->SetLineStyle(line_style);
+  high_tail_graph->SetLineWidth(line_width);
+  components.push_back(high_tail_graph);
+  delete high_tail;
 }
 
 void FittingUtils::PlotFitSinglePeak(const TString input_name,
                                      const TString peak_name,
                                      const TString label) {
-  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
+  Int_t npts = 1000;
+  Double_t x_step = (fit_range_high_ - fit_range_low_) / (npts - 1);
+  Width_t line_width = PlottingUtils::GetLineWidth();
 
-  TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
-  TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
-  pad1->SetBottomMargin(0.04);
-  pad1->SetGridx(1);
-  pad1->SetGridy(1);
-  pad1->SetTopMargin(0.12);
-  pad2->SetTopMargin(0.04);
-  pad2->SetBottomMargin(0.35);
-  pad2->SetGridx(1);
-  pad2->SetGridy(1);
-  pad1->Draw();
-  pad2->Draw();
-  pad1->cd();
-
-  Float_t min_hist_value = 0.9 * fit_range_low_;
-  Float_t max_hist_value = 1.1 * fit_range_high_;
-
-  working_hist_->GetXaxis()->SetRangeUser(min_hist_value, max_hist_value);
-  working_hist_->GetXaxis()->SetLabelSize(0);
-  working_hist_->GetXaxis()->SetTitleSize(0);
-  working_hist_->SetLineColor(kViolet);
-  working_hist_->GetYaxis()->SetTitleOffset(1);
-  working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
-  working_hist_->Draw();
-
-  pad1->SetTickx(0);
-  fit_function_->Draw("same");
-  fit_function_->SetLineColor(kAzure);
+  TGraph *total_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    total_graph->SetPoint(i, x, fit_function_->Eval(x));
+  }
+  total_graph->SetLineColor(kAzure);
+  total_graph->SetLineWidth(line_width);
 
   TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
                             fit_range_low_, fit_range_high_, 2);
   background->SetParameter(0, fit_function_->GetParameter(10));
   background->SetParameter(1, fit_function_->GetParameter(11));
-  background->SetLineColor(kGreen);
-  background->SetNpx(1000);
-  background->Draw("same");
 
-  Int_t npts = 1000;
-  Double_t x_step = (fit_range_high_ - fit_range_low_) / (npts - 1);
+  TGraph *background_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    background_graph->SetPoint(i, x, background->Eval(x));
+  }
+  background_graph->SetLineColor(kGreen);
+  background_graph->SetLineWidth(line_width);
+
+  std::vector<TGraph *> components;
+  components.push_back(background_graph);
+
+  Double_t ga = fit_function_->GetParameter(2);
 
   TF1 *peak = new TF1("gaussian", FittingFunctions::Gaussian, fit_range_low_,
                       fit_range_high_, 3);
@@ -616,10 +644,9 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
     peak_graph->SetPoint(i, x, peak->Eval(x) + background->Eval(x));
   }
   peak_graph->SetLineColor(kBlack);
-  peak_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  peak_graph->Draw("L same");
-
-  Double_t ga = fit_function_->GetParameter(2);
+  peak_graph->SetLineWidth(line_width);
+  components.push_back(peak_graph);
+  delete peak;
 
   if (TMath::Abs(fit_function_->GetParameter(3)) > 1e-6) {
     TF1 *step = new TF1("step", FittingFunctions::Step, fit_range_low_,
@@ -633,8 +660,9 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
       step_graph->SetPoint(i, x, step->Eval(x) + background->Eval(x));
     }
     step_graph->SetLineColor(kGray);
-    step_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-    step_graph->Draw("L same");
+    step_graph->SetLineWidth(line_width);
+    components.push_back(step_graph);
+    delete step;
   }
 
   if (TMath::Abs(fit_function_->GetParameter(4)) > 1e-6 ||
@@ -653,8 +681,9 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
       low_tail_graph->SetPoint(i, x, low_tail->Eval(x) + background->Eval(x));
     }
     low_tail_graph->SetLineColor(kRed);
-    low_tail_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-    low_tail_graph->Draw("L same");
+    low_tail_graph->SetLineWidth(line_width);
+    components.push_back(low_tail_graph);
+    delete low_tail;
   }
 
   if (TMath::Abs(fit_function_->GetParameter(8)) > 1e-6) {
@@ -670,615 +699,99 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
       high_tail_graph->SetPoint(i, x, high_tail->Eval(x) + background->Eval(x));
     }
     high_tail_graph->SetLineColor(kOrange);
-    high_tail_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-    high_tail_graph->Draw("L same");
+    high_tail_graph->SetLineWidth(line_width);
+    components.push_back(high_tail_graph);
+    delete high_tail;
   }
 
-  pad2->cd();
+  delete background;
 
-  Int_t nbins = working_hist_->GetNbinsX();
-  TGraph *residuals = new TGraph();
-  Int_t point_counter = 0;
-  for (Int_t i = 1; i <= nbins; i++) {
-    Double_t x = working_hist_->GetBinCenter(i);
-    if (x < fit_range_low_ || x > fit_range_high_)
-      continue;
-    Double_t data = working_hist_->GetBinContent(i);
-    Double_t fit_val = fit_function_->Eval(x);
-    Double_t error = working_hist_->GetBinError(i);
-
-    if (error > 0 && data > 0) {
-      Double_t pull = (data - fit_val) / error;
-      residuals->SetPoint(point_counter, x, pull);
-      point_counter++;
-    }
-  }
-
-  residuals->SetMarkerStyle(20);
-  residuals->SetMarkerSize(0.8);
-  residuals->SetMarkerColor(kAzure);
-  residuals->SetLineColor(kAzure);
-  residuals->SetTitle("");
-  Double_t actual_min = working_hist_->GetXaxis()->GetBinLowEdge(
-      working_hist_->GetXaxis()->GetFirst());
-  Double_t actual_max = working_hist_->GetXaxis()->GetBinUpEdge(
-      working_hist_->GetXaxis()->GetLast());
-  residuals->GetXaxis()->SetLimits(actual_min, actual_max);
-  residuals->GetYaxis()->SetTitle("#delta/#sigma");
-  residuals->GetXaxis()->SetTitle(working_hist_->GetXaxis()->GetTitle());
-  residuals->GetXaxis()->SetTitleSize(0.13);
-  residuals->GetYaxis()->SetTitleSize(0.13);
-  residuals->GetXaxis()->SetLabelSize(0.12);
-  residuals->GetYaxis()->SetLabelSize(0.12);
-  residuals->GetXaxis()->SetTitleOffset(1.0);
-  residuals->GetYaxis()->SetTitleOffset(0.3);
-  residuals->GetYaxis()->SetNdivisions(505);
-  residuals->GetXaxis()->SetNdivisions(510);
-  residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
-  residuals->Draw("AP");
-
-  TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
-  zero_line->SetLineColor(kBlack);
-  zero_line->SetLineStyle(2);
-  zero_line->SetLineWidth(PlottingUtils::GetLineWidth());
-  zero_line->Draw("same");
-
-  pad1->cd();
-  pad1->SetLogy(kTRUE);
-  if (label.Length() > 0) {
-    PlottingUtils::AddText(label, 0.85, 0.85);
-  }
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
-                            PlotSaveOptions::kLOG);
-
-  PlotResidualHistogram(residuals, input_name, peak_name);
-  gROOT->GetListOfCanvases()->Remove(canvas);
-  canvas->SetBatch(kTRUE);
-  delete canvas;
+  PlottingUtils::PlotFitWithResiduals(
+      working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
+      peak_name + "_" + input_name, "fits", label, kTRUE);
 }
 
 void FittingUtils::PlotFitDoublePeak(const TString input_name,
                                      const TString peak_name,
                                      const TString label) {
-  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
+  Int_t npts = 1000;
+  Double_t x_step = (fit_range_high_ - fit_range_low_) / (npts - 1);
+  Width_t line_width = PlottingUtils::GetLineWidth();
 
-  TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
-  TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
-  pad1->SetBottomMargin(0.04);
-  pad1->SetGridx(1);
-  pad1->SetGridy(1);
-  pad1->SetTopMargin(0.12);
-  pad2->SetTopMargin(0.04);
-  pad2->SetBottomMargin(0.35);
-  pad2->SetGridx(1);
-  pad2->SetGridy(1);
-  pad1->Draw();
-  pad2->Draw();
-  pad1->cd();
+  TGraph *total_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    total_graph->SetPoint(i, x, fit_function_->Eval(x));
+  }
+  total_graph->SetLineColor(kAzure);
+  total_graph->SetLineWidth(line_width);
 
-  Float_t min_hist_value = 0.9 * fit_range_low_;
-  Float_t max_hist_value = 1.1 * fit_range_high_;
-
-  working_hist_->GetXaxis()->SetRangeUser(min_hist_value, max_hist_value);
-  working_hist_->GetXaxis()->SetLabelSize(0);
-  working_hist_->GetXaxis()->SetTitleSize(0);
-  working_hist_->SetLineColor(kViolet);
-  working_hist_->GetYaxis()->SetTitleOffset(1);
-  working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
-  working_hist_->Draw();
-
-  pad1->SetTickx(0);
-  fit_function_->Draw("same");
-  fit_function_->SetLineColor(kAzure);
-
-  // Background (params 20-21)
   TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
                             fit_range_low_, fit_range_high_, 2);
   background->SetParameter(0, fit_function_->GetParameter(20));
   background->SetParameter(1, fit_function_->GetParameter(21));
-  background->SetLineColor(kGreen);
-  background->SetNpx(1000);
-  background->Draw("same");
 
-  Int_t npts = 1000;
-  Double_t x_step = (fit_range_high_ - fit_range_low_) / (npts - 1);
-
-  // Peak 1 components (offset 0, solid lines)
-  Double_t ga1 = fit_function_->GetParameter(2);
-  TF1 *peak1 = new TF1("gaussian1", FittingFunctions::Gaussian, fit_range_low_,
-                       fit_range_high_, 3);
-  peak1->SetParameter(0, fit_function_->GetParameter(0));
-  peak1->SetParameter(1, fit_function_->GetParameter(1));
-  peak1->SetParameter(2, ga1);
-  TGraph *peak1_graph = new TGraph(npts);
+  TGraph *background_graph = new TGraph(npts);
   for (Int_t i = 0; i < npts; i++) {
     Double_t x = fit_range_low_ + i * x_step;
-    peak1_graph->SetPoint(i, x, peak1->Eval(x) + background->Eval(x));
+    background_graph->SetPoint(i, x, background->Eval(x));
   }
-  peak1_graph->SetLineColor(kBlack);
-  peak1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  peak1_graph->Draw("L same");
+  background_graph->SetLineColor(kGreen);
+  background_graph->SetLineWidth(line_width);
 
-  TF1 *step1 = new TF1("step1", FittingFunctions::Step, fit_range_low_,
-                       fit_range_high_, 3);
-  step1->SetParameter(0, fit_function_->GetParameter(0));
-  step1->SetParameter(1, fit_function_->GetParameter(1));
-  step1->SetParameter(2, fit_function_->GetParameter(3) * ga1);
-  TGraph *step1_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    step1_graph->SetPoint(i, x, step1->Eval(x) + background->Eval(x));
-  }
-  step1_graph->SetLineColor(kGray);
-  step1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  step1_graph->Draw("L same");
+  std::vector<TGraph *> components;
+  components.push_back(background_graph);
 
-  TF1 *low_tail1 = new TF1("lowtail1", FittingFunctions::LowTail,
-                           fit_range_low_, fit_range_high_, 6);
-  low_tail1->SetParameter(0, fit_function_->GetParameter(0));
-  low_tail1->SetParameter(1, fit_function_->GetParameter(1));
-  low_tail1->SetParameter(2, fit_function_->GetParameter(4) * ga1);
-  low_tail1->SetParameter(3, fit_function_->GetParameter(5));
-  low_tail1->SetParameter(4, fit_function_->GetParameter(6) * ga1);
-  low_tail1->SetParameter(5, fit_function_->GetParameter(7));
-  TGraph *low_tail1_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    low_tail1_graph->SetPoint(i, x, low_tail1->Eval(x) + background->Eval(x));
-  }
-  low_tail1_graph->SetLineColor(kRed);
-  low_tail1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  low_tail1_graph->Draw("L same");
+  AppendPeakGraphs(components, 0, 1, background, npts, x_step);
+  AppendPeakGraphs(components, 10, 3, background, npts, x_step);
 
-  TF1 *high_tail1 = new TF1("hightail1", FittingFunctions::HighTail,
-                            fit_range_low_, fit_range_high_, 4);
-  high_tail1->SetParameter(0, fit_function_->GetParameter(0));
-  high_tail1->SetParameter(1, fit_function_->GetParameter(1));
-  high_tail1->SetParameter(2, fit_function_->GetParameter(8) * ga1);
-  high_tail1->SetParameter(3, fit_function_->GetParameter(9));
-  TGraph *high_tail1_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    high_tail1_graph->SetPoint(i, x, high_tail1->Eval(x) + background->Eval(x));
-  }
-  high_tail1_graph->SetLineColor(kOrange);
-  high_tail1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  high_tail1_graph->Draw("L same");
+  delete background;
 
-  // Peak 2 components (offset 10, dotted lines)
-  Double_t ga2 = fit_function_->GetParameter(12);
-  TF1 *peak2 = new TF1("gaussian2", FittingFunctions::Gaussian, fit_range_low_,
-                       fit_range_high_, 3);
-  peak2->SetParameter(0, fit_function_->GetParameter(10));
-  peak2->SetParameter(1, fit_function_->GetParameter(11));
-  peak2->SetParameter(2, ga2);
-  TGraph *peak2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    peak2_graph->SetPoint(i, x, peak2->Eval(x) + background->Eval(x));
-  }
-  peak2_graph->SetLineColor(kBlack);
-  peak2_graph->SetLineStyle(3);
-  peak2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  peak2_graph->Draw("L same");
-
-  TF1 *step2 = new TF1("step2", FittingFunctions::Step, fit_range_low_,
-                       fit_range_high_, 3);
-  step2->SetParameter(0, fit_function_->GetParameter(10));
-  step2->SetParameter(1, fit_function_->GetParameter(11));
-  step2->SetParameter(2, fit_function_->GetParameter(13) * ga2);
-  TGraph *step2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    step2_graph->SetPoint(i, x, step2->Eval(x) + background->Eval(x));
-  }
-  step2_graph->SetLineColor(kGray);
-  step2_graph->SetLineStyle(3);
-  step2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  step2_graph->Draw("L same");
-
-  TF1 *low_tail2 = new TF1("lowtail2", FittingFunctions::LowTail,
-                           fit_range_low_, fit_range_high_, 6);
-  low_tail2->SetParameter(0, fit_function_->GetParameter(10));
-  low_tail2->SetParameter(1, fit_function_->GetParameter(11));
-  low_tail2->SetParameter(2, fit_function_->GetParameter(14) * ga2);
-  low_tail2->SetParameter(3, fit_function_->GetParameter(15));
-  low_tail2->SetParameter(4, fit_function_->GetParameter(16) * ga2);
-  low_tail2->SetParameter(5, fit_function_->GetParameter(17));
-  TGraph *low_tail2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    low_tail2_graph->SetPoint(i, x, low_tail2->Eval(x) + background->Eval(x));
-  }
-  low_tail2_graph->SetLineColor(kRed);
-  low_tail2_graph->SetLineStyle(3);
-  low_tail2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  low_tail2_graph->Draw("L same");
-
-  TF1 *high_tail2 = new TF1("hightail2", FittingFunctions::HighTail,
-                            fit_range_low_, fit_range_high_, 4);
-  high_tail2->SetParameter(0, fit_function_->GetParameter(10));
-  high_tail2->SetParameter(1, fit_function_->GetParameter(11));
-  high_tail2->SetParameter(2, fit_function_->GetParameter(18) * ga2);
-  high_tail2->SetParameter(3, fit_function_->GetParameter(19));
-  TGraph *high_tail2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    high_tail2_graph->SetPoint(i, x, high_tail2->Eval(x) + background->Eval(x));
-  }
-  high_tail2_graph->SetLineColor(kOrange);
-  high_tail2_graph->SetLineStyle(3);
-  high_tail2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  high_tail2_graph->Draw("L same");
-
-  pad2->cd();
-
-  Int_t nbins = working_hist_->GetNbinsX();
-  TGraph *residuals = new TGraph();
-  Int_t point_counter = 0;
-  for (Int_t i = 1; i <= nbins; i++) {
-    Double_t x = working_hist_->GetBinCenter(i);
-    if (x < fit_range_low_ || x > fit_range_high_)
-      continue;
-    Double_t data = working_hist_->GetBinContent(i);
-    Double_t fit_val = fit_function_->Eval(x);
-    Double_t error = working_hist_->GetBinError(i);
-
-    if (error > 0 && data > 0) {
-      Double_t pull = (data - fit_val) / error;
-      residuals->SetPoint(point_counter, x, pull);
-      point_counter++;
-    }
-  }
-
-  residuals->SetMarkerStyle(20);
-  residuals->SetMarkerSize(0.8);
-  residuals->SetMarkerColor(kAzure);
-  residuals->SetLineColor(kAzure);
-  residuals->SetTitle("");
-  Double_t actual_min = working_hist_->GetXaxis()->GetBinLowEdge(
-      working_hist_->GetXaxis()->GetFirst());
-  Double_t actual_max = working_hist_->GetXaxis()->GetBinUpEdge(
-      working_hist_->GetXaxis()->GetLast());
-  residuals->GetXaxis()->SetLimits(actual_min, actual_max);
-  residuals->GetYaxis()->SetTitle("#delta/#sigma");
-  residuals->GetXaxis()->SetTitle(working_hist_->GetXaxis()->GetTitle());
-  residuals->GetXaxis()->SetTitleSize(0.13);
-  residuals->GetYaxis()->SetTitleSize(0.13);
-  residuals->GetXaxis()->SetLabelSize(0.12);
-  residuals->GetYaxis()->SetLabelSize(0.12);
-  residuals->GetXaxis()->SetTitleOffset(1.0);
-  residuals->GetYaxis()->SetTitleOffset(0.3);
-  residuals->GetYaxis()->SetNdivisions(505);
-  residuals->GetXaxis()->SetNdivisions(510);
-  residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
-  residuals->Draw("AP");
-
-  TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
-  zero_line->SetLineColor(kBlack);
-  zero_line->SetLineStyle(2);
-  zero_line->SetLineWidth(PlottingUtils::GetLineWidth());
-  zero_line->Draw("same");
-
-  pad1->cd();
-  pad1->SetLogy(kTRUE);
-  if (label.Length() > 0) {
-    PlottingUtils::AddText(label, 0.85, 0.85);
-  }
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
-                            PlotSaveOptions::kLOG);
-
-  PlotResidualHistogram(residuals, input_name, peak_name);
-  gROOT->GetListOfCanvases()->Remove(canvas);
-  canvas->SetBatch(kTRUE);
-  delete canvas;
+  PlottingUtils::PlotFitWithResiduals(
+      working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
+      peak_name + "_" + input_name, "fits", label, kTRUE);
 }
 
 void FittingUtils::PlotFitTriplePeak(const TString input_name,
                                      const TString peak_name,
                                      const TString label) {
-  TCanvas *canvas = PlottingUtils::GetConfiguredCanvas(kFALSE);
+  Int_t npts = 1000;
+  Double_t x_step = (fit_range_high_ - fit_range_low_) / (npts - 1);
+  Width_t line_width = PlottingUtils::GetLineWidth();
 
-  TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
-  TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
-  pad1->SetBottomMargin(0.04);
-  pad1->SetGridx(1);
-  pad1->SetGridy(1);
-  pad1->SetTopMargin(0.12);
-  pad2->SetTopMargin(0.04);
-  pad2->SetBottomMargin(0.35);
-  pad2->SetGridx(1);
-  pad2->SetGridy(1);
-  pad1->Draw();
-  pad2->Draw();
-  pad1->cd();
+  TGraph *total_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t x = fit_range_low_ + i * x_step;
+    total_graph->SetPoint(i, x, fit_function_->Eval(x));
+  }
+  total_graph->SetLineColor(kAzure);
+  total_graph->SetLineWidth(line_width);
 
-  Float_t min_hist_value = 0.9 * fit_range_low_;
-  Float_t max_hist_value = 1.1 * fit_range_high_;
-
-  working_hist_->GetXaxis()->SetRangeUser(min_hist_value, max_hist_value);
-  working_hist_->GetXaxis()->SetLabelSize(0);
-  working_hist_->GetXaxis()->SetTitleSize(0);
-  working_hist_->SetLineColor(kViolet);
-  working_hist_->GetYaxis()->SetTitleOffset(1);
-  working_hist_->SetLineWidth(PlottingUtils::GetLineWidth());
-  working_hist_->Draw();
-
-  pad1->SetTickx(0);
-  fit_function_->Draw("same");
-  fit_function_->SetLineColor(kAzure);
-
-  // Background (params 30-31)
   TF1 *background = new TF1("background", FittingFunctions::LinearBackground,
                             fit_range_low_, fit_range_high_, 2);
   background->SetParameter(0, fit_function_->GetParameter(30));
   background->SetParameter(1, fit_function_->GetParameter(31));
-  background->SetLineColor(kGreen);
-  background->SetNpx(1000);
-  background->Draw("same");
 
-  Int_t npts = 1000;
-  Double_t x_step = (fit_range_high_ - fit_range_low_) / (npts - 1);
-
-  // Peak 1 components (offset 0, solid lines)
-  Double_t ga1 = fit_function_->GetParameter(2);
-  TF1 *peak1 = new TF1("gaussian1", FittingFunctions::Gaussian, fit_range_low_,
-                       fit_range_high_, 3);
-  peak1->SetParameter(0, fit_function_->GetParameter(0));
-  peak1->SetParameter(1, fit_function_->GetParameter(1));
-  peak1->SetParameter(2, ga1);
-  TGraph *peak1_graph = new TGraph(npts);
+  TGraph *background_graph = new TGraph(npts);
   for (Int_t i = 0; i < npts; i++) {
     Double_t x = fit_range_low_ + i * x_step;
-    peak1_graph->SetPoint(i, x, peak1->Eval(x) + background->Eval(x));
+    background_graph->SetPoint(i, x, background->Eval(x));
   }
-  peak1_graph->SetLineColor(kBlack);
-  peak1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  peak1_graph->Draw("L same");
+  background_graph->SetLineColor(kGreen);
+  background_graph->SetLineWidth(line_width);
 
-  TF1 *step1 = new TF1("step1", FittingFunctions::Step, fit_range_low_,
-                       fit_range_high_, 3);
-  step1->SetParameter(0, fit_function_->GetParameter(0));
-  step1->SetParameter(1, fit_function_->GetParameter(1));
-  step1->SetParameter(2, fit_function_->GetParameter(3) * ga1);
-  TGraph *step1_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    step1_graph->SetPoint(i, x, step1->Eval(x) + background->Eval(x));
-  }
-  step1_graph->SetLineColor(kGray);
-  step1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  step1_graph->Draw("L same");
+  std::vector<TGraph *> components;
+  components.push_back(background_graph);
 
-  TF1 *low_tail1 = new TF1("lowtail1", FittingFunctions::LowTail,
-                           fit_range_low_, fit_range_high_, 6);
-  low_tail1->SetParameter(0, fit_function_->GetParameter(0));
-  low_tail1->SetParameter(1, fit_function_->GetParameter(1));
-  low_tail1->SetParameter(2, fit_function_->GetParameter(4) * ga1);
-  low_tail1->SetParameter(3, fit_function_->GetParameter(5));
-  low_tail1->SetParameter(4, fit_function_->GetParameter(6) * ga1);
-  low_tail1->SetParameter(5, fit_function_->GetParameter(7));
-  TGraph *low_tail1_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    low_tail1_graph->SetPoint(i, x, low_tail1->Eval(x) + background->Eval(x));
-  }
-  low_tail1_graph->SetLineColor(kRed);
-  low_tail1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  low_tail1_graph->Draw("L same");
+  AppendPeakGraphs(components, 0, 1, background, npts, x_step);
+  AppendPeakGraphs(components, 10, 3, background, npts, x_step);
+  AppendPeakGraphs(components, 20, 4, background, npts, x_step);
 
-  TF1 *high_tail1 = new TF1("hightail1", FittingFunctions::HighTail,
-                            fit_range_low_, fit_range_high_, 4);
-  high_tail1->SetParameter(0, fit_function_->GetParameter(0));
-  high_tail1->SetParameter(1, fit_function_->GetParameter(1));
-  high_tail1->SetParameter(2, fit_function_->GetParameter(8) * ga1);
-  high_tail1->SetParameter(3, fit_function_->GetParameter(9));
-  TGraph *high_tail1_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    high_tail1_graph->SetPoint(i, x, high_tail1->Eval(x) + background->Eval(x));
-  }
-  high_tail1_graph->SetLineColor(kOrange);
-  high_tail1_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  high_tail1_graph->Draw("L same");
+  delete background;
 
-  // Peak 2 components (offset 10, dotted lines)
-  Double_t ga2 = fit_function_->GetParameter(12);
-  TF1 *peak2 = new TF1("gaussian2", FittingFunctions::Gaussian, fit_range_low_,
-                       fit_range_high_, 3);
-  peak2->SetParameter(0, fit_function_->GetParameter(10));
-  peak2->SetParameter(1, fit_function_->GetParameter(11));
-  peak2->SetParameter(2, ga2);
-  TGraph *peak2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    peak2_graph->SetPoint(i, x, peak2->Eval(x) + background->Eval(x));
-  }
-  peak2_graph->SetLineColor(kBlack);
-  peak2_graph->SetLineStyle(3);
-  peak2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  peak2_graph->Draw("L same");
-
-  TF1 *step2 = new TF1("step2", FittingFunctions::Step, fit_range_low_,
-                       fit_range_high_, 3);
-  step2->SetParameter(0, fit_function_->GetParameter(10));
-  step2->SetParameter(1, fit_function_->GetParameter(11));
-  step2->SetParameter(2, fit_function_->GetParameter(13) * ga2);
-  TGraph *step2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    step2_graph->SetPoint(i, x, step2->Eval(x) + background->Eval(x));
-  }
-  step2_graph->SetLineColor(kGray);
-  step2_graph->SetLineStyle(3);
-  step2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  step2_graph->Draw("L same");
-
-  TF1 *low_tail2 = new TF1("lowtail2", FittingFunctions::LowTail,
-                           fit_range_low_, fit_range_high_, 6);
-  low_tail2->SetParameter(0, fit_function_->GetParameter(10));
-  low_tail2->SetParameter(1, fit_function_->GetParameter(11));
-  low_tail2->SetParameter(2, fit_function_->GetParameter(14) * ga2);
-  low_tail2->SetParameter(3, fit_function_->GetParameter(15));
-  low_tail2->SetParameter(4, fit_function_->GetParameter(16) * ga2);
-  low_tail2->SetParameter(5, fit_function_->GetParameter(17));
-  TGraph *low_tail2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    low_tail2_graph->SetPoint(i, x, low_tail2->Eval(x) + background->Eval(x));
-  }
-  low_tail2_graph->SetLineColor(kRed);
-  low_tail2_graph->SetLineStyle(3);
-  low_tail2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  low_tail2_graph->Draw("L same");
-
-  TF1 *high_tail2 = new TF1("hightail2", FittingFunctions::HighTail,
-                            fit_range_low_, fit_range_high_, 4);
-  high_tail2->SetParameter(0, fit_function_->GetParameter(10));
-  high_tail2->SetParameter(1, fit_function_->GetParameter(11));
-  high_tail2->SetParameter(2, fit_function_->GetParameter(18) * ga2);
-  high_tail2->SetParameter(3, fit_function_->GetParameter(19));
-  TGraph *high_tail2_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    high_tail2_graph->SetPoint(i, x, high_tail2->Eval(x) + background->Eval(x));
-  }
-  high_tail2_graph->SetLineColor(kOrange);
-  high_tail2_graph->SetLineStyle(3);
-  high_tail2_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  high_tail2_graph->Draw("L same");
-
-  // Peak 3 components (offset 20, dashed lines)
-  Double_t ga3 = fit_function_->GetParameter(22);
-  TF1 *peak3 = new TF1("gaussian3", FittingFunctions::Gaussian, fit_range_low_,
-                       fit_range_high_, 3);
-  peak3->SetParameter(0, fit_function_->GetParameter(20));
-  peak3->SetParameter(1, fit_function_->GetParameter(21));
-  peak3->SetParameter(2, ga3);
-  TGraph *peak3_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    peak3_graph->SetPoint(i, x, peak3->Eval(x) + background->Eval(x));
-  }
-  peak3_graph->SetLineColor(kBlack);
-  peak3_graph->SetLineStyle(4);
-  peak3_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  peak3_graph->Draw("L same");
-
-  TF1 *step3 = new TF1("step3", FittingFunctions::Step, fit_range_low_,
-                       fit_range_high_, 3);
-  step3->SetParameter(0, fit_function_->GetParameter(20));
-  step3->SetParameter(1, fit_function_->GetParameter(21));
-  step3->SetParameter(2, fit_function_->GetParameter(23) * ga3);
-  TGraph *step3_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    step3_graph->SetPoint(i, x, step3->Eval(x) + background->Eval(x));
-  }
-  step3_graph->SetLineColor(kGray);
-  step3_graph->SetLineStyle(4);
-  step3_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  step3_graph->Draw("L same");
-
-  TF1 *low_tail3 = new TF1("lowtail3", FittingFunctions::LowTail,
-                           fit_range_low_, fit_range_high_, 6);
-  low_tail3->SetParameter(0, fit_function_->GetParameter(20));
-  low_tail3->SetParameter(1, fit_function_->GetParameter(21));
-  low_tail3->SetParameter(2, fit_function_->GetParameter(24) * ga3);
-  low_tail3->SetParameter(3, fit_function_->GetParameter(25));
-  low_tail3->SetParameter(4, fit_function_->GetParameter(26) * ga3);
-  low_tail3->SetParameter(5, fit_function_->GetParameter(27));
-  TGraph *low_tail3_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    low_tail3_graph->SetPoint(i, x, low_tail3->Eval(x) + background->Eval(x));
-  }
-  low_tail3_graph->SetLineColor(kRed);
-  low_tail3_graph->SetLineStyle(4);
-  low_tail3_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  low_tail3_graph->Draw("L same");
-
-  TF1 *high_tail3 = new TF1("hightail3", FittingFunctions::HighTail,
-                            fit_range_low_, fit_range_high_, 4);
-  high_tail3->SetParameter(0, fit_function_->GetParameter(20));
-  high_tail3->SetParameter(1, fit_function_->GetParameter(21));
-  high_tail3->SetParameter(2, fit_function_->GetParameter(28) * ga3);
-  high_tail3->SetParameter(3, fit_function_->GetParameter(29));
-  TGraph *high_tail3_graph = new TGraph(npts);
-  for (Int_t i = 0; i < npts; i++) {
-    Double_t x = fit_range_low_ + i * x_step;
-    high_tail3_graph->SetPoint(i, x, high_tail3->Eval(x) + background->Eval(x));
-  }
-  high_tail3_graph->SetLineColor(kOrange);
-  high_tail3_graph->SetLineStyle(4);
-  high_tail3_graph->SetLineWidth(PlottingUtils::GetLineWidth());
-  high_tail3_graph->Draw("L same");
-
-  if (label.Length() > 0) {
-    PlottingUtils::AddText(label, 0.85, 0.85);
-  }
-
-  pad2->cd();
-
-  Int_t nbins = working_hist_->GetNbinsX();
-  TGraph *residuals = new TGraph();
-  Int_t point_counter = 0;
-  for (Int_t i = 1; i <= nbins; i++) {
-    Double_t x = working_hist_->GetBinCenter(i);
-    if (x < fit_range_low_ || x > fit_range_high_)
-      continue;
-    Double_t data = working_hist_->GetBinContent(i);
-    Double_t fit_val = fit_function_->Eval(x);
-    Double_t error = working_hist_->GetBinError(i);
-
-    if (error > 0 && data > 0) {
-      Double_t pull = (data - fit_val) / error;
-      residuals->SetPoint(point_counter, x, pull);
-      point_counter++;
-    }
-  }
-
-  residuals->SetMarkerStyle(20);
-  residuals->SetMarkerSize(0.8);
-  residuals->SetMarkerColor(kAzure);
-  residuals->SetLineColor(kAzure);
-  residuals->SetTitle("");
-  Double_t actual_min = working_hist_->GetXaxis()->GetBinLowEdge(
-      working_hist_->GetXaxis()->GetFirst());
-  Double_t actual_max = working_hist_->GetXaxis()->GetBinUpEdge(
-      working_hist_->GetXaxis()->GetLast());
-  residuals->GetXaxis()->SetLimits(actual_min, actual_max);
-  residuals->GetYaxis()->SetTitle("#delta/#sigma");
-  residuals->GetXaxis()->SetTitle(working_hist_->GetXaxis()->GetTitle());
-  residuals->GetXaxis()->SetTitleSize(0.13);
-  residuals->GetYaxis()->SetTitleSize(0.13);
-  residuals->GetXaxis()->SetLabelSize(0.12);
-  residuals->GetYaxis()->SetLabelSize(0.12);
-  residuals->GetXaxis()->SetTitleOffset(1.0);
-  residuals->GetYaxis()->SetTitleOffset(0.3);
-  residuals->GetYaxis()->SetNdivisions(505);
-  residuals->GetXaxis()->SetNdivisions(510);
-  residuals->GetYaxis()->CenterTitle(kTRUE);
-  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
-  residuals->Draw("AP");
-
-  TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
-  zero_line->SetLineColor(kBlack);
-  zero_line->SetLineStyle(2);
-  zero_line->SetLineWidth(PlottingUtils::GetLineWidth());
-  zero_line->Draw("same");
-
-  pad1->cd();
-  pad1->SetLogy(kTRUE);
-  PlottingUtils::SaveFigure(canvas, peak_name + "_" + input_name, "fits",
-                            PlotSaveOptions::kLOG);
-
-  PlotResidualHistogram(residuals, input_name, peak_name);
-  gROOT->GetListOfCanvases()->Remove(canvas);
-  canvas->SetBatch(kTRUE);
-  delete canvas;
+  PlottingUtils::PlotFitWithResiduals(
+      working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
+      peak_name + "_" + input_name, "fits", label, kTRUE);
 }
 
 Double_t FittingUtils::EstimateBackground() {

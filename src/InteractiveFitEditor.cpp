@@ -1,13 +1,5 @@
 #include "InteractiveFitEditor.hpp"
 
-#include <TCanvas.h>
-#include <TGClient.h>
-#include <TMath.h>
-#include <TSystem.h>
-#include <iostream>
-
-// Constructor
-
 InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
                                            TF1 *fit_func, Double_t range_low,
                                            Double_t range_high, Int_t num_peaks,
@@ -97,8 +89,6 @@ InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
 
   UpdateCanvas();
 }
-
-// Destructor
 
 InteractiveFitEditor::~InteractiveFitEditor() {
   if (redraw_timer_) {

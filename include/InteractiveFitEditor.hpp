@@ -2,8 +2,9 @@
 #define INTERACTIVEFITEDITOR_H
 
 #include "FittingUtils.hpp"
-
+#include <TCanvas.h>
 #include <TGButton.h>
+#include <TGClient.h>
 #include <TGDoubleSlider.h>
 #include <TGFrame.h>
 #include <TGLabel.h>
@@ -12,9 +13,12 @@
 #include <TGTab.h>
 #include <TGraph.h>
 #include <TLatex.h>
+#include <TMath.h>
 #include <TPad.h>
 #include <TRootEmbeddedCanvas.h>
+#include <TSystem.h>
 #include <TTimer.h>
+#include <iostream>
 
 class InteractiveFitEditor : public TGMainFrame {
 private:

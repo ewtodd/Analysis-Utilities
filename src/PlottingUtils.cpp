@@ -234,3 +234,146 @@ TString PlottingUtils::GetRandomName() {
   TString name = Form("name%.7f", number);
   return name;
 }
+
+void PlottingUtils::PlotFitWithResiduals(
+    TH1 *hist, TGraph *total_graph,
+    const std::vector<TGraph *> &component_graphs, Float_t fit_range_low,
+    Float_t fit_range_high, const TString &output_name,
+    const TString &output_subdirectory, const TString &label, Bool_t logy) {
+  TCanvas *canvas = GetConfiguredCanvas(kFALSE);
+
+  TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
+  TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
+  pad1->SetBottomMargin(0.04);
+  pad1->SetGridx(1);
+  pad1->SetGridy(1);
+  pad1->SetTopMargin(0.12);
+  pad2->SetTopMargin(0.04);
+  pad2->SetBottomMargin(0.35);
+  pad2->SetGridx(1);
+  pad2->SetGridy(1);
+  pad1->Draw();
+  pad2->Draw();
+  pad1->cd();
+
+  Float_t min_hist_value = 0.9 * fit_range_low;
+  Float_t max_hist_value = 1.1 * fit_range_high;
+
+  hist->GetXaxis()->SetRangeUser(min_hist_value, max_hist_value);
+  hist->GetXaxis()->SetLabelSize(0);
+  hist->GetXaxis()->SetTitleSize(0);
+  hist->SetLineColor(kViolet);
+  hist->GetYaxis()->SetTitleOffset(1);
+  hist->SetLineWidth(line_width_);
+  hist->Draw();
+
+  pad1->SetTickx(0);
+  if (total_graph)
+    total_graph->Draw("L same");
+  for (std::size_t i = 0; i < component_graphs.size(); i++) {
+    if (component_graphs[i])
+      component_graphs[i]->Draw("L same");
+  }
+
+  pad2->cd();
+
+  Int_t nbins = hist->GetNbinsX();
+  TGraph *residuals = new TGraph();
+  Int_t point_counter = 0;
+  for (Int_t i = 1; i <= nbins; i++) {
+    Double_t x = hist->GetBinCenter(i);
+    if (x < fit_range_low || x > fit_range_high)
+      continue;
+    Double_t data = hist->GetBinContent(i);
+    Double_t fit_val = total_graph ? total_graph->Eval(x) : 0.0;
+    Double_t error = hist->GetBinError(i);
+
+    if (error > 0 && data > 0) {
+      Double_t pull = (data - fit_val) / error;
+      residuals->SetPoint(point_counter, x, pull);
+      point_counter++;
+    }
+  }
+
+  residuals->SetMarkerStyle(20);
+  residuals->SetMarkerSize(0.8);
+  residuals->SetMarkerColor(kAzure);
+  residuals->SetLineColor(kAzure);
+  residuals->SetTitle("");
+  Double_t actual_min =
+      hist->GetXaxis()->GetBinLowEdge(hist->GetXaxis()->GetFirst());
+  Double_t actual_max =
+      hist->GetXaxis()->GetBinUpEdge(hist->GetXaxis()->GetLast());
+  residuals->GetXaxis()->SetLimits(actual_min, actual_max);
+  residuals->GetYaxis()->SetTitle("#delta/#sigma");
+  residuals->GetXaxis()->SetTitle(hist->GetXaxis()->GetTitle());
+  residuals->GetXaxis()->SetTitleSize(0.13);
+  residuals->GetYaxis()->SetTitleSize(0.13);
+  residuals->GetXaxis()->SetLabelSize(0.12);
+  residuals->GetYaxis()->SetLabelSize(0.12);
+  residuals->GetXaxis()->SetTitleOffset(1.0);
+  residuals->GetYaxis()->SetTitleOffset(0.3);
+  residuals->GetYaxis()->SetNdivisions(505);
+  residuals->GetXaxis()->SetNdivisions(510);
+  residuals->GetYaxis()->CenterTitle(kTRUE);
+  residuals->GetYaxis()->SetRangeUser(-5.5, 5.5);
+  residuals->Draw("AP");
+
+  TF1 *zero_line = new TF1("zero_line", "0", actual_min, actual_max);
+  zero_line->SetLineColor(kBlack);
+  zero_line->SetLineStyle(2);
+  zero_line->SetLineWidth(line_width_);
+  zero_line->Draw("same");
+
+  pad1->cd();
+  pad1->SetLogy(logy);
+  if (label.Length() > 0) {
+    AddText(label, 0.85, 0.85);
+  }
+
+  PlotSaveOptions save_opts =
+      logy ? PlotSaveOptions::kLOG : PlotSaveOptions::kLINEAR;
+  SaveFigure(canvas, output_name, output_subdirectory, save_opts);
+
+  PlotPullHistogram(residuals, output_name, output_subdirectory);
+
+  gROOT->GetListOfCanvases()->Remove(canvas);
+  canvas->SetBatch(kTRUE);
+  delete canvas;
+}
+
+void PlottingUtils::PlotPullHistogram(TGraph *residuals,
+                                      const TString &output_name,
+                                      const TString &output_subdirectory) {
+  Int_t npoints = residuals->GetN();
+  if (npoints == 0)
+    return;
+
+  TH1D *pull_hist =
+      new TH1D("pull_hist", ";#delta/#sigma;Counts", 82, -5.5, 5.5);
+
+  Double_t *y = residuals->GetY();
+  for (Int_t i = 0; i < npoints; i++) {
+    pull_hist->Fill(y[i]);
+  }
+
+  TH1D *gauss_ref = new TH1D("gauss_ref", "", 82, -5.5, 5.5);
+  for (Int_t i = 1; i <= gauss_ref->GetNbinsX(); i++) {
+    Double_t lo = gauss_ref->GetBinLowEdge(i);
+    Double_t hi = lo + gauss_ref->GetBinWidth(i);
+    gauss_ref->SetBinContent(i, npoints * (TMath::Freq(hi) - TMath::Freq(lo)));
+  }
+
+  Double_t ks_pvalue = pull_hist->KolmogorovTest(gauss_ref);
+
+  TCanvas *hist_canvas = GetConfiguredCanvas(kFALSE);
+  ConfigureAndDrawHistogram(pull_hist, kAzure);
+  AddText(TString::Format("KS p = %.3f", ks_pvalue), 0.85, 0.85);
+
+  SaveFigure(hist_canvas, "residuals_" + output_name,
+             output_subdirectory + "/residual_hists", PlotSaveOptions::kLINEAR);
+
+  delete hist_canvas;
+  delete gauss_ref;
+  delete pull_hist;
+}
