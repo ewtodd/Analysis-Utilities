@@ -4,10 +4,10 @@
 #include "FittingUtils.hpp"
 
 #include <TGButton.h>
+#include <TGDoubleSlider.h>
 #include <TGFrame.h>
 #include <TGLabel.h>
 #include <TGNumberEntry.h>
-#include <TGDoubleSlider.h>
 #include <TGSlider.h>
 #include <TGTab.h>
 #include <TGraph.h>
@@ -116,8 +116,7 @@ private:
 
 public:
   InteractiveFitEditor(const TGWindow *parent, TH1 *hist, TF1 *fit_func,
-                       Double_t range_low, Double_t range_high,
-                       Int_t num_peaks,
+                       Double_t range_low, Double_t range_high, Int_t num_peaks,
                        const TString &info_label = "");
   virtual ~InteractiveFitEditor();
 
@@ -131,9 +130,8 @@ public:
   TRootEmbeddedCanvas *GetEmbeddedCanvas() { return embedded_canvas_; }
 };
 
-Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
-                                  Double_t range_low, Double_t range_high,
-                                  Int_t num_peaks,
+Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
+                                  Double_t range_high, Int_t num_peaks,
                                   const TString &info_label);
 
 #endif

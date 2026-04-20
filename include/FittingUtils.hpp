@@ -2,7 +2,6 @@
 #define FITTINGUTILS_H
 
 #include "PlottingUtils.hpp"
-#include <TROOT.h>
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TFile.h>
@@ -10,13 +9,13 @@
 #include <TH1.h>
 #include <TMath.h>
 #include <TPad.h>
+#include <TROOT.h>
 #include <TSystem.h>
 #include <TTree.h>
 
 // Forward declaration (defined in InteractiveFitEditor.hpp)
-Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func,
-                                  Double_t range_low, Double_t range_high,
-                                  Int_t num_peaks = 1,
+Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
+                                  Double_t range_high, Int_t num_peaks = 1,
                                   const TString &info_label = "");
 
 namespace FittingFunctions {
