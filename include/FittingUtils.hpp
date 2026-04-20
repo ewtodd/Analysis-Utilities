@@ -12,6 +12,8 @@
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TTree.h>
+#include <fstream>
+#include <iomanip>
 
 // Forward declaration (defined in InteractiveFitEditor.hpp)
 Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
@@ -76,8 +78,9 @@ private:
                                const TString &peak_name);
 
   void SortPeaksByMu(Int_t num_peaks);
-  void PlotResidualHistogram(TGraph *residuals, const TString &input_name,
-                             const TString &peak_name);
+  void AppendPeakGraphs(std::vector<TGraph *> &components, Int_t param_offset,
+                        Style_t line_style, TF1 *background, Int_t npts,
+                        Double_t x_step);
 
 public:
   FittingUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
