@@ -69,6 +69,7 @@
             numpy
             pandas
             scipy
+            iminuit
           ];
           doCheck = false;
         };
@@ -88,6 +89,8 @@
                 numpy
                 pandas
                 scipy
+                iminuit
+                pytest
                 pythonPackage
               ]
             ))

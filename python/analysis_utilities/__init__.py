@@ -1,6 +1,21 @@
 """Analysis utilities for nuclear measurement data."""
 
+from analysis_utilities.init_utils import set_root_preferences
+from analysis_utilities.simultaneous_fit import (FitResult,
+                                                   SimultaneousFit)
+from analysis_utilities.unbinned_fit import (UnbinnedFit,
+                                               UnbinnedFitResult)
+
 __version__ = "@VERSION@"
+
+__all__ = [
+    "load_cpp_library",
+    "set_root_preferences",
+    "SimultaneousFit",
+    "FitResult",
+    "UnbinnedFit",
+    "UnbinnedFitResult",
+]
 
 _cpp_loaded = False
 

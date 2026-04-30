@@ -251,6 +251,76 @@ df = load_tree_data("output.root", cache_dir=None)
 <!---->
 Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `UShort_t`, `Long64_t`, `ULong64_t`, `UChar_t`.
 <!---->
+### SimultaneousFit
+<!---->
+`SimultaneousFit` fits parametric models over multiple binned channels that share parameters by name — e.g. a signal region plus a background-only sideband with a shared background shape, or multiple detectors sharing a resolution.
+It complements `FittingUtils` (C++) which handles single-channel photopeak fits with component pruning; reach for `SimultaneousFit` when channels must be fit jointly with shared parameters.
+<!---->
+Built on [iminuit](https://iminuit.readthedocs.io/).
+Each channel contributes an `ExtendedBinnedNLL` term, optional `NormalConstraint` terms are summed in, and Minuit is driven via `migrad` + `hesse` (+ optional `minos`).
+Parameter sharing is by name: any parameter appearing in multiple channel model signatures is a single fit parameter.
+Plots are produced via `PlottingUtils::PlotFitWithResiduals` (same two-pad main + residual + pull-histogram output as `FittingUtils`).
+<!---->
+**Model builders** (`analysis_utilities.fit_models`) — each returns a callable that takes bin edges and returns bin-integrated expected counts (analytic integrals, no `scipy.quad` in the likelihood):
+- `gaussian_peak(mu, sigma, nsig)` — erf-based bin integral; `nsig` is the total yield over `(-inf, +inf)`.
+- `exponential_bkg(reference_range, tau, nbkg)` — exponential, normalized so `nbkg` is the integral over `reference_range`.
+- `linear_bkg(reference_range, slope, nbkg)` — linear, parametrized about the midpoint of `reference_range` so the integral is independent of slope at nominal.
+- `polynomial_bkg(reference_range, coeff_names, nbkg)` — `1 + sum c_i (x - x_mid)^i`, analytically integrated.
+- `compose(**components)` — sums named component callables into a total model and attaches overlay metadata used by the plotter.
+<!---->
+The keyword arguments on each builder set the fit-parameter names on the returned callable, which is how channels are wired together:
+<!---->
+```python
+from analysis_utilities import SimultaneousFit, load_cpp_library
+from analysis_utilities.fit_models import (
+    compose, exponential_bkg, gaussian_peak,
+)
+#
+ROOT = load_cpp_library()
+ROOT.PlottingUtils.SetStylePreferences(ROOT.PlotSaveFormat.kPNG)
+#
+peak   = gaussian_peak(mu="mu", sigma="sigma", nsig="nsig")
+bkg_sr = exponential_bkg((60.0, 80.0), tau="tau", nbkg="nbkg_sr")
+bkg_sb = exponential_bkg((60.0, 80.0), tau="tau", nbkg="nbkg_sb")
+sr_model = compose(signal=peak, background=bkg_sr)
+#
+fit = SimultaneousFit(name="ge73m")
+fit.add_channel("signal_region", counts_sr, edges_sr, sr_model,
+                background_component="background")
+fit.add_channel("sideband", counts_sb, edges_sb, bkg_sb)
+#
+fit.set_parameter("mu",      value=68.5, limits=(65.0, 75.0))
+fit.set_parameter("sigma",   value=0.5,  limits=(0.05, 5.0))
+fit.set_parameter("nsig",    value=400,  limits=(0, None))
+fit.set_parameter("tau",     value=30,   limits=(1.0, 500.0))
+fit.set_parameter("nbkg_sr", value=1e4,  limits=(0, None))
+fit.set_parameter("nbkg_sb", value=3e3,  limits=(0, None))
+#
+result = fit.fit(minos=["nsig", "mu"])
+fit.plot(result, labels={"signal_region": "signal region",
+                         "sideband":      "sideband"})
+```
+<!---->
+`tau` is the only parameter appearing in both channel models, so the sideband data contributes to constraining the signal-region background shape.
+<!---->
+**Inputs**:
+- `add_channel(name, counts, edges, model, components=None, background_component=None)` takes numpy arrays.
+- `add_channel_from_th1(name, hist, model, x_range=None, ...)` extracts `counts`/`edges` from a ROOT `TH1`. Pass `x_range=(lo, hi)` to restrict to bins fully contained in that range.
+- `set_parameter(name, value=..., limits=..., fixed=..., error=...)` per parameter.
+- `add_constraint(name, mean, sigma)` adds a Gaussian constraint (`iminuit.cost.NormalConstraint`).
+<!---->
+**Running the fit**:
+- `fit(minos=None, strategy=1, tol=None, print_level=0)`.
+`minos=True` runs Minos on every free parameter; pass an iterable of names to run Minos on a subset.
+<!---->
+**Result** (`FitResult` dataclass): `values`, `errors`, `minos` (asymmetric errors), `corr` (pandas DataFrame of correlations among free parameters), `nll`, `chi2`, `ndof`, `chi2_per_channel`, per-channel `residuals`, and the underlying `minuit` instance as an escape hatch for `mnprofile` / `draw_mnmatrix` / etc.
+<!---->
+**Plots**: `fit.plot(result)` writes one two-pad canvas per channel to `plots/fits/<name>_<channel>.{png,pdf}` plus a pull histogram to `plots/fits/residual_hists/`.
+Requires a prior `PlottingUtils::SetStylePreferences` call.
+Uniform binning is assumed per channel — variable-width bins produce a correct likelihood but a miscalibrated plot overlay.
+<!---->
+A full worked example is provided in [`examples/simultaneous_fit_sr_sideband.py`](examples/simultaneous_fit_sr_sideband.py).
+<!---->
 ## A note on AI-assisted development
 <!---->
 Parts of this codebase — primarily the interactive GUI editor and routine boilerplate — were written with the help of [Claude Code](https://claude.ai/claude-code).
