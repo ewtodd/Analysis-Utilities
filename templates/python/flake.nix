@@ -37,6 +37,7 @@
                 numpy
                 pandas
                 matplotlib
+                iminuit
                 analysis-utils-py
               ]
             ))
