@@ -3,6 +3,16 @@
 PlotSaveFormat PlottingUtils::save_format_ = PlotSaveFormat::kPNG;
 Bool_t PlottingUtils::preferences_set_ = kFALSE;
 Width_t PlottingUtils::line_width_ = 2;
+TString PlottingUtils::plots_base_dir_ = "plots";
+
+void PlottingUtils::SetPlotsBaseDir(const TString &dir) {
+  TString d = dir;
+  while (d.Length() > 0 && d[d.Length() - 1] == '/')
+    d.Chop();
+  plots_base_dir_ = d;
+}
+
+TString PlottingUtils::GetPlotsBaseDir() { return plots_base_dir_; }
 
 void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
   if (!preferences_set_)
@@ -172,23 +182,24 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
   TString extension = (save_format_ == PlotSaveFormat::kPNG) ? ".png" : ".pdf";
   TString output_filename = output_name + extension;
 
-  TString subdirectory =
-      output_subdirectory == "" ? "" : output_subdirectory + "/";
+  TString base = GetPlotsBaseDir();
+  TString full_dir =
+      output_subdirectory == "" ? base : base + "/" + output_subdirectory;
 
-  if (output_subdirectory != "") {
-    if (gSystem->AccessPathName("plots/" + output_subdirectory)) {
-      gSystem->mkdir("plots/" + output_subdirectory, kTRUE);
-    }
+  if (gSystem->AccessPathName(full_dir)) {
+    gSystem->mkdir(full_dir, kTRUE);
   }
 
+  TString prefix = full_dir + "/";
+
   if (save_options != PlotSaveOptions::kLOG)
-    canvas->Print("plots/" + subdirectory + output_filename);
+    canvas->Print(prefix + output_filename);
 
   if (save_options != PlotSaveOptions::kLINEAR) {
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
-    canvas->Print("plots/" + subdirectory + "log_" + output_filename);
+    canvas->Print(prefix + "log_" + output_filename);
 
     canvas->SetLogy(kFALSE);
     canvas->Modified();
