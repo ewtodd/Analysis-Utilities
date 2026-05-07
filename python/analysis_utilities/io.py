@@ -1,11 +1,72 @@
 import array as _array
 import os
+from pathlib import Path
+from typing import Union
 
 import numpy as np
 import pandas as pd
 import ROOT
 
 _DEFAULT_CACHE_DIR = "df_cache"
+
+_root_files_base = "root_files"
+
+PathLike = Union[str, os.PathLike]
+
+
+def set_root_files_base_dir(dir: PathLike) -> None:
+    """Set the base directory used by :func:`open_for_reading` and
+    :func:`open_for_writing` for relative subpaths.
+
+    The argument is resolved to an absolute path via
+    ``Path(dir).expanduser().resolve()`` and stored as a string. When the
+    C++ library is loadable, the resolved value is also forwarded to
+    :cpp:func:`IO::SetRootFilesBaseDir` so Python and C++ share state.
+    """
+    global _root_files_base
+    resolved = str(Path(dir).expanduser().resolve())
+    _root_files_base = resolved
+    try:
+        from analysis_utilities import load_cpp_library
+
+        load_cpp_library().IO.SetRootFilesBaseDir(resolved)
+    except (ImportError, RuntimeError, OSError):
+        pass
+
+
+def get_root_files_base_dir() -> str:
+    """Return the current root-files base directory (absolute path string)."""
+    return _root_files_base
+
+
+def _join_path(subpath: str) -> str:
+    if ROOT.gSystem.IsAbsoluteFileName(subpath):
+        return subpath
+    return str(ROOT.gSystem.ConcatFileName(_root_files_base, subpath))
+
+
+def open_for_reading(subpath: str) -> "ROOT.TFile":
+    """Open ``<root_files_base>/<subpath>`` for reading.
+
+    Absolute ``subpath`` values are passed through untouched. Returns a
+    ``ROOT.TFile`` opened in ``"READ"`` mode.
+    """
+    full = _join_path(subpath)
+    return ROOT.TFile(full, "READ")
+
+
+def open_for_writing(subpath: str, mode: str = "RECREATE") -> "ROOT.TFile":
+    """Open ``<root_files_base>/<subpath>`` for writing, creating parents.
+
+    The parent directory of the resolved path is created via
+    ``ROOT.gSystem.mkdir(..., True)``. Absolute ``subpath`` values are
+    passed through untouched. Returns a ``ROOT.TFile`` opened in
+    ``mode`` (default ``"RECREATE"``).
+    """
+    full = _join_path(subpath)
+    parent = ROOT.gSystem.DirName(full)
+    ROOT.gSystem.mkdir(parent, True)
+    return ROOT.TFile(full, mode)
 
 _TYPE_MAP = {
     "Float_t": ("f", np.float32),

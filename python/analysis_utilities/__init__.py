@@ -1,20 +1,23 @@
 """Analysis utilities for nuclear measurement data."""
 
 from analysis_utilities.init_utils import set_root_preferences
+from analysis_utilities.io import (get_root_files_base_dir, open_for_reading,
+                                     open_for_writing,
+                                     set_root_files_base_dir)
 from analysis_utilities.simultaneous_fit import (FitResult,
                                                    SimultaneousFit)
-from analysis_utilities.unbinned_fit import (UnbinnedFit,
-                                               UnbinnedFitResult)
 
 __version__ = "@VERSION@"
 
 __all__ = [
     "load_cpp_library",
     "set_root_preferences",
+    "set_root_files_base_dir",
+    "get_root_files_base_dir",
+    "open_for_reading",
+    "open_for_writing",
     "SimultaneousFit",
     "FitResult",
-    "UnbinnedFit",
-    "UnbinnedFitResult",
 ]
 
 _cpp_loaded = False
@@ -40,6 +43,7 @@ def load_cpp_library():
         ROOT.gInterpreter.Declare('#include "PlottingUtils.hpp"')
         ROOT.gInterpreter.Declare('#include "FittingUtils.hpp"')
         ROOT.gInterpreter.Declare('#include "InitUtils.hpp"')
+        ROOT.gInterpreter.Declare('#include "IOUtils.hpp"')
         _cpp_loaded = True
 
     return ROOT

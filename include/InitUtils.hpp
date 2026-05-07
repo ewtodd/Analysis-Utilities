@@ -2,6 +2,7 @@
 #define INITUTILS_H
 
 #include "BinaryUtils.hpp"
+#include "IOUtils.hpp"
 #include "PlottingUtils.hpp"
 #include <TFile.h>
 #include <TROOT.h>
@@ -10,8 +11,9 @@
 
 class InitUtils {
 public:
-  static void
-  SetROOTPreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG);
+  static void SetROOTPreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG,
+                                 const TString &plots_dir = "",
+                                 const TString &root_files_dir = "");
   static Bool_t ConvertWavedumpBinToROOT(const TString input_filename,
                                          const TString output_name,
                                          Bool_t corrections_enabled = kTRUE);

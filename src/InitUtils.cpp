@@ -1,14 +1,38 @@
 #include "InitUtils.hpp"
 
-void InitUtils::SetROOTPreferences(PlotSaveFormat save_format) {
+void InitUtils::SetROOTPreferences(PlotSaveFormat save_format,
+                                   const TString &plots_dir,
+                                   const TString &root_files_dir) {
   PlottingUtils::SetStylePreferences(save_format);
   gROOT->ForceStyle(kTRUE);
   gROOT->SetBatch(kTRUE);
-  if (gSystem->AccessPathName("plots")) {
-    gSystem->mkdir("plots", kTRUE);
+
+  TString resolved_plots_dir = plots_dir;
+  if (resolved_plots_dir.Length() == 0) {
+    std::cout
+        << "WARNING: InitUtils::SetROOTPreferences called without plots_dir; "
+           "defaulting to CWD-relative \"plots\". Pass an absolute path to "
+           "drive output into a project root."
+        << std::endl;
+    resolved_plots_dir = "plots";
   }
-  if (gSystem->AccessPathName("root_files")) {
-    gSystem->mkdir("root_files", kTRUE);
+  PlottingUtils::SetPlotsBaseDir(resolved_plots_dir);
+
+  TString resolved_root_files_dir = root_files_dir;
+  if (resolved_root_files_dir.Length() == 0) {
+    std::cout << "WARNING: InitUtils::SetROOTPreferences called without "
+                 "root_files_dir; defaulting to CWD-relative \"root_files\"."
+              << std::endl;
+    resolved_root_files_dir = "root_files";
+  } else {
+    IO::SetRootFilesBaseDir(resolved_root_files_dir);
+  }
+
+  if (gSystem->AccessPathName(PlottingUtils::GetPlotsBaseDir())) {
+    gSystem->mkdir(PlottingUtils::GetPlotsBaseDir(), kTRUE);
+  }
+  if (gSystem->AccessPathName(IO::GetRootFilesBaseDir())) {
+    gSystem->mkdir(IO::GetRootFilesBaseDir(), kTRUE);
   }
 }
 

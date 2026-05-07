@@ -2,8 +2,9 @@
 
 void FittingUtils::SaveInteractiveParams(const TString &input_name,
                                          const TString &peak_name) {
-  gSystem->mkdir("plots/fits", kTRUE);
-  TString filename = "plots/fits/" + peak_name + "_" + input_name + ".fits";
+  TString fits_dir = PlottingUtils::GetPlotsBaseDir() + "/fits";
+  gSystem->mkdir(fits_dir, kTRUE);
+  TString filename = fits_dir + "/" + peak_name + "_" + input_name + ".fits";
   std::ofstream out(filename.Data());
   if (!out.is_open()) {
     std::cerr << "WARNING: Could not save interactive params to " << filename
@@ -26,7 +27,8 @@ void FittingUtils::SaveInteractiveParams(const TString &input_name,
 
 Bool_t FittingUtils::LoadInteractiveParams(const TString &input_name,
                                            const TString &peak_name) {
-  TString filename = "plots/fits/" + peak_name + "_" + input_name + ".fits";
+  TString filename = PlottingUtils::GetPlotsBaseDir() + "/fits/" + peak_name +
+                     "_" + input_name + ".fits";
   std::ifstream in(filename.Data());
   if (!in.is_open())
     return kFALSE;

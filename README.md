@@ -143,9 +143,14 @@ Note: argument order is the extremely sane `(x1, x2, y1, y2)`, not the ROOT defa
 Optional `angle` (default 0) sets text rotation in degrees.
 <!---->
 **Output**:
-- `SaveFigure(canvas, name, subdirectory, PlotSaveOptions)` - Saves to `plots/` directory (or `plots/<subdirectory>/` if specified) using the format set in `SetStylePreferences`.
+- `SaveFigure(canvas, name, subdirectory, PlotSaveOptions)` - Saves to `<plots_base>/` (or `<plots_base>/<subdirectory>/` if specified) using the format set in `SetStylePreferences`.
+The base defaults to `"plots"` (CWD-relative) and is configurable via `SetPlotsBaseDir` or `InitUtils::SetROOTPreferences`.
+Parent directories are created automatically.
 `PlotSaveOptions` controls linear (`kLINEAR`), log (`kLOG`), or both (`kBOTH`, default).
 Log variants are prefixed with `log_`.
+- `SetPlotsBaseDir(dir)` / `GetPlotsBaseDir()` - Set/inspect the plot output base directory.
+Trailing slashes are stripped on set.
+Pass an absolute path so output is anchored to a project root regardless of CWD.
 <!---->
 **Utilities**:
 - `GetDefaultColors()` - Returns a 24-color palette of distinct ROOT colors
@@ -155,8 +160,22 @@ Log variants are prefixed with `log_`.
 <!---->
 Initialization and file conversion utilities.
 <!---->
-- `SetROOTPreferences()` - Configure ROOT environment and plotting defaults
+- `SetROOTPreferences(save_format, plots_dir, root_files_dir)` - Configure ROOT environment, set the plot output base via `PlottingUtils::SetPlotsBaseDir`, and set the ROOT-files I/O base via `IO::SetRootFilesBaseDir`.
+Pass absolute paths so output is anchored to a project root regardless of CWD.
+If `plots_dir` or `root_files_dir` is omitted, a warning is printed and the CWD-relative defaults `"plots"` / `"root_files"` are used.
 - `ConvertCoMPASSBinToROOT()` - Convert CoMPASS binary files to ROOT format
+<!---->
+### IOUtils
+<!---->
+Path-aware ROOT file open helpers.
+Subpaths resolve against the base directory configured via `IO::SetRootFilesBaseDir` (or `InitUtils::SetROOTPreferences`); absolute paths pass through untouched.
+All filesystem operations use `gSystem` (no `std::filesystem`).
+<!---->
+- `IO::SetRootFilesBaseDir(dir)` - Set the base directory (default `"root_files"`).
+Trailing slashes are stripped.
+- `IO::GetRootFilesBaseDir()` - Return the current base directory.
+- `IO::OpenForReading(subpath)` - Returns a `TFile*` opened in `"READ"` at `<base>/<subpath>` (or just `subpath` if absolute).
+- `IO::OpenForWriting(subpath, mode = "RECREATE")` - Same join semantics, plus creates parent directories via `gSystem->mkdir(..., kTRUE)` before opening.
 <!---->
 ## Python Package
 <!---->
@@ -206,6 +225,33 @@ ROOT.PlottingUtils.SetStylePreferences(ROOT.PlotSaveFormat.kPNG)
 c = ROOT.PlottingUtils.GetConfiguredCanvas(False)
 # Use ROOT.PlottingUtils.ConfigureGraph, ConfigureHistogram, etc.
 ```
+<!---->
+### Project-rooted output paths
+<!---->
+`set_root_preferences` configures the ROOT environment and pins both the plot output base and the ROOT-files I/O base to absolute paths, so downstream scripts produce identical output regardless of CWD.
+The same call wires `PlottingUtils::SaveFigure` and `IO::OpenForReading` / `IO::OpenForWriting` (Python: `analysis_utilities.io.open_for_reading` / `open_for_writing`) to the configured locations on both the Python and C++ sides.
+<!---->
+```python
+from pathlib import Path
+from analysis_utilities import (set_root_preferences, open_for_reading,
+                                  open_for_writing)
+#
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ROOT = set_root_preferences(plots_dir=PROJECT_ROOT / "plots" / "raw",
+                            root_files_dir=PROJECT_ROOT / "root_files")
+#
+# Read: opens <root_files_base>/<subpath>
+fin = open_for_reading(f"filtered/run42.root")
+#
+# Write: creates parent dirs under <root_files_base> before opening
+fout = open_for_writing(f"raw/calibration_2026-05-01.root")          # default RECREATE
+fupd = open_for_writing(f"filtered/run42.root", mode="UPDATE")
+#
+# Absolute subpaths bypass the base entirely.
+```
+<!---->
+Omitting `plots_dir` or `root_files_dir` prints a warning and falls back to the CWD-relative defaults (`"plots"` and `"root_files"`).
+The IO helpers use only `ROOT.gSystem` for filesystem operations (path joining via `ConcatFileName`, parent creation via `mkdir`); no `pathlib` is imported on the open code path.
 <!---->
 ### TTree loader
 <!---->

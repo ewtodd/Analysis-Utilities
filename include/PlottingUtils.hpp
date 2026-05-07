@@ -48,6 +48,9 @@ public:
                          TString output_subdirectory = "",
                          PlotSaveOptions save_options = PlotSaveOptions::kBOTH);
 
+  static void SetPlotsBaseDir(const TString &dir);
+  static TString GetPlotsBaseDir();
+
   static void
   PlotFitWithResiduals(TH1 *hist, TGraph *total_graph,
                        const std::vector<TGraph *> &component_graphs,
@@ -70,6 +73,7 @@ private:
   static PlotSaveFormat save_format_;
   static Bool_t preferences_set_;
   static Width_t line_width_;
+  static TString plots_base_dir_;
   static void WarnIfNotConfigured(const TString method_name);
   static void PlotPullHistogram(TGraph *residuals, const TString &output_name,
                                 const TString &output_subdirectory);
