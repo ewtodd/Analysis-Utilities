@@ -4,8 +4,6 @@ from analysis_utilities.init_utils import set_root_preferences
 from analysis_utilities.io import (get_root_files_base_dir, open_for_reading,
                                      open_for_writing,
                                      set_root_files_base_dir)
-from analysis_utilities.simultaneous_fit import (FitResult,
-                                                   SimultaneousFit)
 
 __version__ = "@VERSION@"
 
@@ -16,8 +14,6 @@ __all__ = [
     "get_root_files_base_dir",
     "open_for_reading",
     "open_for_writing",
-    "SimultaneousFit",
-    "FitResult",
 ]
 
 _cpp_loaded = False
@@ -41,7 +37,6 @@ def load_cpp_library():
                 "Could not load lib-analysis-utils.so. "
                 "Make sure LD_LIBRARY_PATH includes the library directory.")
         ROOT.gInterpreter.Declare('#include "PlottingUtils.hpp"')
-        ROOT.gInterpreter.Declare('#include "FittingUtils.hpp"')
         ROOT.gInterpreter.Declare('#include "InitUtils.hpp"')
         ROOT.gInterpreter.Declare('#include "IOUtils.hpp"')
         _cpp_loaded = True
