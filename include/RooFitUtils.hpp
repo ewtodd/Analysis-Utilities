@@ -70,6 +70,27 @@ struct RooFitBackgroundModel {
   RooAbsPdf *bkg_pdf = nullptr;
 };
 
+struct RooFitChannelConfig {
+  TString name;
+  TH1 *hist;
+  Float_t fit_range_low;
+  Float_t fit_range_high;
+  Int_t num_peaks;
+  std::vector<Double_t> mu_inits;
+  Bool_t use_flat_background;
+  Bool_t use_step;
+  Bool_t use_low_exp_tail;
+  Bool_t use_low_lin_tail;
+  Bool_t use_high_exp_tail;
+};
+
+struct RooFitParamLink {
+  TString target_channel;
+  TString target_param;
+  TString source_channel;
+  TString source_param;
+};
+
 class RooFitUtils {
 private:
   TH1 *working_hist_;
@@ -95,7 +116,39 @@ private:
   RooFitBackgroundModel bkg_;
   std::vector<RooAbsArg *> owned_args_;
 
+  std::vector<RooFitChannelConfig> sim_channels_;
+  std::vector<RooFitParamLink> sim_links_;
+  std::map<TString, FitResult> sim_seeds_;
+  std::map<TString, std::vector<RooFitPeakModel>> sim_channel_peaks_;
+  std::map<TString, RooFitBackgroundModel> sim_channel_bkg_;
+  std::map<TString, RooAbsPdf *> sim_channel_pdfs_;
+  std::map<TString, RooDataHist *> sim_channel_data_;
+  std::map<TString, TString> sim_channel_range_names_;
+  RooCategory *sim_category_;
+  RooSimultaneous *sim_pdf_;
+  RooDataHist *sim_combined_data_;
+  Bool_t sim_mode_;
+
   static constexpr const char *kFitRangeName = "fitrange";
+
+  void InitState();
+  RooRealVar *ResolveOrCreate(const TString &channel, const TString &param_name,
+                              std::map<TString, RooRealVar *> &registry,
+                              Double_t init_val, Double_t lo, Double_t hi);
+  void BuildChannelModel(const RooFitChannelConfig &cfg,
+                         std::map<TString, RooRealVar *> &registry);
+  void ApplySeedToChannel(const TString &channel);
+  TString ParamFullName(const TString &channel, const TString &param);
+  TString SourceForTarget(const TString &target);
+  Double_t ComputeChannelChi2(const TString &channel,
+                              const std::vector<RooFitPeakModel> &peaks,
+                              const RooFitBackgroundModel &bkg, Int_t &ndof);
+  void PlotChannel(const TString &channel, Int_t num_peaks,
+                   const std::vector<RooFitPeakModel> &peaks,
+                   const RooFitBackgroundModel &bkg,
+                   const TString &input_name, const TString &base_label,
+                   const TString &chi2_label);
+  PeakFitResult ExtractPeakResultFor(const RooFitPeakModel &p);
 
   Double_t EstimateBackground();
 
@@ -145,6 +198,7 @@ private:
   void RegisterOwned(RooAbsArg *arg);
 
 public:
+  RooFitUtils();
   RooFitUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
               Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
               Bool_t use_low_exp_tail = kFALSE,
@@ -192,6 +246,21 @@ public:
   FitResult FitTriplePeak(const TString input_name, const TString peak_name,
                           const FitResult &constrained_peaks,
                           Double_t mu3_init);
+
+  void AddChannel(const TString &name, TH1 *hist, Float_t fit_range_low,
+                  Float_t fit_range_high, Int_t num_peaks,
+                  const std::vector<Double_t> &mu_inits,
+                  Bool_t use_flat_background = kFALSE,
+                  Bool_t use_step = kFALSE,
+                  Bool_t use_low_exp_tail = kFALSE,
+                  Bool_t use_low_lin_tail = kFALSE,
+                  Bool_t use_high_exp_tail = kFALSE);
+  void LinkParameter(const TString &target, const TString &source);
+  void LinkPeakShape(const TString &target_channel, Int_t target_peak,
+                      const TString &source_channel, Int_t source_peak);
+  void SeedChannel(const TString &channel_name, const FitResult &result);
+  std::vector<FitResult> FitSimultaneous(const TString &input_name,
+                                          const TString &base_label);
 };
 
 #endif
