@@ -1656,7 +1656,9 @@ void RooFitUtils::BuildChannelModel(
     const RooFitChannelConfig &cfg,
     std::map<TString, RooRealVar *> &registry) {
   Double_t range_width = cfg.fit_range_high - cfg.fit_range_low;
-  Double_t sigma_init = range_width * 0.01;
+  Double_t sigma_init = range_width * 0.05;
+  Double_t sigma_lo = cfg.hist->GetBinWidth(1);
+  Double_t sigma_hi = range_width * 0.1;
   Double_t peak_height = cfg.hist->GetBinContent(cfg.hist->GetMaximumBin());
   Double_t hist_xmin = cfg.hist->GetXaxis()->GetXmin();
   Double_t hist_xmax = cfg.hist->GetXaxis()->GetXmax();
@@ -1708,9 +1710,8 @@ void RooFitUtils::BuildChannelModel(
 
     p.mu = ResolveOrCreate(cfg.name, "Mu" + suffix, registry, mu_init,
                             cfg.fit_range_low, cfg.fit_range_high);
-    p.sigma =
-        ResolveOrCreate(cfg.name, "Sigma" + suffix, registry, sigma_init,
-                         range_width * 0.001, range_width * 0.5);
+    p.sigma = ResolveOrCreate(cfg.name, "Sigma" + suffix, registry,
+                                sigma_init, sigma_lo, sigma_hi);
     p.gaus_yield = ResolveOrCreate(cfg.name, "GausAmplitude" + suffix,
                                     registry, total_init, 0,
                                     peak_height * range_width * 10.0);
@@ -1905,10 +1906,11 @@ Double_t RooFitUtils::ComputeChannelChi2(
     ndof = 0;
     return -1;
   }
+  Double_t saved_val = x_->getVal();
+
   RooArgSet nset(*x_);
   Double_t total_exp = pdf->expectedEvents(&nset);
   Double_t bin_width = cfg->hist->GetBinWidth(1);
-  Double_t saved = x_->getVal();
 
   Double_t chi2 = 0;
   Int_t nbins_in_range = 0;
@@ -1927,7 +1929,7 @@ Double_t RooFitUtils::ComputeChannelChi2(
     chi2 += residual * residual;
     nbins_in_range++;
   }
-  x_->setVal(saved);
+  x_->setVal(saved_val);
 
   Int_t npars = 0;
   RooArgSet *params = pdf->getParameters(RooArgSet(*x_));
@@ -2031,6 +2033,17 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     BuildChannelModel(sim_channels_[i], registry);
   }
 
+  Float_t union_lo = sim_channels_[0].fit_range_low;
+  Float_t union_hi = sim_channels_[0].fit_range_high;
+  for (size_t i = 1; i < sim_channels_.size(); i++) {
+    if (sim_channels_[i].fit_range_low < union_lo)
+      union_lo = sim_channels_[i].fit_range_low;
+    if (sim_channels_[i].fit_range_high > union_hi)
+      union_hi = sim_channels_[i].fit_range_high;
+  }
+  x_->setRange(union_lo, union_hi);
+  x_->setRange("fitrange", union_lo, union_hi);
+
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     ApplySeedToChannel(sim_channels_[i].name);
   }
@@ -2058,9 +2071,34 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   std::cout << "Running simultaneous fit over " << sim_channels_.size()
             << " channels (per-channel ranges via SplitRange)" << std::endl;
 
+  std::cout << "--- pre-fit param values ---" << std::endl;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    const RooFitChannelConfig &cfg = sim_channels_[i];
+    Double_t data_total = 0;
+    Int_t nbh = cfg.hist->GetNbinsX();
+    for (Int_t j = 1; j <= nbh; j++) {
+      Double_t xv = cfg.hist->GetBinCenter(j);
+      if (xv >= cfg.fit_range_low && xv <= cfg.fit_range_high)
+        data_total += cfg.hist->GetBinContent(j);
+    }
+    Double_t sum_yields = sim_channel_pdfs_[cfg.name]->expectedEvents(
+        RooArgSet(*x_));
+    std::cout << "  " << cfg.name << ": data events in fitrange = "
+              << data_total << ", sum_yields = " << sum_yields << std::endl;
+    std::vector<RooFitPeakModel> &peaks = sim_channel_peaks_[cfg.name];
+    for (size_t pi = 0; pi < peaks.size(); pi++) {
+      std::cout << "    peak " << pi + 1 << ": mu=" << peaks[pi].mu->getVal()
+                << " sigma=" << peaks[pi].sigma->getVal()
+                << " gaus_yield=" << peaks[pi].gaus_yield->getVal()
+                << std::endl;
+    }
+    std::cout << "    bkg_yield=" << sim_channel_bkg_[cfg.name].bkg_yield->getVal()
+              << std::endl;
+  }
+
   RooFitResult *fit_result = sim_pdf_->fitTo(
       *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-      RooFit::Range("fitrange"), RooFit::SplitRange(),
+      RooFit::Range("fitrange"),
       RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(0),
       RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
       RooFit::EvalBackend::Cpu());
@@ -2068,6 +2106,24 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   Bool_t sim_valid = (fit_result && fit_result->status() == 0);
   if (!sim_valid) {
     std::cout << "WARNING: simultaneous fit did not converge cleanly"
+              << std::endl;
+  }
+
+  std::cout << "--- post-fit param values ---" << std::endl;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    const RooFitChannelConfig &cfg = sim_channels_[i];
+    Double_t sum_yields = sim_channel_pdfs_[cfg.name]->expectedEvents(
+        RooArgSet(*x_));
+    std::cout << "  " << cfg.name << ": sum_yields = " << sum_yields
+              << std::endl;
+    std::vector<RooFitPeakModel> &peaks = sim_channel_peaks_[cfg.name];
+    for (size_t pi = 0; pi < peaks.size(); pi++) {
+      std::cout << "    peak " << pi + 1 << ": mu=" << peaks[pi].mu->getVal()
+                << " sigma=" << peaks[pi].sigma->getVal()
+                << " gaus_yield=" << peaks[pi].gaus_yield->getVal()
+                << std::endl;
+    }
+    std::cout << "    bkg_yield=" << sim_channel_bkg_[cfg.name].bkg_yield->getVal()
               << std::endl;
   }
 
