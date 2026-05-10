@@ -62,18 +62,15 @@ RooAbsPdf *RooFitFunctions::MakeFlatBackground(const TString &name,
 
 void RooFitUtils::RegisterOwned(RooAbsArg *arg) { owned_args_.push_back(arg); }
 
-RooFitUtils::RooFitUtils(TH1 *working_hist, Float_t fit_range_low,
-                         Float_t fit_range_high, Bool_t use_flat_background,
-                         Bool_t use_step, Bool_t use_low_exp_tail,
-                         Bool_t use_low_lin_tail, Bool_t use_high_exp_tail) {
-  working_hist_ = static_cast<TH1 *>(working_hist->Clone());
-  fit_range_low_ = fit_range_low;
-  fit_range_high_ = fit_range_high;
-  use_flat_background_ = use_flat_background;
-  use_step_ = use_step;
-  use_low_exp_tail_ = use_low_exp_tail;
-  use_low_lin_tail_ = use_low_lin_tail;
-  use_high_exp_tail_ = use_high_exp_tail;
+void RooFitUtils::InitState() {
+  working_hist_ = nullptr;
+  fit_range_low_ = 0;
+  fit_range_high_ = 0;
+  use_flat_background_ = kFALSE;
+  use_step_ = kFALSE;
+  use_low_exp_tail_ = kFALSE;
+  use_low_lin_tail_ = kFALSE;
+  use_high_exp_tail_ = kFALSE;
   use_manual_init_ = kFALSE;
   interactive_ = kFALSE;
 
@@ -82,8 +79,33 @@ RooFitUtils::RooFitUtils(TH1 *working_hist, Float_t fit_range_low,
   total_pdf_ = nullptr;
   num_peaks_ = 0;
 
+  sim_category_ = nullptr;
+  sim_pdf_ = nullptr;
+  sim_combined_data_ = nullptr;
+  sim_mode_ = kFALSE;
+
   RooMsgService::instance().setGlobalKillBelow(RooFit::WARNING);
   RooRealVar::enableSilentClipping();
+}
+
+RooFitUtils::RooFitUtils() {
+  InitState();
+  sim_mode_ = kTRUE;
+}
+
+RooFitUtils::RooFitUtils(TH1 *working_hist, Float_t fit_range_low,
+                         Float_t fit_range_high, Bool_t use_flat_background,
+                         Bool_t use_step, Bool_t use_low_exp_tail,
+                         Bool_t use_low_lin_tail, Bool_t use_high_exp_tail) {
+  InitState();
+  working_hist_ = static_cast<TH1 *>(working_hist->Clone());
+  fit_range_low_ = fit_range_low;
+  fit_range_high_ = fit_range_high;
+  use_flat_background_ = use_flat_background;
+  use_step_ = use_step;
+  use_low_exp_tail_ = use_low_exp_tail;
+  use_low_lin_tail_ = use_low_lin_tail;
+  use_high_exp_tail_ = use_high_exp_tail;
 
   std::cout << "Fit configuration:" << std::endl;
   std::cout << std::endl;
@@ -108,6 +130,14 @@ RooFitUtils::~RooFitUtils() {
   }
   owned_args_.clear();
   delete data_hist_;
+  delete sim_combined_data_;
+  delete sim_pdf_;
+  delete sim_category_;
+  std::map<TString, RooDataHist *>::iterator dit;
+  for (dit = sim_channel_data_.begin(); dit != sim_channel_data_.end(); ++dit) {
+    delete dit->second;
+  }
+  sim_channel_data_.clear();
   delete working_hist_;
 }
 
@@ -1514,5 +1544,575 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     results.valid = kTRUE;
   }
 
+  return results;
+}
+
+TString RooFitUtils::ParamFullName(const TString &channel,
+                                    const TString &param) {
+  return channel + ":" + param;
+}
+
+TString RooFitUtils::SourceForTarget(const TString &target) {
+  for (size_t i = 0; i < sim_links_.size(); i++) {
+    TString full_target =
+        ParamFullName(sim_links_[i].target_channel, sim_links_[i].target_param);
+    if (full_target == target) {
+      return ParamFullName(sim_links_[i].source_channel,
+                            sim_links_[i].source_param);
+    }
+  }
+  return "";
+}
+
+RooRealVar *RooFitUtils::ResolveOrCreate(
+    const TString &channel, const TString &param_name,
+    std::map<TString, RooRealVar *> &registry, Double_t init_val, Double_t lo,
+    Double_t hi) {
+  TString full = ParamFullName(channel, param_name);
+  TString source = SourceForTarget(full);
+  if (source.Length() > 0) {
+    std::map<TString, RooRealVar *>::iterator it = registry.find(source);
+    if (it == registry.end()) {
+      std::cerr << "ERROR: source param " << source << " for link target "
+                << full << " not yet built; check channel order." << std::endl;
+      return nullptr;
+    }
+    registry[full] = it->second;
+    return it->second;
+  }
+  RooRealVar *v = new RooRealVar(full.Data(), full.Data(), init_val, lo, hi);
+  RegisterOwned(v);
+  registry[full] = v;
+  return v;
+}
+
+void RooFitUtils::AddChannel(const TString &name, TH1 *hist,
+                              Float_t fit_range_low, Float_t fit_range_high,
+                              Int_t num_peaks,
+                              const std::vector<Double_t> &mu_inits,
+                              Bool_t use_flat_background, Bool_t use_step,
+                              Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
+                              Bool_t use_high_exp_tail) {
+  if (!sim_mode_) {
+    std::cerr << "ERROR: AddChannel called on a single-channel RooFitUtils "
+                 "instance; construct with the default ctor for sim mode."
+              << std::endl;
+    return;
+  }
+  if ((Int_t)mu_inits.size() != num_peaks) {
+    std::cerr << "ERROR: mu_inits size (" << mu_inits.size()
+              << ") must match num_peaks (" << num_peaks << ")" << std::endl;
+    return;
+  }
+  RooFitChannelConfig cfg;
+  cfg.name = name;
+  cfg.hist = static_cast<TH1 *>(hist->Clone());
+  cfg.fit_range_low = fit_range_low;
+  cfg.fit_range_high = fit_range_high;
+  cfg.num_peaks = num_peaks;
+  cfg.mu_inits = mu_inits;
+  cfg.use_flat_background = use_flat_background;
+  cfg.use_step = use_step;
+  cfg.use_low_exp_tail = use_low_exp_tail;
+  cfg.use_low_lin_tail = use_low_lin_tail;
+  cfg.use_high_exp_tail = use_high_exp_tail;
+  sim_channels_.push_back(cfg);
+}
+
+void RooFitUtils::LinkParameter(const TString &target, const TString &source) {
+  Ssiz_t t_sep = target.Index(":");
+  Ssiz_t s_sep = source.Index(":");
+  if (t_sep < 0 || s_sep < 0) {
+    std::cerr << "ERROR: LinkParameter expects 'channel:Param' format"
+              << std::endl;
+    return;
+  }
+  RooFitParamLink lk;
+  lk.target_channel = TString(target(0, t_sep));
+  lk.target_param = TString(target(t_sep + 1, target.Length() - t_sep - 1));
+  lk.source_channel = TString(source(0, s_sep));
+  lk.source_param = TString(source(s_sep + 1, source.Length() - s_sep - 1));
+  sim_links_.push_back(lk);
+}
+
+void RooFitUtils::LinkPeakShape(const TString &target_channel,
+                                 Int_t target_peak,
+                                 const TString &source_channel,
+                                 Int_t source_peak) {
+  TString t_suffix = TString::Format("%d", target_peak + 1);
+  TString s_suffix = TString::Format("%d", source_peak + 1);
+  const char *shape_params[9] = {
+      "Mu",
+      "Sigma",
+      "StepAmplitude",
+      "LowExpTailAmplitude",
+      "LowExpTailDecay",
+      "LowLinTailAmplitude",
+      "LowLinTailSlope",
+      "HighExpTailAmplitude",
+      "HighExpTailDecay"};
+  for (Int_t i = 0; i < 9; i++) {
+    LinkParameter(target_channel + ":" + shape_params[i] + t_suffix,
+                  source_channel + ":" + shape_params[i] + s_suffix);
+  }
+}
+
+void RooFitUtils::SeedChannel(const TString &channel_name,
+                               const FitResult &result) {
+  sim_seeds_[channel_name] = result;
+}
+
+void RooFitUtils::BuildChannelModel(
+    const RooFitChannelConfig &cfg,
+    std::map<TString, RooRealVar *> &registry) {
+  Double_t range_width = cfg.fit_range_high - cfg.fit_range_low;
+  Double_t sigma_init = range_width * 0.01;
+  Double_t peak_height = cfg.hist->GetBinContent(cfg.hist->GetMaximumBin());
+  Double_t hist_xmin = cfg.hist->GetXaxis()->GetXmin();
+  Double_t hist_xmax = cfg.hist->GetXaxis()->GetXmax();
+
+  if (x_ == nullptr) {
+    Double_t global_xmin = hist_xmin;
+    Double_t global_xmax = hist_xmax;
+    for (size_t i = 0; i < sim_channels_.size(); i++) {
+      Double_t cmin = sim_channels_[i].hist->GetXaxis()->GetXmin();
+      Double_t cmax = sim_channels_[i].hist->GetXaxis()->GetXmax();
+      if (cmin < global_xmin)
+        global_xmin = cmin;
+      if (cmax > global_xmax)
+        global_xmax = cmax;
+    }
+    x_ = new RooRealVar("x", "x", global_xmin, global_xmax);
+    RegisterOwned(x_);
+  }
+
+  TString range_name = "fitrange_" + cfg.name;
+  x_->setRange(range_name.Data(), cfg.fit_range_low, cfg.fit_range_high);
+  sim_channel_range_names_[cfg.name] = range_name;
+
+  std::vector<RooFitPeakModel> peaks;
+  for (Int_t pi = 0; pi < cfg.num_peaks; pi++) {
+    RooFitPeakModel p;
+    TString suffix = TString::Format("%d", pi + 1);
+    Double_t mu_init = cfg.mu_inits[pi];
+
+    Int_t mu_bin = cfg.hist->FindBin(mu_init);
+    Double_t local_height = cfg.hist->GetBinContent(mu_bin);
+    Double_t bkg_left = 0;
+    Double_t bkg_right = 0;
+    Int_t lbin = cfg.hist->FindBin(cfg.fit_range_low);
+    Int_t rbin = cfg.hist->FindBin(cfg.fit_range_high);
+    Int_t nside = (rbin - lbin) / 10;
+    if (nside < 1)
+      nside = 1;
+    for (Int_t i = 0; i < nside; i++) {
+      bkg_left += cfg.hist->GetBinContent(lbin + i);
+      bkg_right += cfg.hist->GetBinContent(rbin - i);
+    }
+    Double_t bkg_floor = (bkg_left + bkg_right) / (2.0 * nside);
+    Double_t net_height = local_height - bkg_floor;
+    if (net_height < 0.1 * local_height)
+      net_height = 0.1 * local_height;
+    Double_t total_init =
+        net_height * sigma_init * TMath::Sqrt(2.0 * TMath::Pi());
+
+    p.mu = ResolveOrCreate(cfg.name, "Mu" + suffix, registry, mu_init,
+                            cfg.fit_range_low, cfg.fit_range_high);
+    p.sigma =
+        ResolveOrCreate(cfg.name, "Sigma" + suffix, registry, sigma_init,
+                         range_width * 0.001, range_width * 0.5);
+    p.gaus_yield = ResolveOrCreate(cfg.name, "GausAmplitude" + suffix,
+                                    registry, total_init, 0,
+                                    peak_height * range_width * 10.0);
+    p.ratio_step = ResolveOrCreate(cfg.name, "StepAmplitude" + suffix,
+                                    registry, 0.0, 0.0, 0.5);
+    p.ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailAmplitude" + suffix,
+                                       registry, 0.0, 0.0, 0.5);
+    p.tau_low_exp = ResolveOrCreate(cfg.name, "LowExpTailDecay" + suffix,
+                                     registry, 1.0, 0.9, 100.0);
+    p.ratio_low_lin = ResolveOrCreate(cfg.name, "LowLinTailAmplitude" + suffix,
+                                       registry, 0.0, 0.0, 0.5);
+    p.slope_low_lin = ResolveOrCreate(cfg.name, "LowLinTailSlope" + suffix,
+                                       registry, 0.0, -0.1, 0.1);
+    p.ratio_high_exp = ResolveOrCreate(cfg.name,
+                                        "HighExpTailAmplitude" + suffix,
+                                        registry, 0.0, 0.0, 0.5);
+    p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailDecay" + suffix,
+                                      registry, 1.0, 0.9, 100.0);
+
+    TString pdf_suffix = "_" + cfg.name + "_" + suffix;
+    p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + pdf_suffix, *x_,
+                                                 *p.mu, *p.sigma);
+    p.step_pdf = RooFitFunctions::MakeStepShelf("step_pdf" + pdf_suffix, *x_,
+                                                 *p.mu, *p.sigma);
+    p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
+        "low_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_low_exp);
+    p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
+        "low_lin_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.slope_low_lin);
+    p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
+        "high_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_high_exp);
+    RegisterOwned(p.gauss_pdf);
+    RegisterOwned(p.step_pdf);
+    RegisterOwned(p.low_exp_pdf);
+    RegisterOwned(p.low_lin_pdf);
+    RegisterOwned(p.high_exp_pdf);
+
+    p.step_yield = new RooFormulaVar(("step_yield" + pdf_suffix).Data(),
+                                      "@0*@1",
+                                      RooArgList(*p.gaus_yield, *p.ratio_step));
+    p.low_exp_yield = new RooFormulaVar(
+        ("low_exp_yield" + pdf_suffix).Data(), "@0*@1",
+        RooArgList(*p.gaus_yield, *p.ratio_low_exp));
+    p.low_lin_yield = new RooFormulaVar(
+        ("low_lin_yield" + pdf_suffix).Data(), "@0*@1",
+        RooArgList(*p.gaus_yield, *p.ratio_low_lin));
+    p.high_exp_yield = new RooFormulaVar(
+        ("high_exp_yield" + pdf_suffix).Data(), "@0*@1",
+        RooArgList(*p.gaus_yield, *p.ratio_high_exp));
+    RegisterOwned(p.step_yield);
+    RegisterOwned(p.low_exp_yield);
+    RegisterOwned(p.low_lin_yield);
+    RegisterOwned(p.high_exp_yield);
+
+    if (!cfg.use_step) {
+      p.ratio_step->setVal(0.0);
+      p.ratio_step->setConstant(kTRUE);
+    }
+    if (!cfg.use_low_exp_tail) {
+      p.ratio_low_exp->setVal(0.0);
+      p.ratio_low_exp->setConstant(kTRUE);
+      p.tau_low_exp->setVal(1.0);
+      p.tau_low_exp->setConstant(kTRUE);
+    }
+    if (!cfg.use_low_lin_tail) {
+      p.ratio_low_lin->setVal(0.0);
+      p.ratio_low_lin->setConstant(kTRUE);
+      p.slope_low_lin->setVal(0.0);
+      p.slope_low_lin->setConstant(kTRUE);
+    }
+    if (!cfg.use_high_exp_tail) {
+      p.ratio_high_exp->setVal(0.0);
+      p.ratio_high_exp->setConstant(kTRUE);
+      p.tau_high_exp->setVal(1.0);
+      p.tau_high_exp->setConstant(kTRUE);
+    }
+
+    peaks.push_back(p);
+  }
+
+  RooFitBackgroundModel bkg;
+  Double_t bkg_estimate = 0;
+  Int_t lbin = cfg.hist->FindBin(cfg.fit_range_low);
+  Int_t rbin = cfg.hist->FindBin(cfg.fit_range_high);
+  Int_t nside = (rbin - lbin) / 10;
+  if (nside < 1)
+    nside = 1;
+  Double_t bkg_left = 0;
+  Double_t bkg_right = 0;
+  for (Int_t i = 0; i < nside; i++) {
+    bkg_left += cfg.hist->GetBinContent(lbin + i);
+    bkg_right += cfg.hist->GetBinContent(rbin - i);
+  }
+  bkg_estimate = (bkg_left + bkg_right) / (2.0 * nside);
+
+  bkg.bkg_yield = ResolveOrCreate(cfg.name, "BkgConstant", registry,
+                                   bkg_estimate * range_width, 0,
+                                   peak_height * range_width * 10.0);
+  bkg.bkg_slope = ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0, -1000.0,
+                                   1000.0);
+  TString bkg_pdf_name = "bkg_pdf_" + cfg.name;
+  if (cfg.use_flat_background) {
+    bkg.bkg_pdf = RooFitFunctions::MakeFlatBackground(bkg_pdf_name, *x_);
+    bkg.bkg_slope->setVal(0.0);
+    bkg.bkg_slope->setConstant(kTRUE);
+  } else {
+    bkg.bkg_pdf = RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_,
+                                                         *bkg.bkg_slope);
+  }
+  RegisterOwned(bkg.bkg_pdf);
+
+  RooArgList pdf_list;
+  RooArgList coef_list;
+  for (size_t pi = 0; pi < peaks.size(); pi++) {
+    pdf_list.add(*peaks[pi].gauss_pdf);
+    coef_list.add(*peaks[pi].gaus_yield);
+    pdf_list.add(*peaks[pi].step_pdf);
+    coef_list.add(*peaks[pi].step_yield);
+    pdf_list.add(*peaks[pi].low_exp_pdf);
+    coef_list.add(*peaks[pi].low_exp_yield);
+    pdf_list.add(*peaks[pi].low_lin_pdf);
+    coef_list.add(*peaks[pi].low_lin_yield);
+    pdf_list.add(*peaks[pi].high_exp_pdf);
+    coef_list.add(*peaks[pi].high_exp_yield);
+  }
+  pdf_list.add(*bkg.bkg_pdf);
+  coef_list.add(*bkg.bkg_yield);
+
+  TString sum_name = "total_pdf_" + cfg.name;
+  RooAddPdf *sum = new RooAddPdf(sum_name.Data(), sum_name.Data(), pdf_list,
+                                  coef_list);
+  RegisterOwned(sum);
+  sim_channel_pdfs_[cfg.name] = sum;
+  sim_channel_peaks_[cfg.name] = peaks;
+  sim_channel_bkg_[cfg.name] = bkg;
+
+  RooDataHist *dh = new RooDataHist(
+      ("data_" + cfg.name).Data(), ("data_" + cfg.name).Data(),
+      RooArgList(*x_), cfg.hist);
+  sim_channel_data_[cfg.name] = dh;
+}
+
+void RooFitUtils::ApplySeedToChannel(const TString &channel) {
+  std::map<TString, FitResult>::iterator it = sim_seeds_.find(channel);
+  if (it == sim_seeds_.end())
+    return;
+  const FitResult &seed = it->second;
+  std::vector<RooFitPeakModel> &peaks = sim_channel_peaks_[channel];
+  RooFitBackgroundModel &bkg = sim_channel_bkg_[channel];
+  for (size_t pi = 0; pi < peaks.size() && pi < seed.peaks.size(); pi++) {
+    const PeakFitResult &cp = seed.peaks[pi];
+    RooFitPeakModel &p = peaks[pi];
+    Double_t cga = cp.gaus_amplitude;
+    if (cp.mu >= 0)
+      p.mu->setVal(cp.mu);
+    if (cp.sigma >= 0)
+      p.sigma->setVal(cp.sigma);
+    if (cga >= 0)
+      p.gaus_yield->setVal(cga);
+    if (cp.step_amplitude >= 0 && cga > 0)
+      p.ratio_step->setVal(cp.step_amplitude / cga);
+    if (cp.low_exp_tail_amplitude >= 0 && cga > 0)
+      p.ratio_low_exp->setVal(cp.low_exp_tail_amplitude / cga);
+    if (cp.low_exp_tail_decay > 0)
+      p.tau_low_exp->setVal(cp.low_exp_tail_decay);
+    if (cp.low_lin_tail_amplitude >= 0 && cga > 0)
+      p.ratio_low_lin->setVal(cp.low_lin_tail_amplitude / cga);
+    if (cp.low_lin_tail_slope > -1)
+      p.slope_low_lin->setVal(cp.low_lin_tail_slope);
+    if (cp.high_exp_tail_amplitude >= 0 && cga > 0)
+      p.ratio_high_exp->setVal(cp.high_exp_tail_amplitude / cga);
+    if (cp.high_exp_tail_decay > 0)
+      p.tau_high_exp->setVal(cp.high_exp_tail_decay);
+  }
+  if (seed.bkg_constant >= 0)
+    bkg.bkg_yield->setVal(seed.bkg_constant);
+  if (seed.lin_bkg_slope > -1e6)
+    bkg.bkg_slope->setVal(seed.lin_bkg_slope);
+}
+
+Double_t RooFitUtils::ComputeChannelChi2(
+    const TString &channel, const std::vector<RooFitPeakModel> & /*peaks*/,
+    const RooFitBackgroundModel & /*bkg*/, Int_t &ndof) {
+  RooAbsPdf *pdf = sim_channel_pdfs_[channel];
+  RooFitChannelConfig const *cfg = nullptr;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    if (sim_channels_[i].name == channel) {
+      cfg = &sim_channels_[i];
+      break;
+    }
+  }
+  if (!cfg) {
+    ndof = 0;
+    return -1;
+  }
+  RooArgSet nset(*x_);
+  Double_t total_exp = pdf->expectedEvents(&nset);
+  Double_t bin_width = cfg->hist->GetBinWidth(1);
+  Double_t saved = x_->getVal();
+
+  Double_t chi2 = 0;
+  Int_t nbins_in_range = 0;
+  Int_t nbins_hist = cfg->hist->GetNbinsX();
+  for (Int_t i = 1; i <= nbins_hist; i++) {
+    Double_t xv = cfg->hist->GetBinCenter(i);
+    if (xv < cfg->fit_range_low || xv > cfg->fit_range_high)
+      continue;
+    Double_t data = cfg->hist->GetBinContent(i);
+    Double_t error = cfg->hist->GetBinError(i);
+    if (error <= 0 || data <= 0)
+      continue;
+    x_->setVal(xv);
+    Double_t fit_val = total_exp * pdf->getVal(&nset) * bin_width;
+    Double_t residual = (data - fit_val) / error;
+    chi2 += residual * residual;
+    nbins_in_range++;
+  }
+  x_->setVal(saved);
+
+  Int_t npars = 0;
+  RooArgSet *params = pdf->getParameters(RooArgSet(*x_));
+  for (Int_t i = 0; i < (Int_t)params->size(); i++) {
+    RooRealVar *v = dynamic_cast<RooRealVar *>((*params)[i]);
+    if (v && !v->isConstant())
+      npars++;
+  }
+  delete params;
+  ndof = nbins_in_range - npars;
+  if (ndof <= 0)
+    return -1;
+  return chi2 / ndof;
+}
+
+PeakFitResult RooFitUtils::ExtractPeakResultFor(const RooFitPeakModel &p) {
+  PeakFitResult r;
+  r.mu = p.mu->getVal();
+  r.mu_error = p.mu->getError();
+  r.sigma = p.sigma->getVal();
+  r.sigma_error = p.sigma->getError();
+  r.gaus_amplitude = p.gaus_yield->getVal();
+  r.gaus_amplitude_error = p.gaus_yield->getError();
+  Double_t ga = r.gaus_amplitude;
+  r.step_amplitude = p.ratio_step->getVal() * ga;
+  r.step_amplitude_error = p.ratio_step->getError() * ga;
+  r.low_exp_tail_amplitude = p.ratio_low_exp->getVal() * ga;
+  r.low_exp_tail_amplitude_error = p.ratio_low_exp->getError() * ga;
+  r.low_exp_tail_decay = p.tau_low_exp->getVal();
+  r.low_exp_tail_decay_error = p.tau_low_exp->getError();
+  r.low_lin_tail_amplitude = p.ratio_low_lin->getVal() * ga;
+  r.low_lin_tail_amplitude_error = p.ratio_low_lin->getError() * ga;
+  r.low_lin_tail_slope = p.slope_low_lin->getVal();
+  r.low_lin_tail_slope_error = p.slope_low_lin->getError();
+  r.high_exp_tail_amplitude = p.ratio_high_exp->getVal() * ga;
+  r.high_exp_tail_amplitude_error = p.ratio_high_exp->getError() * ga;
+  r.high_exp_tail_decay = p.tau_high_exp->getVal();
+  r.high_exp_tail_decay_error = p.tau_high_exp->getError();
+  return r;
+}
+
+void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
+                               const std::vector<RooFitPeakModel> &peaks,
+                               const RooFitBackgroundModel &bkg,
+                               const TString &input_name,
+                               const TString &base_label,
+                               const TString &chi2_label) {
+  RooFitChannelConfig const *cfg = nullptr;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    if (sim_channels_[i].name == channel) {
+      cfg = &sim_channels_[i];
+      break;
+    }
+  }
+  if (!cfg)
+    return;
+
+  TH1 *saved_hist = working_hist_;
+  Float_t saved_lo = fit_range_low_;
+  Float_t saved_hi = fit_range_high_;
+  std::vector<RooFitPeakModel> saved_peaks = peaks_;
+  RooFitBackgroundModel saved_bkg = bkg_;
+  Int_t saved_np = num_peaks_;
+
+  working_hist_ = cfg->hist;
+  fit_range_low_ = cfg->fit_range_low;
+  fit_range_high_ = cfg->fit_range_high;
+  peaks_ = peaks;
+  bkg_ = bkg;
+  num_peaks_ = num_peaks;
+
+  TString plot_name = base_label + "_" + channel;
+  if (num_peaks == 1)
+    PlotFitSinglePeak(input_name, plot_name, chi2_label);
+  else if (num_peaks == 2)
+    PlotFitDoublePeak(input_name, plot_name, chi2_label);
+  else if (num_peaks == 3)
+    PlotFitTriplePeak(input_name, plot_name, chi2_label);
+
+  working_hist_ = saved_hist;
+  fit_range_low_ = saved_lo;
+  fit_range_high_ = saved_hi;
+  peaks_ = saved_peaks;
+  bkg_ = saved_bkg;
+  num_peaks_ = saved_np;
+}
+
+std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
+                                                     const TString &base_label) {
+  std::vector<FitResult> results;
+  if (sim_channels_.empty()) {
+    std::cerr << "ERROR: FitSimultaneous called with no channels" << std::endl;
+    return results;
+  }
+
+  std::map<TString, RooRealVar *> registry;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    BuildChannelModel(sim_channels_[i], registry);
+  }
+
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    ApplySeedToChannel(sim_channels_[i].name);
+  }
+
+  sim_category_ = new RooCategory("channel", "channel");
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    sim_category_->defineType(sim_channels_[i].name.Data());
+  }
+
+  std::map<std::string, RooDataHist *> data_map;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    data_map[sim_channels_[i].name.Data()] =
+        sim_channel_data_[sim_channels_[i].name];
+  }
+  sim_combined_data_ =
+      new RooDataHist("combined_data", "combined_data", RooArgList(*x_),
+                       *sim_category_, data_map);
+
+  sim_pdf_ = new RooSimultaneous("sim_pdf", "sim_pdf", *sim_category_);
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    sim_pdf_->addPdf(*sim_channel_pdfs_[sim_channels_[i].name],
+                     sim_channels_[i].name.Data());
+  }
+
+  TString combined_range;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    if (i > 0)
+      combined_range += ",";
+    combined_range += sim_channel_range_names_[sim_channels_[i].name];
+  }
+
+  std::cout << "Running simultaneous fit over " << sim_channels_.size()
+            << " channels (range: " << combined_range << ")" << std::endl;
+
+  RooFitResult *fit_result = sim_pdf_->fitTo(
+      *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
+      RooFit::Range(combined_range.Data()), RooFit::SplitRange(),
+      RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(0),
+      RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
+      RooFit::EvalBackend::Cpu());
+
+  Bool_t sim_valid = (fit_result && fit_result->status() == 0);
+  if (!sim_valid) {
+    std::cout << "WARNING: simultaneous fit did not converge cleanly"
+              << std::endl;
+  }
+
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    const RooFitChannelConfig &cfg = sim_channels_[i];
+    Int_t ndof = 0;
+    Double_t chi2 = ComputeChannelChi2(
+        cfg.name, sim_channel_peaks_[cfg.name], sim_channel_bkg_[cfg.name],
+        ndof);
+    std::cout << "Channel '" << cfg.name << "' chi2/ndf = " << chi2
+              << " (ndof=" << ndof << ")" << std::endl;
+
+    FitResult cr;
+    for (Int_t pi = 0; pi < cfg.num_peaks; pi++) {
+      cr.peaks.push_back(
+          ExtractPeakResultFor(sim_channel_peaks_[cfg.name][pi]));
+    }
+    cr.bkg_constant = sim_channel_bkg_[cfg.name].bkg_yield->getVal();
+    cr.bkg_constant_error = sim_channel_bkg_[cfg.name].bkg_yield->getError();
+    cr.lin_bkg_slope = sim_channel_bkg_[cfg.name].bkg_slope->getVal();
+    cr.lin_bkg_slope_error = sim_channel_bkg_[cfg.name].bkg_slope->getError();
+    cr.reduced_chi2 = chi2;
+    cr.valid = sim_valid;
+    results.push_back(cr);
+
+    TString chi2_label = Form("#chi^{2}/ndf = %.3f", chi2);
+    PlotChannel(cfg.name, cfg.num_peaks, sim_channel_peaks_[cfg.name],
+                sim_channel_bkg_[cfg.name], input_name, base_label,
+                chi2_label);
+  }
+
+  delete fit_result;
   return results;
 }
