@@ -1,6 +1,7 @@
 #include "RooFitUtils.hpp"
 
 #include "InteractiveRooFitEditor.hpp"
+#include "InteractiveSimultaneousFitEditor.hpp"
 #include "RooFitPhotopeakPdfs.hpp"
 
 #include <RooMsgService.h>
@@ -2096,17 +2097,44 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
               << std::endl;
   }
 
-  RooFitResult *fit_result = sim_pdf_->fitTo(
-      *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-      RooFit::Range("fitrange"),
-      RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(0),
-      RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
-      RooFit::EvalBackend::Cpu());
+  RooFitResult *fit_result = nullptr;
+  Bool_t sim_valid = kFALSE;
 
-  Bool_t sim_valid = (fit_result && fit_result->status() == 0);
-  if (!sim_valid) {
-    std::cout << "WARNING: simultaneous fit did not converge cleanly"
-              << std::endl;
+  if (interactive_) {
+    std::vector<SimEditorChannelView> views;
+    for (size_t i = 0; i < sim_channels_.size(); i++) {
+      const RooFitChannelConfig &cfg = sim_channels_[i];
+      SimEditorChannelView v;
+      v.name = cfg.name;
+      v.hist = cfg.hist;
+      v.pdf = sim_channel_pdfs_[cfg.name];
+      v.data = sim_channel_data_[cfg.name];
+      v.peaks = &sim_channel_peaks_[cfg.name];
+      v.bkg = &sim_channel_bkg_[cfg.name];
+      v.num_peaks = cfg.num_peaks;
+      views.push_back(v);
+    }
+    Bool_t was_batch = gROOT->IsBatch();
+    gROOT->SetBatch(kFALSE);
+    TString info = base_label + " / " + input_name;
+    Bool_t accepted = LaunchInteractiveSimultaneousFitEditor(
+        sim_pdf_, sim_combined_data_, x_, views, union_lo, union_hi, info);
+    gROOT->SetBatch(was_batch);
+    sim_valid = accepted;
+    if (!accepted) {
+      std::cout << "Interactive sim fit cancelled" << std::endl;
+    }
+  } else {
+    fit_result = sim_pdf_->fitTo(
+        *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
+        RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
+        RooFit::PrintLevel(0), RooFit::Strategy(1),
+        RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
+    sim_valid = (fit_result && fit_result->status() == 0);
+    if (!sim_valid) {
+      std::cout << "WARNING: simultaneous fit did not converge cleanly"
+                << std::endl;
+    }
   }
 
   std::cout << "--- post-fit param values ---" << std::endl;
