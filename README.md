@@ -62,9 +62,17 @@ Requires ROOT thread safety (`ROOT::EnableThreadSafety()`), which is handled aut
 <!---->
 Outputs processed data to ROOT TTrees with optional waveform storage.
 <!---->
-### FittingUtils
+### FittingUtils and RooFitUtils
 <!---->
 Fit gamma-ray spectral photopeaks with a composable model.
+Two backends are provided with identical APIs and result types so call sites can swap one for the other:
+<!---->
+- **`FittingUtils`** - `TF1` + ROOT::Math::Minimizer (Minuit2). Fast, pointwise un-normalized model evaluation.
+- **`RooFitUtils`** - `RooAddPdf` of `RooGenericPdf` components + `RooFit::EvalBackend::Cpu`. Slower per Minuit step (each component PDF re-normalizes numerically over the fit range) but provides RooFit's full machinery for downstream extensions (e.g. simultaneous fits).
+<!---->
+Both classes take the same constructor signature, expose the same `Set*` flag setters, and return the same `FitResult` struct.
+The interactive fit editor is implemented per-backend (`InteractiveFitEditor` for TF1, `InteractiveRooFitEditor` for RooFit).
+Saved-parameter files use the `.fits` extension for the TF1 backend and `.roofits` for the RooFit backend, so the two can coexist for the same input.
 <!---->
 **Base model**:
 - Gaussian peak + linear or flat background
@@ -88,21 +96,27 @@ Failed fits return -1 for all parameters.
 Reduced chi-squared is displayed on fit plots by default.
 Individual peak components are plotted summed with the background for readability, and multi-peak fits use distinct line styles per peak.
 <!---->
+**Backend-specific notes for `RooFitUtils`**:
+- Amplitude/yield semantics: gaussian, step and tail "amplitude" fields in `PeakFitResult` carry RooFit yields (event counts) rather than peak heights.
+This is internally consistent for constrained fits because the ratio `component_amplitude / gaus_amplitude` is the same quantity in both backends.
+- The low-energy linear tail factor `(1 + s·(x-μ))` is floored at zero to keep the PDF non-negative as required by RooFit normalization. The TF1 backend has no such constraint.
+- `RooRealVar::enableSilentClipping()` is enabled so observable values outside the current range are silently clipped rather than throwing.
+<!---->
 ![Fit example](assets/FitExample.png)
 <!---->
 **Interactive fitting**:
 - `SetInteractive()` enables a GUI editor that opens after the automated fit completes.
 The editor shows the histogram, total fit, and individual components with a residual panel, all updating in real-time as parameters are adjusted via sliders and number entries.
 A fit range slider allows adjusting the fit range visually.
-Parameters can be fixed/freed via checkboxes, and a Refit button runs Minuit with the current values as initial guesses.
+Parameters can be fixed/freed via checkboxes, and a Refit button runs the underlying minimizer with the current values as initial guesses.
 Live chi-squared is displayed on the plot.
 <!---->
 ![Interactive fit editor GUI](assets/GUI.png)
 <!---->
-- On accept, parameters and fit range are saved to a `.fits` file in the `plots/fits/` directory.
+- On accept, parameters and fit range are saved to a `.fits` (TF1) or `.roofits` (RooFit) file in the `plots/fits/` directory.
 On subsequent runs with `SetInteractive()`, saved parameters are loaded automatically and the editor is skipped, so interactive results only need to be produced once.
-Delete the `.fits` file to redo the interactive fit.
-- It is recommended to re-run the fitting macro after an interactive session, as the saved parameters serve as much better starting points for Minuit and often produce a lower chi-squared on the second pass.
+Delete the saved file to redo the interactive fit.
+- It is recommended to re-run the fitting macro after an interactive session, as the saved parameters serve as much better starting points for the minimizer and often produce a lower chi-squared on the second pass.
 - Batch mode is temporarily disabled for the editor window and restored afterward, so plot popups are not affected.
 <!---->
 **References**:
@@ -296,76 +310,6 @@ df = load_tree_data("output.root", cache_dir=None)
 **Returns** a `pandas.DataFrame` of scalar data. If `array_branch` is specified, returns a tuple of `(DataFrame, numpy.ndarray)`.
 <!---->
 Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `UShort_t`, `Long64_t`, `ULong64_t`, `UChar_t`.
-<!---->
-### SimultaneousFit
-<!---->
-`SimultaneousFit` fits parametric models over multiple binned channels that share parameters by name — e.g. a signal region plus a background-only sideband with a shared background shape, or multiple detectors sharing a resolution.
-It complements `FittingUtils` (C++) which handles single-channel photopeak fits with component pruning; reach for `SimultaneousFit` when channels must be fit jointly with shared parameters.
-<!---->
-Built on [iminuit](https://iminuit.readthedocs.io/).
-Each channel contributes an `ExtendedBinnedNLL` term, optional `NormalConstraint` terms are summed in, and Minuit is driven via `migrad` + `hesse` (+ optional `minos`).
-Parameter sharing is by name: any parameter appearing in multiple channel model signatures is a single fit parameter.
-Plots are produced via `PlottingUtils::PlotFitWithResiduals` (same two-pad main + residual + pull-histogram output as `FittingUtils`).
-<!---->
-**Model builders** (`analysis_utilities.fit_models`) — each returns a callable that takes bin edges and returns bin-integrated expected counts (analytic integrals, no `scipy.quad` in the likelihood):
-- `gaussian_peak(mu, sigma, nsig)` — erf-based bin integral; `nsig` is the total yield over `(-inf, +inf)`.
-- `exponential_bkg(reference_range, tau, nbkg)` — exponential, normalized so `nbkg` is the integral over `reference_range`.
-- `linear_bkg(reference_range, slope, nbkg)` — linear, parametrized about the midpoint of `reference_range` so the integral is independent of slope at nominal.
-- `polynomial_bkg(reference_range, coeff_names, nbkg)` — `1 + sum c_i (x - x_mid)^i`, analytically integrated.
-- `compose(**components)` — sums named component callables into a total model and attaches overlay metadata used by the plotter.
-<!---->
-The keyword arguments on each builder set the fit-parameter names on the returned callable, which is how channels are wired together:
-<!---->
-```python
-from analysis_utilities import SimultaneousFit, load_cpp_library
-from analysis_utilities.fit_models import (
-    compose, exponential_bkg, gaussian_peak,
-)
-#
-ROOT = load_cpp_library()
-ROOT.PlottingUtils.SetStylePreferences(ROOT.PlotSaveFormat.kPNG)
-#
-peak   = gaussian_peak(mu="mu", sigma="sigma", nsig="nsig")
-bkg_sr = exponential_bkg((60.0, 80.0), tau="tau", nbkg="nbkg_sr")
-bkg_sb = exponential_bkg((60.0, 80.0), tau="tau", nbkg="nbkg_sb")
-sr_model = compose(signal=peak, background=bkg_sr)
-#
-fit = SimultaneousFit(name="ge73m")
-fit.add_channel("signal_region", counts_sr, edges_sr, sr_model,
-                background_component="background")
-fit.add_channel("sideband", counts_sb, edges_sb, bkg_sb)
-#
-fit.set_parameter("mu",      value=68.5, limits=(65.0, 75.0))
-fit.set_parameter("sigma",   value=0.5,  limits=(0.05, 5.0))
-fit.set_parameter("nsig",    value=400,  limits=(0, None))
-fit.set_parameter("tau",     value=30,   limits=(1.0, 500.0))
-fit.set_parameter("nbkg_sr", value=1e4,  limits=(0, None))
-fit.set_parameter("nbkg_sb", value=3e3,  limits=(0, None))
-#
-result = fit.fit(minos=["nsig", "mu"])
-fit.plot(result, labels={"signal_region": "signal region",
-                         "sideband":      "sideband"})
-```
-<!---->
-`tau` is the only parameter appearing in both channel models, so the sideband data contributes to constraining the signal-region background shape.
-<!---->
-**Inputs**:
-- `add_channel(name, counts, edges, model, components=None, background_component=None)` takes numpy arrays.
-- `add_channel_from_th1(name, hist, model, x_range=None, ...)` extracts `counts`/`edges` from a ROOT `TH1`. Pass `x_range=(lo, hi)` to restrict to bins fully contained in that range.
-- `set_parameter(name, value=..., limits=..., fixed=..., error=...)` per parameter.
-- `add_constraint(name, mean, sigma)` adds a Gaussian constraint (`iminuit.cost.NormalConstraint`).
-<!---->
-**Running the fit**:
-- `fit(minos=None, strategy=1, tol=None, print_level=0)`.
-`minos=True` runs Minos on every free parameter; pass an iterable of names to run Minos on a subset.
-<!---->
-**Result** (`FitResult` dataclass): `values`, `errors`, `minos` (asymmetric errors), `corr` (pandas DataFrame of correlations among free parameters), `nll`, `chi2`, `ndof`, `chi2_per_channel`, per-channel `residuals`, and the underlying `minuit` instance as an escape hatch for `mnprofile` / `draw_mnmatrix` / etc.
-<!---->
-**Plots**: `fit.plot(result)` writes one two-pad canvas per channel to `plots/fits/<name>_<channel>.{png,pdf}` plus a pull histogram to `plots/fits/residual_hists/`.
-Requires a prior `PlottingUtils::SetStylePreferences` call.
-Uniform binning is assumed per channel — variable-width bins produce a correct likelihood but a miscalibrated plot overlay.
-<!---->
-A full worked example is provided in [`examples/simultaneous_fit_sr_sideband.py`](examples/simultaneous_fit_sr_sideband.py).
 <!---->
 ## A note on AI-assisted development
 <!---->

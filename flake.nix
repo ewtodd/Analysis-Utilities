@@ -16,7 +16,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "26.5.03";
+        version = "26.5.10";
         toolkit = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities";
           inherit version;
@@ -68,8 +68,6 @@
           propagatedBuildInputs = with pkgs.python3Packages; [
             numpy
             pandas
-            scipy
-            iminuit
           ];
           doCheck = false;
         };
@@ -88,8 +86,6 @@
               python-pkgs: with python-pkgs; [
                 numpy
                 pandas
-                scipy
-                iminuit
                 pytest
                 pythonPackage
               ]

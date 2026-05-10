@@ -834,6 +834,8 @@ FitResult FittingUtils::FitSinglePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
+      else if (fit_function_->GetNDF() > 0)
+        final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
                 << std::endl;
       fit_valid = kTRUE;
@@ -1319,6 +1321,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
+      else if (fit_function_->GetNDF() > 0)
+        final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
                 << std::endl;
       fit_valid = kTRUE;
@@ -1868,6 +1872,8 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
+      else if (fit_function_->GetNDF() > 0)
+        final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
                 << std::endl;
       fit_valid = kTRUE;
@@ -2286,6 +2292,8 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
       TFitResultPtr refit = working_hist_->Fit(fit_function_, "LSMRBENR+");
       if (refit.Get() && refit->IsValid())
         final_chi2 = refit->Chi2() / refit->Ndf();
+      else if (fit_function_->GetNDF() > 0)
+        final_chi2 = fit_function_->GetChisquare() / fit_function_->GetNDF();
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
                 << std::endl;
       fit_valid = kTRUE;
