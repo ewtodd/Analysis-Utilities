@@ -1,6 +1,7 @@
 #include "RooFitUtils.hpp"
 
 #include "InteractiveRooFitEditor.hpp"
+#include "RooFitPhotopeakPdfs.hpp"
 
 #include <RooMsgService.h>
 #include <TGraph.h>
@@ -17,36 +18,25 @@ RooAbsPdf *RooFitFunctions::MakeGaussian(const TString &name, RooRealVar &x,
 
 RooAbsPdf *RooFitFunctions::MakeStepShelf(const TString &name, RooRealVar &x,
                                           RooRealVar &mu, RooRealVar &sigma) {
-  return new RooGenericPdf(name.Data(), name.Data(),
-                           "1.0/TMath::Power(1.0+exp((@0-@1)/@2),2)",
-                           RooArgList(x, mu, sigma));
+  return new RooStepShelf(name.Data(), name.Data(), x, mu, sigma);
 }
 
 RooAbsPdf *RooFitFunctions::MakeLowExpTail(const TString &name, RooRealVar &x,
                                            RooRealVar &mu, RooRealVar &sigma,
                                            RooRealVar &tau) {
-  return new RooGenericPdf(
-      name.Data(), name.Data(),
-      "exp((@0-@1)/@3)*TMath::Erfc((@0-@1)/(TMath::Sqrt(2.0)*@2))",
-      RooArgList(x, mu, sigma, tau));
+  return new RooLowExpTail(name.Data(), name.Data(), x, mu, sigma, tau);
 }
 
 RooAbsPdf *RooFitFunctions::MakeLowLinTail(const TString &name, RooRealVar &x,
                                            RooRealVar &mu, RooRealVar &sigma,
                                            RooRealVar &slope) {
-  return new RooGenericPdf(
-      name.Data(), name.Data(),
-      "TMath::Max(0.0,1.0+@3*(@0-@1))*TMath::Erfc((@0-@1)/(TMath::Sqrt(2.0)*@2))",
-      RooArgList(x, mu, sigma, slope));
+  return new RooLowLinTail(name.Data(), name.Data(), x, mu, sigma, slope);
 }
 
 RooAbsPdf *RooFitFunctions::MakeHighExpTail(const TString &name, RooRealVar &x,
                                             RooRealVar &mu, RooRealVar &sigma,
                                             RooRealVar &tau) {
-  return new RooGenericPdf(
-      name.Data(), name.Data(),
-      "exp((@1-@0)/@3)*TMath::Erfc((@1-@0)/(TMath::Sqrt(2.0)*@2))",
-      RooArgList(x, mu, sigma, tau));
+  return new RooHighExpTail(name.Data(), name.Data(), x, mu, sigma, tau);
 }
 
 RooAbsPdf *RooFitFunctions::MakeLinearBackground(const TString &name,
@@ -1686,7 +1676,7 @@ void RooFitUtils::BuildChannelModel(
     RegisterOwned(x_);
   }
 
-  TString range_name = "fitrange_" + cfg.name;
+  TString range_name = TString("fitrange_") + cfg.name;
   x_->setRange(range_name.Data(), cfg.fit_range_low, cfg.fit_range_high);
   sim_channel_range_names_[cfg.name] = range_name;
 
@@ -2001,6 +1991,7 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
   std::vector<RooFitPeakModel> saved_peaks = peaks_;
   RooFitBackgroundModel saved_bkg = bkg_;
   Int_t saved_np = num_peaks_;
+  RooAddPdf *saved_total = total_pdf_;
 
   working_hist_ = cfg->hist;
   fit_range_low_ = cfg->fit_range_low;
@@ -2008,6 +1999,7 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
   peaks_ = peaks;
   bkg_ = bkg;
   num_peaks_ = num_peaks;
+  total_pdf_ = static_cast<RooAddPdf *>(sim_channel_pdfs_[channel]);
 
   TString plot_name = base_label + "_" + channel;
   if (num_peaks == 1)
@@ -2023,6 +2015,7 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
   peaks_ = saved_peaks;
   bkg_ = saved_bkg;
   num_peaks_ = saved_np;
+  total_pdf_ = saved_total;
 }
 
 std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
@@ -2062,19 +2055,12 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
                      sim_channels_[i].name.Data());
   }
 
-  TString combined_range;
-  for (size_t i = 0; i < sim_channels_.size(); i++) {
-    if (i > 0)
-      combined_range += ",";
-    combined_range += sim_channel_range_names_[sim_channels_[i].name];
-  }
-
   std::cout << "Running simultaneous fit over " << sim_channels_.size()
-            << " channels (range: " << combined_range << ")" << std::endl;
+            << " channels (per-channel ranges via SplitRange)" << std::endl;
 
   RooFitResult *fit_result = sim_pdf_->fitTo(
       *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-      RooFit::Range(combined_range.Data()), RooFit::SplitRange(),
+      RooFit::Range("fitrange"), RooFit::SplitRange(),
       RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(0),
       RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
       RooFit::EvalBackend::Cpu());
