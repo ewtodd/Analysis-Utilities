@@ -37,11 +37,11 @@ struct PeakFitResult {
   Float_t gaus_amplitude = -1, gaus_amplitude_error = -1;
   Float_t step_amplitude = -1, step_amplitude_error = -1;
   Float_t low_exp_tail_amplitude = -1, low_exp_tail_amplitude_error = -1;
-  Float_t low_exp_tail_decay = -1, low_exp_tail_decay_error = -1;
+  Float_t low_exp_tail_ratio = -1, low_exp_tail_ratio_error = -1;
   Float_t low_lin_tail_amplitude = -1, low_lin_tail_amplitude_error = -1;
   Float_t low_lin_tail_slope = -1, low_lin_tail_slope_error = -1;
   Float_t high_exp_tail_amplitude = -1, high_exp_tail_amplitude_error = -1;
-  Float_t high_exp_tail_decay = -1, high_exp_tail_decay_error = -1;
+  Float_t high_exp_tail_ratio = -1, high_exp_tail_ratio_error = -1;
 };
 
 struct FitResult {

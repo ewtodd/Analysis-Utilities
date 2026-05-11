@@ -347,8 +347,8 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   p.ratio_low_exp = new RooRealVar("LowExpTailAmplitude" + suffix,
                                    "LowExpTailAmplitude" + suffix, 0.0, 0.0,
                                    0.5);
-  p.tau_low_exp = new RooRealVar("LowExpTailDecay" + suffix,
-                                 "LowExpTailDecay" + suffix, 1.0, 0.9, 100.0);
+  p.tau_low_exp = new RooRealVar("LowExpTailRatio" + suffix,
+                                 "LowExpTailRatio" + suffix, 1.5, 1.0, 100.0);
   p.ratio_low_lin = new RooRealVar("LowLinTailAmplitude" + suffix,
                                    "LowLinTailAmplitude" + suffix, 0.0, 0.0,
                                    0.5);
@@ -357,8 +357,8 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   p.ratio_high_exp = new RooRealVar("HighExpTailAmplitude" + suffix,
                                     "HighExpTailAmplitude" + suffix, 0.0, 0.0,
                                     0.5);
-  p.tau_high_exp = new RooRealVar("HighExpTailDecay" + suffix,
-                                  "HighExpTailDecay" + suffix, 1.0, 0.9, 100.0);
+  p.tau_high_exp = new RooRealVar("HighExpTailRatio" + suffix,
+                                  "HighExpTailRatio" + suffix, 1.5, 1.0, 100.0);
 
   RegisterOwned(p.mu);
   RegisterOwned(p.sigma);
@@ -470,7 +470,7 @@ void RooFitUtils::ConfigureComponentFlagsForPeak(Int_t peak_idx) {
   if (use_low_exp_tail_) {
     p.ratio_low_exp->setVal(0.1);
     p.ratio_low_exp->setConstant(kFALSE);
-    p.tau_low_exp->setVal(1.0);
+    p.tau_low_exp->setVal(1.5);
     p.tau_low_exp->setConstant(kFALSE);
   } else {
     p.ratio_low_exp->setVal(0.0);
@@ -494,7 +494,7 @@ void RooFitUtils::ConfigureComponentFlagsForPeak(Int_t peak_idx) {
   if (use_high_exp_tail_) {
     p.ratio_high_exp->setVal(0.1);
     p.ratio_high_exp->setConstant(kFALSE);
-    p.tau_high_exp->setVal(1.0);
+    p.tau_high_exp->setVal(1.5);
     p.tau_high_exp->setConstant(kFALSE);
   } else {
     p.ratio_high_exp->setVal(0.0);
@@ -536,7 +536,7 @@ void RooFitUtils::ReleaseComponent(Int_t peak_idx, const TString &component) {
     p.ratio_low_exp->setConstant(kFALSE);
     p.tau_low_exp->setConstant(kFALSE);
     p.ratio_low_exp->setVal(0.15);
-    p.tau_low_exp->setVal(1.0);
+    p.tau_low_exp->setVal(1.5);
   } else if (component == "low_lin") {
     p.ratio_low_lin->setConstant(kFALSE);
     p.slope_low_lin->setConstant(kFALSE);
@@ -546,7 +546,7 @@ void RooFitUtils::ReleaseComponent(Int_t peak_idx, const TString &component) {
     p.ratio_high_exp->setConstant(kFALSE);
     p.tau_high_exp->setConstant(kFALSE);
     p.ratio_high_exp->setVal(0.15);
-    p.tau_high_exp->setVal(1.0);
+    p.tau_high_exp->setVal(1.5);
   }
 }
 
@@ -762,16 +762,16 @@ PeakFitResult RooFitUtils::ExtractPeakResult(Int_t peak_idx) {
   result.step_amplitude_error = p.ratio_step->getError() * ga;
   result.low_exp_tail_amplitude = p.ratio_low_exp->getVal() * ga;
   result.low_exp_tail_amplitude_error = p.ratio_low_exp->getError() * ga;
-  result.low_exp_tail_decay = p.tau_low_exp->getVal();
-  result.low_exp_tail_decay_error = p.tau_low_exp->getError();
+  result.low_exp_tail_ratio = p.tau_low_exp->getVal();
+  result.low_exp_tail_ratio_error = p.tau_low_exp->getError();
   result.low_lin_tail_amplitude = p.ratio_low_lin->getVal() * ga;
   result.low_lin_tail_amplitude_error = p.ratio_low_lin->getError() * ga;
   result.low_lin_tail_slope = p.slope_low_lin->getVal();
   result.low_lin_tail_slope_error = p.slope_low_lin->getError();
   result.high_exp_tail_amplitude = p.ratio_high_exp->getVal() * ga;
   result.high_exp_tail_amplitude_error = p.ratio_high_exp->getError() * ga;
-  result.high_exp_tail_decay = p.tau_high_exp->getVal();
-  result.high_exp_tail_decay_error = p.tau_high_exp->getError();
+  result.high_exp_tail_ratio = p.tau_high_exp->getVal();
+  result.high_exp_tail_ratio_error = p.tau_high_exp->getError();
   return result;
 }
 
@@ -1549,8 +1549,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     p.ratio_step->setConstant(kTRUE);
     p.ratio_low_exp->setVal(constrained_peak.low_exp_tail_amplitude / cga);
     p.ratio_low_exp->setConstant(kTRUE);
-    p.tau_low_exp->setVal(constrained_peak.low_exp_tail_decay > 0
-                              ? constrained_peak.low_exp_tail_decay
+    p.tau_low_exp->setVal(constrained_peak.low_exp_tail_ratio > 0
+                              ? constrained_peak.low_exp_tail_ratio
                               : 1.0);
     p.tau_low_exp->setConstant(kTRUE);
     p.ratio_low_lin->setVal(constrained_peak.low_lin_tail_amplitude / cga);
@@ -1559,8 +1559,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     p.slope_low_lin->setConstant(kTRUE);
     p.ratio_high_exp->setVal(constrained_peak.high_exp_tail_amplitude / cga);
     p.ratio_high_exp->setConstant(kTRUE);
-    p.tau_high_exp->setVal(constrained_peak.high_exp_tail_decay > 0
-                                ? constrained_peak.high_exp_tail_decay
+    p.tau_high_exp->setVal(constrained_peak.high_exp_tail_ratio > 0
+                                ? constrained_peak.high_exp_tail_ratio
                                 : 1.0);
     p.tau_high_exp->setConstant(kTRUE);
   }
@@ -1699,7 +1699,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     p.ratio_step->setConstant(kTRUE);
     p.ratio_low_exp->setVal(cp.low_exp_tail_amplitude / cga);
     p.ratio_low_exp->setConstant(kTRUE);
-    p.tau_low_exp->setVal(cp.low_exp_tail_decay > 0 ? cp.low_exp_tail_decay
+    p.tau_low_exp->setVal(cp.low_exp_tail_ratio > 0 ? cp.low_exp_tail_ratio
                                                       : 1.0);
     p.tau_low_exp->setConstant(kTRUE);
     p.ratio_low_lin->setVal(cp.low_lin_tail_amplitude / cga);
@@ -1708,7 +1708,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     p.slope_low_lin->setConstant(kTRUE);
     p.ratio_high_exp->setVal(cp.high_exp_tail_amplitude / cga);
     p.ratio_high_exp->setConstant(kTRUE);
-    p.tau_high_exp->setVal(cp.high_exp_tail_decay > 0 ? cp.high_exp_tail_decay
+    p.tau_high_exp->setVal(cp.high_exp_tail_ratio > 0 ? cp.high_exp_tail_ratio
                                                          : 1.0);
     p.tau_high_exp->setConstant(kTRUE);
   }
@@ -1902,11 +1902,11 @@ void RooFitUtils::LinkPeakShape(const TString &target_channel,
       "Sigma",
       "StepAmplitude",
       "LowExpTailAmplitude",
-      "LowExpTailDecay",
+      "LowExpTailRatio",
       "LowLinTailAmplitude",
       "LowLinTailSlope",
       "HighExpTailAmplitude",
-      "HighExpTailDecay"};
+      "HighExpTailRatio"};
   for (Int_t i = 0; i < 9; i++) {
     LinkParameter(target_channel + ":" + shape_params[i] + t_suffix,
                   source_channel + ":" + shape_params[i] + s_suffix);
@@ -1989,8 +1989,8 @@ void RooFitUtils::BuildChannelModel(
                                     registry, 0.0, 0.0, 0.5);
     p.ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailAmplitude" + suffix,
                                        registry, 0.0, 0.0, 0.5);
-    p.tau_low_exp = ResolveOrCreate(cfg.name, "LowExpTailDecay" + suffix,
-                                     registry, 1.0, 0.9, 100.0);
+    p.tau_low_exp = ResolveOrCreate(cfg.name, "LowExpTailRatio" + suffix,
+                                     registry, 1.5, 1.0, 100.0);
     p.ratio_low_lin = ResolveOrCreate(cfg.name, "LowLinTailAmplitude" + suffix,
                                        registry, 0.0, 0.0, 0.5);
     p.slope_low_lin = ResolveOrCreate(cfg.name, "LowLinTailSlope" + suffix,
@@ -1998,8 +1998,8 @@ void RooFitUtils::BuildChannelModel(
     p.ratio_high_exp = ResolveOrCreate(cfg.name,
                                         "HighExpTailAmplitude" + suffix,
                                         registry, 0.0, 0.0, 0.5);
-    p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailDecay" + suffix,
-                                      registry, 1.0, 0.9, 100.0);
+    p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix,
+                                      registry, 1.5, 1.0, 100.0);
 
     TString pdf_suffix = "_" + cfg.name + "_" + suffix;
     p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + pdf_suffix, *x_,
@@ -2172,16 +2172,16 @@ void RooFitUtils::ApplySeedToChannel(const TString &channel) {
       p.ratio_step->setVal(cp.step_amplitude / cga);
     if (cp.low_exp_tail_amplitude >= 0 && cga > 0)
       p.ratio_low_exp->setVal(cp.low_exp_tail_amplitude / cga);
-    if (cp.low_exp_tail_decay > 0)
-      p.tau_low_exp->setVal(cp.low_exp_tail_decay);
+    if (cp.low_exp_tail_ratio > 0)
+      p.tau_low_exp->setVal(cp.low_exp_tail_ratio);
     if (cp.low_lin_tail_amplitude >= 0 && cga > 0)
       p.ratio_low_lin->setVal(cp.low_lin_tail_amplitude / cga);
     if (cp.low_lin_tail_slope > -1)
       p.slope_low_lin->setVal(cp.low_lin_tail_slope);
     if (cp.high_exp_tail_amplitude >= 0 && cga > 0)
       p.ratio_high_exp->setVal(cp.high_exp_tail_amplitude / cga);
-    if (cp.high_exp_tail_decay > 0)
-      p.tau_high_exp->setVal(cp.high_exp_tail_decay);
+    if (cp.high_exp_tail_ratio > 0)
+      p.tau_high_exp->setVal(cp.high_exp_tail_ratio);
   }
   if (seed.bkg_constant >= 0)
     bkg.bkg_yield->setVal(seed.bkg_constant);
@@ -2256,16 +2256,16 @@ PeakFitResult RooFitUtils::ExtractPeakResultFor(const RooFitPeakModel &p) {
   r.step_amplitude_error = p.ratio_step->getError() * ga;
   r.low_exp_tail_amplitude = p.ratio_low_exp->getVal() * ga;
   r.low_exp_tail_amplitude_error = p.ratio_low_exp->getError() * ga;
-  r.low_exp_tail_decay = p.tau_low_exp->getVal();
-  r.low_exp_tail_decay_error = p.tau_low_exp->getError();
+  r.low_exp_tail_ratio = p.tau_low_exp->getVal();
+  r.low_exp_tail_ratio_error = p.tau_low_exp->getError();
   r.low_lin_tail_amplitude = p.ratio_low_lin->getVal() * ga;
   r.low_lin_tail_amplitude_error = p.ratio_low_lin->getError() * ga;
   r.low_lin_tail_slope = p.slope_low_lin->getVal();
   r.low_lin_tail_slope_error = p.slope_low_lin->getError();
   r.high_exp_tail_amplitude = p.ratio_high_exp->getVal() * ga;
   r.high_exp_tail_amplitude_error = p.ratio_high_exp->getError() * ga;
-  r.high_exp_tail_decay = p.tau_high_exp->getVal();
-  r.high_exp_tail_decay_error = p.tau_high_exp->getError();
+  r.high_exp_tail_ratio = p.tau_high_exp->getVal();
+  r.high_exp_tail_ratio_error = p.tau_high_exp->getError();
   return r;
 }
 

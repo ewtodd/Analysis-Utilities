@@ -230,7 +230,7 @@ void InteractiveFitEditor::BuildPeakTab(TGCompositeFrame *parent,
       new TGGroupFrame(parent, "Low-Side Tails", kVerticalFrame);
   parent->AddFrame(ltail_grp, new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 1));
   AddParamRow(ltail_grp, offset + 4, "Exp Amp");
-  AddParamRow(ltail_grp, offset + 5, "Exp Decay");
+  AddParamRow(ltail_grp, offset + 5, "Exp Decay/Sigma");
   AddParamRow(ltail_grp, offset + 6, "Lin Amp");
   AddParamRow(ltail_grp, offset + 7, "Lin Slope");
 
@@ -239,7 +239,7 @@ void InteractiveFitEditor::BuildPeakTab(TGCompositeFrame *parent,
       new TGGroupFrame(parent, "High-Side Tail", kVerticalFrame);
   parent->AddFrame(htail_grp, new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 3));
   AddParamRow(htail_grp, offset + 8, "Exp Amp");
-  AddParamRow(htail_grp, offset + 9, "Exp Decay");
+  AddParamRow(htail_grp, offset + 9, "Exp Decay/Sigma");
 }
 
 void InteractiveFitEditor::BuildBackgroundTab(TGCompositeFrame *parent) {
@@ -950,8 +950,8 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     lo = 0;
     hi = 0.5;
     break;
-  case 5: // LowExpTailDecay
-    lo = 0.5;
+  case 5: // LowExpTailRatio
+    lo = 1.0;
     hi = 100;
     break;
   case 6: // LowLinTailAmplitude ratio
@@ -966,8 +966,8 @@ void InteractiveFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     lo = 0;
     hi = 0.5;
     break;
-  case 9: // HighExpTailDecay
-    lo = 0.5;
+  case 9: // HighExpTailRatio
+    lo = 1.0;
     hi = 100;
     break;
   default:
