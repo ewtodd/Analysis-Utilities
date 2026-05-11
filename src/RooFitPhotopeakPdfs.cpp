@@ -73,16 +73,19 @@ Double_t LowLinIntegral(Double_t y_lo, Double_t y_hi, Double_t sigma,
     if (threshold > eff_lo)
       eff_lo = threshold;
     if (eff_lo >= eff_hi)
-      return 0.0;
+      return 1e-300;
   } else if (slope < -1e-10) {
     Double_t threshold = -1.0 / slope;
     if (threshold < eff_hi)
       eff_hi = threshold;
     if (eff_lo >= eff_hi)
-      return 0.0;
+      return 1e-300;
   }
-  return LowLinAntideriv(eff_hi, sigma, slope) -
-         LowLinAntideriv(eff_lo, sigma, slope);
+  Double_t val = LowLinAntideriv(eff_hi, sigma, slope) -
+                 LowLinAntideriv(eff_lo, sigma, slope);
+  if (val < 1e-300)
+    return 1e-300;
+  return val;
 }
 
 } // namespace
@@ -116,16 +119,19 @@ Int_t RooStepShelf::getAnalyticalIntegral(RooArgSet &allVars,
 Double_t RooStepShelf::analyticalIntegral(Int_t code,
                                           const char *rangeName) const {
   if (code != 1)
-    return 0.0;
+    return 1e-300;
   Double_t sigma = (Double_t)sigma_;
   if (sigma <= 0)
-    return 0.0;
+    return 1e-300;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);
   Double_t z_lo = (x_lo - mu) / sigma;
   Double_t z_hi = (x_hi - mu) / sigma;
-  return sigma * (StepAntideriv(z_hi) - StepAntideriv(z_lo));
+  Double_t val = sigma * (StepAntideriv(z_hi) - StepAntideriv(z_lo));
+  if (!std::isfinite(val) || val < 1e-300)
+    return 1e-300;
+  return val;
 }
 
 RooLowExpTail::RooLowExpTail(const char *name, const char *title,
@@ -160,18 +166,21 @@ Int_t RooLowExpTail::getAnalyticalIntegral(RooArgSet &allVars,
 Double_t RooLowExpTail::analyticalIntegral(Int_t code,
                                             const char *rangeName) const {
   if (code != 1)
-    return 0.0;
+    return 1e-300;
   Double_t sigma = (Double_t)sigma_;
   Double_t tau = (Double_t)tau_;
   if (sigma <= 0 || tau <= 0)
-    return 0.0;
+    return 1e-300;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);
   Double_t y_lo = x_lo - mu;
   Double_t y_hi = x_hi - mu;
-  return ExpTailAntideriv(y_hi, sigma, tau) -
-         ExpTailAntideriv(y_lo, sigma, tau);
+  Double_t val = ExpTailAntideriv(y_hi, sigma, tau) -
+                 ExpTailAntideriv(y_lo, sigma, tau);
+  if (!std::isfinite(val) || val < 1e-300)
+    return 1e-300;
+  return val;
 }
 
 RooLowLinTail::RooLowLinTail(const char *name, const char *title,
@@ -251,16 +260,19 @@ Int_t RooHighExpTail::getAnalyticalIntegral(RooArgSet &allVars,
 Double_t RooHighExpTail::analyticalIntegral(Int_t code,
                                              const char *rangeName) const {
   if (code != 1)
-    return 0.0;
+    return 1e-300;
   Double_t sigma = (Double_t)sigma_;
   Double_t tau = (Double_t)tau_;
   if (sigma <= 0 || tau <= 0)
-    return 0.0;
+    return 1e-300;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);
   Double_t z_lo = mu - x_lo;
   Double_t z_hi = mu - x_hi;
-  return ExpTailAntideriv(z_lo, sigma, tau) -
-         ExpTailAntideriv(z_hi, sigma, tau);
+  Double_t val = ExpTailAntideriv(z_lo, sigma, tau) -
+                 ExpTailAntideriv(z_hi, sigma, tau);
+  if (!std::isfinite(val) || val < 1e-300)
+    return 1e-300;
+  return val;
 }

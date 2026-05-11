@@ -4,13 +4,14 @@
 #include "FittingUtils.hpp"
 #include "PlottingUtils.hpp"
 
+#include <RooAbsData.h>
 #include <RooAbsPdf.h>
 #include <RooAbsReal.h>
 #include <RooAddPdf.h>
 #include <RooArgList.h>
 #include <RooArgSet.h>
 #include <RooCategory.h>
-#include <RooDataHist.h>
+#include <RooDataSet.h>
 #include <RooFitResult.h>
 #include <RooFormulaVar.h>
 #include <RooGaussian.h>
@@ -21,6 +22,7 @@
 
 #include <TH1.h>
 #include <TString.h>
+#include <TTree.h>
 #include <map>
 #include <vector>
 
@@ -73,8 +75,10 @@ struct RooFitBackgroundModel {
 struct RooFitChannelConfig {
   TString name;
   TH1 *hist;
+  std::vector<Double_t> events;
   Float_t fit_range_low;
   Float_t fit_range_high;
+  Float_t display_bin_width_kev;
   Int_t num_peaks;
   std::vector<Double_t> mu_inits;
   Bool_t use_flat_background;
@@ -94,8 +98,10 @@ struct RooFitParamLink {
 class RooFitUtils {
 private:
   TH1 *working_hist_;
+  std::vector<Double_t> events_;
   Float_t fit_range_low_;
   Float_t fit_range_high_;
+  Float_t display_bin_width_kev_;
 
   Bool_t use_flat_background_;
   Bool_t use_step_;
@@ -108,7 +114,7 @@ private:
   std::vector<Double_t> manual_params_;
 
   RooRealVar *x_;
-  RooDataHist *data_hist_;
+  RooDataSet *unbinned_data_;
   RooAddPdf *total_pdf_;
   Int_t num_peaks_;
 
@@ -122,22 +128,30 @@ private:
   std::map<TString, std::vector<RooFitPeakModel>> sim_channel_peaks_;
   std::map<TString, RooFitBackgroundModel> sim_channel_bkg_;
   std::map<TString, RooAbsPdf *> sim_channel_pdfs_;
-  std::map<TString, RooDataHist *> sim_channel_data_;
+  std::map<TString, RooDataSet *> sim_channel_data_;
   std::map<TString, TString> sim_channel_range_names_;
   RooCategory *sim_category_;
   RooSimultaneous *sim_pdf_;
-  RooDataHist *sim_combined_data_;
+  RooDataSet *sim_combined_data_;
   Bool_t sim_mode_;
 
   static constexpr const char *kFitRangeName = "fitrange";
 
   void InitState();
+  void BuildDisplayHistogram();
+  void BuildUnbinnedData();
+  static RooDataSet *BuildUnbinnedDataFrom(const std::vector<Double_t> &events,
+                                           RooRealVar *x);
   RooRealVar *ResolveOrCreate(const TString &channel, const TString &param_name,
                               std::map<TString, RooRealVar *> &registry,
                               Double_t init_val, Double_t lo, Double_t hi);
   void BuildChannelModel(const RooFitChannelConfig &cfg,
                          std::map<TString, RooRealVar *> &registry);
   void ApplySeedToChannel(const TString &channel);
+  void SaveSimInteractiveParams(const TString &input_name,
+                                 const TString &base_label);
+  Bool_t LoadSimInteractiveParams(const TString &input_name,
+                                   const TString &base_label);
   TString ParamFullName(const TString &channel, const TString &param);
   TString SourceForTarget(const TString &target);
   Double_t ComputeChannelChi2(const TString &channel,
@@ -199,12 +213,25 @@ private:
 
 public:
   RooFitUtils();
-  RooFitUtils(TH1 *working_hist, Float_t fit_range_low, Float_t fit_range_high,
+  RooFitUtils(const std::vector<Double_t> &events, Float_t fit_range_low,
+              Float_t fit_range_high, Float_t display_bin_width_kev,
               Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
               Bool_t use_low_exp_tail = kFALSE,
               Bool_t use_low_lin_tail = kFALSE,
               Bool_t use_high_exp_tail = kFALSE);
   ~RooFitUtils();
+
+  static std::vector<Double_t> LoadEventsFromTree(TTree *tree,
+                                                  const TString &branch_name);
+  static TH1F *BuildDisplayHistogramFrom(const std::vector<Double_t> &events,
+                                         Float_t fit_range_low,
+                                         Float_t fit_range_high,
+                                         Float_t display_bin_width_kev);
+  static void RefillDisplayHistogram(TH1 *hist,
+                                     const std::vector<Double_t> &events,
+                                     Float_t fit_range_low,
+                                     Float_t fit_range_high,
+                                     Float_t display_bin_width_kev);
 
   void SetBackgroundModel(Bool_t use_flat_background) {
     use_flat_background_ = use_flat_background;
@@ -247,8 +274,9 @@ public:
                           const FitResult &constrained_peaks,
                           Double_t mu3_init);
 
-  void AddChannel(const TString &name, TH1 *hist, Float_t fit_range_low,
-                  Float_t fit_range_high, Int_t num_peaks,
+  void AddChannel(const TString &name, const std::vector<Double_t> &events,
+                  Float_t fit_range_low, Float_t fit_range_high,
+                  Float_t display_bin_width_kev, Int_t num_peaks,
                   const std::vector<Double_t> &mu_inits,
                   Bool_t use_flat_background = kFALSE,
                   Bool_t use_step = kFALSE,

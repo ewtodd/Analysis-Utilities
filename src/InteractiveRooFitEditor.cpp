@@ -9,13 +9,16 @@
 #include <iostream>
 
 InteractiveRooFitEditor::InteractiveRooFitEditor(
-    const TGWindow *parent, TH1 *hist, RooAbsPdf *total_pdf, RooRealVar *x,
-    RooDataHist *data, std::vector<RooFitPeakModel> *peaks,
+    const TGWindow *parent, TH1 *hist, const std::vector<Double_t> *events,
+    Float_t display_bin_width_kev, RooAbsPdf *total_pdf, RooRealVar *x,
+    RooAbsData *data, std::vector<RooFitPeakModel> *peaks,
     RooFitBackgroundModel *bkg, Double_t range_low, Double_t range_high,
     const TString &info_label)
     : TGMainFrame(parent, 1400, 900) {
 
   hist_ = hist;
+  events_ = events;
+  display_bin_width_kev_ = display_bin_width_kev;
   total_pdf_ = total_pdf;
   x_ = x;
   data_ = data;
@@ -728,6 +731,12 @@ void InteractiveRooFitEditor::OnRangeChanged() {
   x_->setRange(range_low_, range_high_);
   x_->setRange("fitrange", range_low_, range_high_);
 
+  if (events_) {
+    RooFitUtils::RefillDisplayHistogram(hist_draw_, *events_,
+                                         (Float_t)range_low_,
+                                         (Float_t)range_high_,
+                                         display_bin_width_kev_);
+  }
   hist_draw_->GetXaxis()->SetRangeUser(0.9 * range_low_, 1.1 * range_high_);
 
   syncing_ = kTRUE;
@@ -963,8 +972,11 @@ Int_t InteractiveRooFitEditor::PeakStyle(Int_t peak_idx) {
   return 4;
 }
 
-Bool_t LaunchInteractiveRooFitEditor(TH1 *hist, RooAbsPdf *total_pdf,
-                                     RooRealVar *x, RooDataHist *data,
+Bool_t LaunchInteractiveRooFitEditor(TH1 *hist,
+                                     const std::vector<Double_t> *events,
+                                     Float_t display_bin_width_kev,
+                                     RooAbsPdf *total_pdf, RooRealVar *x,
+                                     RooAbsData *data,
                                      std::vector<RooFitPeakModel> *peaks,
                                      RooFitBackgroundModel *bkg,
                                      Double_t range_low, Double_t range_high,
@@ -975,10 +987,9 @@ Bool_t LaunchInteractiveRooFitEditor(TH1 *hist, RooAbsPdf *total_pdf,
     return kFALSE;
   }
 
-  InteractiveRooFitEditor *editor =
-      new InteractiveRooFitEditor(gClient->GetRoot(), hist, total_pdf, x, data,
-                                   peaks, bkg, range_low, range_high,
-                                   info_label);
+  InteractiveRooFitEditor *editor = new InteractiveRooFitEditor(
+      gClient->GetRoot(), hist, events, display_bin_width_kev, total_pdf, x,
+      data, peaks, bkg, range_low, range_high, info_label);
 
   while (!editor->IsDone()) {
     gSystem->ProcessEvents();
