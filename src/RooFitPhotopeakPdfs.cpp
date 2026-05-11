@@ -148,9 +148,10 @@ RooLowExpTail::RooLowExpTail(const RooLowExpTail &other, const char *name)
 
 Double_t RooLowExpTail::evaluate() const {
   Double_t sigma = (Double_t)sigma_;
-  Double_t tau = (Double_t)tau_;
-  if (sigma <= 0 || tau <= 0)
+  Double_t ratio = (Double_t)tau_;
+  if (sigma <= 0 || ratio <= 0)
     return 0.0;
+  Double_t tau = ratio * sigma;
   Double_t y = (Double_t)x_ - (Double_t)mu_;
   return ExpTailDensity(y, sigma, tau);
 }
@@ -168,9 +169,10 @@ Double_t RooLowExpTail::analyticalIntegral(Int_t code,
   if (code != 1)
     return 1e-300;
   Double_t sigma = (Double_t)sigma_;
-  Double_t tau = (Double_t)tau_;
-  if (sigma <= 0 || tau <= 0)
+  Double_t ratio = (Double_t)tau_;
+  if (sigma <= 0 || ratio <= 0)
     return 1e-300;
+  Double_t tau = ratio * sigma;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);
@@ -242,9 +244,10 @@ RooHighExpTail::RooHighExpTail(const RooHighExpTail &other, const char *name)
 
 Double_t RooHighExpTail::evaluate() const {
   Double_t sigma = (Double_t)sigma_;
-  Double_t tau = (Double_t)tau_;
-  if (sigma <= 0 || tau <= 0)
+  Double_t ratio = (Double_t)tau_;
+  if (sigma <= 0 || ratio <= 0)
     return 0.0;
+  Double_t tau = ratio * sigma;
   Double_t z = (Double_t)mu_ - (Double_t)x_;
   return ExpTailDensity(z, sigma, tau);
 }
@@ -262,9 +265,10 @@ Double_t RooHighExpTail::analyticalIntegral(Int_t code,
   if (code != 1)
     return 1e-300;
   Double_t sigma = (Double_t)sigma_;
-  Double_t tau = (Double_t)tau_;
-  if (sigma <= 0 || tau <= 0)
+  Double_t ratio = (Double_t)tau_;
+  if (sigma <= 0 || ratio <= 0)
     return 1e-300;
+  Double_t tau = ratio * sigma;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);

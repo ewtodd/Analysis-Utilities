@@ -230,16 +230,16 @@ void InteractiveRooFitEditor::BuildPeakTab(TGCompositeFrame *parent,
   TGGroupFrame *ltail_grp =
       new TGGroupFrame(parent, "Low-Side Tails", kVerticalFrame);
   parent->AddFrame(ltail_grp, new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 1));
-  AddParamRow(ltail_grp, offset + 4, "Exp Ratio");
-  AddParamRow(ltail_grp, offset + 5, "Exp Decay");
+  AddParamRow(ltail_grp, offset + 4, "Exp Amp");
+  AddParamRow(ltail_grp, offset + 5, "Exp Decay/Sigma");
   AddParamRow(ltail_grp, offset + 6, "Lin Ratio");
   AddParamRow(ltail_grp, offset + 7, "Lin Slope");
 
   TGGroupFrame *htail_grp =
       new TGGroupFrame(parent, "High-Side Tail", kVerticalFrame);
   parent->AddFrame(htail_grp, new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 3));
-  AddParamRow(htail_grp, offset + 8, "Exp Ratio");
-  AddParamRow(htail_grp, offset + 9, "Exp Decay");
+  AddParamRow(htail_grp, offset + 8, "Exp Amp");
+  AddParamRow(htail_grp, offset + 9, "Exp Decay/Sigma");
 }
 
 void InteractiveRooFitEditor::BuildBackgroundTab(TGCompositeFrame *parent) {
@@ -951,7 +951,7 @@ void InteractiveRooFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     break;
   case 5:
   case 9:
-    lo = 0.5;
+    lo = 1.0;
     hi = 100.0;
     break;
   case 7:
