@@ -758,7 +758,8 @@ void InteractiveRooFitEditor::DoRefit() {
       total_pdf_->fitTo(*data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
                          RooFit::Range("fitrange"),
                          RooFit::SumW2Error(kFALSE),
-                         RooFit::PrintLevel(-1), RooFit::Strategy(2),
+                         RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1),
+                         RooFit::Strategy(2),
                          RooFit::Minimizer("Minuit2", "migrad"),
                          RooFit::EvalBackend::Cpu());
   if (res)
