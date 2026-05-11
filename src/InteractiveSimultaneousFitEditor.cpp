@@ -798,7 +798,8 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
   RooFitResult *res = sim_pdf_->fitTo(
       *combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
       RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
-      RooFit::PrintLevel(-1), RooFit::Strategy(1),
+      RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1),
+      RooFit::Strategy(1),
       RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
   if (res)
     delete res;

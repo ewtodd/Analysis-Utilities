@@ -4,6 +4,7 @@
 #include "InteractiveSimultaneousFitEditor.hpp"
 #include "RooFitPhotopeakPdfs.hpp"
 
+#include <RooAbsReal.h>
 #include <RooMsgService.h>
 #include <TBranch.h>
 #include <TGraph.h>
@@ -85,6 +86,7 @@ void RooFitUtils::InitState() {
   for (Int_t i = 0; i < RooMsgService::instance().numStreams(); i++) {
     RooMsgService::instance().getStream(i).removeTopic(RooFit::InputArguments);
   }
+  RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::Ignore);
   RooRealVar::enableSilentClipping();
 }
 
@@ -586,6 +588,7 @@ RooFitResult *RooFitUtils::RunFit(Bool_t quiet) {
                          RooFit::Range(kFitRangeName),
                          RooFit::SumW2Error(kFALSE),
                          RooFit::PrintLevel(print_level),
+                         RooFit::PrintEvalErrors(-1),
                          RooFit::Strategy(2),
                          RooFit::Minimizer("Minuit2", "migrad"),
                          RooFit::EvalBackend::Cpu());
@@ -800,11 +803,12 @@ void RooFitUtils::SaveInteractiveParams(const TString &input_name,
               << std::endl;
     return;
   }
-  out << std::setprecision(15);
+  out << std::setprecision(17);
   out << "RANGE " << fit_range_low_ << " " << fit_range_high_ << "\n";
   std::vector<RooRealVar *> all = CollectAllParams();
   for (size_t i = 0; i < all.size(); i++) {
     out << all[i]->GetName() << " " << all[i]->getVal() << " "
+        << all[i]->getError() << " "
         << (all[i]->isConstant() ? 1 : 0) << "\n";
   }
   out.close();
@@ -834,10 +838,11 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
     BuildDisplayHistogram();
   }
 
-  Double_t value;
+  Double_t value, error;
   Int_t fixed;
-  while (in >> token >> value >> fixed && idx < (Int_t)all.size()) {
+  while (in >> token >> value >> error >> fixed && idx < (Int_t)all.size()) {
     all[idx]->setVal(value);
+    all[idx]->setError(error);
     all[idx]->setConstant(fixed ? kTRUE : kFALSE);
     idx++;
   }
@@ -866,7 +871,7 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
               << filename << std::endl;
     return;
   }
-  out << std::setprecision(15);
+  out << std::setprecision(17);
   out << "RANGE " << x_->getMin("fitrange") << " " << x_->getMax("fitrange")
       << "\n";
 
@@ -901,6 +906,7 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
 
   for (size_t i = 0; i < ordered.size(); i++) {
     out << ordered[i]->GetName() << " " << ordered[i]->getVal() << " "
+        << ordered[i]->getError() << " "
         << (ordered[i]->isConstant() ? 1 : 0) << "\n";
   }
   out.close();
@@ -949,9 +955,9 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     x_->setRange("fitrange", rlo, rhi);
   }
 
-  Double_t value;
+  Double_t value, error;
   Int_t fixed;
-  while (in >> token >> value >> fixed) {
+  while (in >> token >> value >> error >> fixed) {
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
     if (it == by_name.end()) {
       std::cerr << "WARNING: param " << token
@@ -959,6 +965,7 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
       continue;
     }
     it->second->setVal(value);
+    it->second->setError(error);
     it->second->setConstant(fixed ? kTRUE : kFALSE);
   }
   in.close();
@@ -2422,7 +2429,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     fit_result = sim_pdf_->fitTo(
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
         RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
-        RooFit::PrintLevel(0), RooFit::Strategy(1),
+        RooFit::PrintLevel(0), RooFit::PrintEvalErrors(-1),
+        RooFit::Strategy(1),
         RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
     sim_valid = (fit_result && fit_result->status() == 0);
     if (!sim_valid) {
