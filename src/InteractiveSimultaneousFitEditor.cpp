@@ -10,7 +10,7 @@
 
 InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
     const TGWindow *parent, RooSimultaneous *sim_pdf,
-    RooDataHist *combined_data, RooRealVar *x,
+    RooAbsData *combined_data, RooRealVar *x,
     const std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
     Double_t range_high, const TString &info_label)
     : TGMainFrame(parent, 1500, 950) {
@@ -765,8 +765,15 @@ void InteractiveSimultaneousFitEditor::OnRangeChanged() {
   x_->setRange("fitrange", range_low_, range_high_);
 
   for (size_t ci = 0; ci < channels_.size(); ci++) {
-    channels_[ci].hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
-                                                       1.1 * range_high_);
+    SimEditorChannelView &cv = channels_[ci];
+    if (cv.events) {
+      RooFitUtils::RefillDisplayHistogram(cv.hist_draw, *cv.events,
+                                           (Float_t)range_low_,
+                                           (Float_t)range_high_,
+                                           cv.display_bin_width_kev);
+    }
+    cv.hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
+                                            1.1 * range_high_);
   }
 
   syncing_ = kTRUE;
@@ -1038,7 +1045,7 @@ Int_t InteractiveSimultaneousFitEditor::PeakStyle(Int_t peak_idx) {
 }
 
 Bool_t LaunchInteractiveSimultaneousFitEditor(
-    RooSimultaneous *sim_pdf, RooDataHist *combined_data, RooRealVar *x,
+    RooSimultaneous *sim_pdf, RooAbsData *combined_data, RooRealVar *x,
     std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
     Double_t range_high, const TString &info_label) {
   if (!gClient) {

@@ -3,8 +3,8 @@
 
 #include "RooFitUtils.hpp"
 
+#include <RooAbsData.h>
 #include <RooAbsPdf.h>
-#include <RooDataHist.h>
 #include <RooRealVar.h>
 #include <TCanvas.h>
 #include <TGButton.h>
@@ -44,9 +44,11 @@ private:
   static const Int_t kRangeHiEntry = 7002;
 
   TH1 *hist_;
+  const std::vector<Double_t> *events_;
+  Float_t display_bin_width_kev_;
   RooAbsPdf *total_pdf_;
   RooRealVar *x_;
-  RooDataHist *data_;
+  RooAbsData *data_;
   std::vector<RooFitPeakModel> *peaks_;
   RooFitBackgroundModel *bkg_;
   TString info_label_text_;
@@ -134,8 +136,10 @@ private:
 
 public:
   InteractiveRooFitEditor(const TGWindow *parent, TH1 *hist,
+                           const std::vector<Double_t> *events,
+                           Float_t display_bin_width_kev,
                            RooAbsPdf *total_pdf, RooRealVar *x,
-                           RooDataHist *data,
+                           RooAbsData *data,
                            std::vector<RooFitPeakModel> *peaks,
                            RooFitBackgroundModel *bkg, Double_t range_low,
                            Double_t range_high,
@@ -152,8 +156,11 @@ public:
   TRootEmbeddedCanvas *GetEmbeddedCanvas() { return embedded_canvas_; }
 };
 
-Bool_t LaunchInteractiveRooFitEditor(TH1 *hist, RooAbsPdf *total_pdf,
-                                     RooRealVar *x, RooDataHist *data,
+Bool_t LaunchInteractiveRooFitEditor(TH1 *hist,
+                                     const std::vector<Double_t> *events,
+                                     Float_t display_bin_width_kev,
+                                     RooAbsPdf *total_pdf, RooRealVar *x,
+                                     RooAbsData *data,
                                      std::vector<RooFitPeakModel> *peaks,
                                      RooFitBackgroundModel *bkg,
                                      Double_t range_low, Double_t range_high,

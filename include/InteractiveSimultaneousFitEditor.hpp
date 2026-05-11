@@ -4,7 +4,7 @@
 #include "RooFitUtils.hpp"
 
 #include <RooAbsPdf.h>
-#include <RooDataHist.h>
+#include <RooAbsData.h>
 #include <RooRealVar.h>
 #include <RooSimultaneous.h>
 #include <TCanvas.h>
@@ -30,8 +30,10 @@
 struct SimEditorChannelView {
   TString name;
   TH1 *hist;
+  const std::vector<Double_t> *events;
+  Float_t display_bin_width_kev;
   RooAbsPdf *pdf;
-  RooDataHist *data;
+  RooAbsData *data;
   std::vector<RooFitPeakModel> *peaks;
   RooFitBackgroundModel *bkg;
   Int_t num_peaks;
@@ -85,7 +87,7 @@ private:
   static const Int_t kHiBoundBase = 50000;
 
   RooSimultaneous *sim_pdf_;
-  RooDataHist *combined_data_;
+  RooAbsData *combined_data_;
   RooRealVar *x_;
   std::vector<SimEditorChannelView> channels_;
   TString info_label_text_;
@@ -152,7 +154,7 @@ private:
 public:
   InteractiveSimultaneousFitEditor(
       const TGWindow *parent, RooSimultaneous *sim_pdf,
-      RooDataHist *combined_data, RooRealVar *x,
+      RooAbsData *combined_data, RooRealVar *x,
       const std::vector<SimEditorChannelView> &channel_views,
       Double_t range_low, Double_t range_high,
       const TString &info_label = "");
@@ -169,7 +171,7 @@ public:
 };
 
 Bool_t LaunchInteractiveSimultaneousFitEditor(
-    RooSimultaneous *sim_pdf, RooDataHist *combined_data, RooRealVar *x,
+    RooSimultaneous *sim_pdf, RooAbsData *combined_data, RooRealVar *x,
     std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
     Double_t range_high, const TString &info_label);
 
