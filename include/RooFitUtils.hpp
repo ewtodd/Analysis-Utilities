@@ -3,6 +3,7 @@
 
 #include "FittingUtils.hpp"
 #include "PlottingUtils.hpp"
+#include "RooFitPhotopeakPdfs.hpp"
 
 #include <RooAbsData.h>
 #include <RooAbsPdf.h>
@@ -16,14 +17,25 @@
 #include <RooFormulaVar.h>
 #include <RooGaussian.h>
 #include <RooGenericPdf.h>
+#include <RooMsgService.h>
 #include <RooPolynomial.h>
 #include <RooRealVar.h>
 #include <RooSimultaneous.h>
 
+#include <TBranch.h>
+#include <TGraph.h>
 #include <TH1.h>
+#include <TLeaf.h>
+#include <TMath.h>
 #include <TString.h>
+#include <TSystem.h>
 #include <TTree.h>
+#include <algorithm>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <map>
+#include <set>
 #include <vector>
 
 namespace RooFitFunctions {

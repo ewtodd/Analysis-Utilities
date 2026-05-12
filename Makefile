@@ -1,5 +1,5 @@
 CXX = $(shell root-config --cxx)
-CXXFLAGS = $(shell root-config --cflags) -std=c++17 -Wall -Wextra -O2 -fPIC
+CXXFLAGS = $(shell root-config --cflags) -std=c++17 -Wall -Wextra -O3 -march=x86-64-v3 -fPIC
 ROOTLIBS = $(shell root-config --glibs) -lRooFit -lRooFitCore
 # Directories
 SRCDIR = src
