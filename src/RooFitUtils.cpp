@@ -2,20 +2,6 @@
 
 #include "InteractiveRooFitEditor.hpp"
 #include "InteractiveSimultaneousFitEditor.hpp"
-#include "RooFitPhotopeakPdfs.hpp"
-
-#include <RooAbsReal.h>
-#include <RooMsgService.h>
-#include <TBranch.h>
-#include <TGraph.h>
-#include <TLeaf.h>
-#include <TMath.h>
-#include <TSystem.h>
-#include <algorithm>
-#include <fstream>
-#include <iomanip>
-#include <set>
-#include <iostream>
 
 RooAbsPdf *RooFitFunctions::MakeGaussian(const TString &name, RooRealVar &x,
                                          RooRealVar &mu, RooRealVar &sigma) {
