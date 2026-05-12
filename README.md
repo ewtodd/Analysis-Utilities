@@ -67,8 +67,8 @@ Outputs processed data to ROOT TTrees with optional waveform storage.
 Fit gamma-ray spectral photopeaks with a composable model.
 Two backends are provided with identical APIs and result types so call sites can swap one for the other:
 <!---->
-- **`FittingUtils`** - `TF1` + ROOT::Math::Minimizer (Minuit2). Fast, pointwise un-normalized model evaluation.
-- **`RooFitUtils`** - `RooAddPdf` of `RooGenericPdf` components + `RooFit::EvalBackend::Cpu`. Slower per Minuit step (each component PDF re-normalizes numerically over the fit range) but provides RooFit's full machinery for downstream extensions (e.g. simultaneous fits).
+- **`FittingUtils`** - `TF1` + ROOT::Math::Minimizer (Minuit2), binned chi-squared. Fast, pointwise un-normalized model evaluation.
+- **`RooFitUtils`** - `RooAddPdf` of `RooGenericPdf` components + `RooFit::EvalBackend::Cpu`, **unbinned extended maximum likelihood**. Slower per Minuit step (each component PDF re-normalizes numerically over the fit range) but provides RooFit's full machinery for downstream extensions (e.g. simultaneous fits).
 <!---->
 Both classes take the same constructor signature, expose the same `Set*` flag setters, and return the same `FitResult` struct.
 The interactive fit editor is implemented per-backend (`InteractiveFitEditor` for TF1, `InteractiveRooFitEditor` for RooFit).
@@ -97,6 +97,9 @@ Reduced chi-squared is displayed on fit plots by default.
 Individual peak components are plotted summed with the background for readability, and multi-peak fits use distinct line styles per peak.
 <!---->
 **Backend-specific notes for `RooFitUtils`**:
+- Input is an event-level `std::vector<Double_t>` plus a display bin width (used only for plotting and the post-hoc reduced chi-squared used for component pruning).
+A static `LoadEventsFromTree` helper extracts events from a ROOT `TTree` branch.
+The fit itself never bins.
 - Amplitude/yield semantics: gaussian, step and tail "amplitude" fields in `PeakFitResult` carry RooFit yields (event counts) rather than peak heights.
 This is internally consistent for constrained fits because the ratio `component_amplitude / gaus_amplitude` is the same quantity in both backends.
 - The low-energy linear tail factor `(1 + s·(x-μ))` is floored at zero to keep the PDF non-negative as required by RooFit normalization. The TF1 backend has no such constraint.
@@ -107,7 +110,7 @@ This is internally consistent for constrained fits because the ratio `component_
 **Interactive fitting**:
 - `SetInteractive()` enables a GUI editor that opens after the automated fit completes.
 The editor shows the histogram, total fit, and individual components with a residual panel, all updating in real-time as parameters are adjusted via sliders and number entries.
-A fit range slider allows adjusting the fit range visually.
+A fit range slider allows adjusting the fit range visually; for the RooFit backend the display histogram is rebuilt from the underlying events whenever the range changes, so binning follows the zoom in real time (the fit itself remains unbinned).
 Parameters can be fixed/freed via checkboxes, and a Refit button runs the underlying minimizer with the current values as initial guesses.
 Live chi-squared is displayed on the plot.
 <!---->
