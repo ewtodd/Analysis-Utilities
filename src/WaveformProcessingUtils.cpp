@@ -1,4 +1,5 @@
 #include "WaveformProcessingUtils.hpp"
+#include "IOUtils.hpp"
 
 WaveformProcessingUtils::WaveformProcessingUtils()
     : polarity_(1), trigger_threshold_(0.15), num_samples_baseline_(10),
@@ -261,9 +262,9 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
   }
   std::cout << std::endl;
 
-  std::ofstream stats_file(
-      "root_files/" + std::string(current_output_name_.Data()) + ".stats",
-      std::ios::app);
+  TString stats_path = IO::GetRootFilesBaseDir() + "/" + current_output_name_ +
+                       ".stats";
+  std::ofstream stats_file(stats_path.Data(), std::ios::app);
   if (stats_file.is_open()) {
     stats_file << "Waveform processing statistics..." << std::endl;
     stats_file << "Total processed: " << stats_.total_processed << std::endl;
@@ -297,15 +298,16 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   current_output_name_ = output_name;
   sample_waveforms_saved_ = 0;
 
-  if (gSystem->AccessPathName("root_files")) {
-    gSystem->mkdir("root_files", kTRUE);
+  const TString base_dir = IO::GetRootFilesBaseDir();
+  if (gSystem->AccessPathName(base_dir)) {
+    gSystem->mkdir(base_dir, kTRUE);
   }
 
   // clear file
-  std::ofstream("root_files/" + std::string(output_name.Data()) + ".stats",
-                std::ios::trunc);
+  TString clear_path = base_dir + "/" + output_name + ".stats";
+  std::ofstream(clear_path.Data(), std::ios::trunc);
 
-  TString output_filename = "root_files/" + output_name + ".root";
+  TString output_filename = base_dir + "/" + output_name + ".root";
   output_file_ = new TFile(output_filename, "RECREATE");
   if (!output_file_ || output_file_->IsZombie()) {
     std::cout << "Error: Could not create output file " << output_filename

@@ -40,8 +40,9 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
                                             const TString output_name,
                                             UShort_t global_header_override,
                                             Bool_t skip_bad_events) {
-  if (gSystem->AccessPathName("root_files")) {
-    gSystem->mkdir("root_files", kTRUE);
+  const TString base_dir = IO::GetRootFilesBaseDir();
+  if (gSystem->AccessPathName(base_dir)) {
+    gSystem->mkdir(base_dir, kTRUE);
   }
 
   if (gSystem->AccessPathName(input_filename)) {
@@ -50,7 +51,7 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
     return 0;
   }
 
-  TString output_filename = "root_files/" + output_name + ".root";
+  TString output_filename = base_dir + "/" + output_name + ".root";
 
   CoMPASSReader reader;
   Bool_t open_success =
@@ -253,8 +254,9 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
 Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
                                            const TString output_name,
                                            Bool_t corrections_enabled) {
-  if (gSystem->AccessPathName("root_files")) {
-    gSystem->mkdir("root_files", kTRUE);
+  const TString base_dir = IO::GetRootFilesBaseDir();
+  if (gSystem->AccessPathName(base_dir)) {
+    gSystem->mkdir(base_dir, kTRUE);
   }
 
   if (gSystem->AccessPathName(input_filename)) {
@@ -263,7 +265,7 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
     return kFALSE;
   }
 
-  TString output_filename = "root_files/" + output_name + "_raw.root";
+  TString output_filename = base_dir + "/" + output_name + "_raw.root";
 
   WaveDump742Reader reader(corrections_enabled);
 
