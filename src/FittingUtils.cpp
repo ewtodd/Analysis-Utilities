@@ -332,6 +332,9 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
                            Bool_t use_low_lin_tail, Bool_t use_high_exp_tail) {
 
   working_hist_ = static_cast<TH1 *>(working_hist->Clone());
+  // Detach from gDirectory so its lifetime is bound to this object, not to
+  // whatever TFile happens to be current at construction time.
+  working_hist_->SetDirectory(nullptr);
   fit_range_low_ = fit_range_low;
   fit_range_high_ = fit_range_high;
   use_flat_background_ = use_flat_background;
@@ -446,7 +449,9 @@ FittingUtils::FittingUtils(TH1 *working_hist, Float_t fit_range_low,
 }
 
 FittingUtils::~FittingUtils() {
+  delete fit_function_;
   fit_function_ = nullptr;
+  delete working_hist_;
   working_hist_ = nullptr;
 }
 
@@ -715,6 +720,11 @@ void FittingUtils::PlotFitSinglePeak(const TString input_name,
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
       peak_name + "_" + input_name, "fits", label, kTRUE);
+
+  delete total_graph;
+  for (Int_t i = 0; i < (Int_t)components.size(); i++) {
+    delete components[i];
+  }
 }
 
 void FittingUtils::PlotFitDoublePeak(const TString input_name,
@@ -756,6 +766,11 @@ void FittingUtils::PlotFitDoublePeak(const TString input_name,
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
       peak_name + "_" + input_name, "fits", label, kTRUE);
+
+  delete total_graph;
+  for (Int_t i = 0; i < (Int_t)components.size(); i++) {
+    delete components[i];
+  }
 }
 
 void FittingUtils::PlotFitTriplePeak(const TString input_name,
@@ -798,6 +813,11 @@ void FittingUtils::PlotFitTriplePeak(const TString input_name,
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
       peak_name + "_" + input_name, "fits", label, kTRUE);
+
+  delete total_graph;
+  for (Int_t i = 0; i < (Int_t)components.size(); i++) {
+    delete components[i];
+  }
 }
 
 Double_t FittingUtils::EstimateBackground() {
@@ -1212,6 +1232,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
     mu2_init = temp;
   }
 
+  delete fit_function_;
   fit_function_ = new TF1("DoublePeak", &FittingFunctions::DoublePeakFunction,
                           fit_range_low_, fit_range_high_, 22);
 
@@ -1747,6 +1768,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   results.peaks.emplace_back(); // peak 1, default -1
   results.peaks.emplace_back(); // peak 2, default -1
 
+  delete fit_function_;
   fit_function_ = new TF1("DoublePeak", &FittingFunctions::DoublePeakFunction,
                           fit_range_low_, fit_range_high_, 22);
 
@@ -2149,6 +2171,7 @@ FitResult FittingUtils::FitTriplePeak(const TString input_name,
   results.peaks.emplace_back(); // peak 2, default -1
   results.peaks.emplace_back(); // peak 3, default -1
 
+  delete fit_function_;
   fit_function_ = new TF1("TriplePeak", &FittingFunctions::TriplePeakFunction,
                           fit_range_low_, fit_range_high_, 32);
 

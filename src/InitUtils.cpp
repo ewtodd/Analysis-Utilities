@@ -242,9 +242,6 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   reader.Close();
 
   delete outfile;
-  if (samples) {
-    delete samples;
-  }
 
   std::cout << "Output saved to: " << output_filename << std::endl;
 
@@ -324,7 +321,6 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
   reader.Close();
 
   delete outfile;
-  delete samples;
 
   std::cout << "Output saved to: " << output_filename << std::endl;
 
