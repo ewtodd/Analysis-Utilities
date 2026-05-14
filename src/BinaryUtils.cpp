@@ -235,11 +235,27 @@ Bool_t CoMPASSReader::ReadEvent() {
               sizeof(UInt_t));
     bytes_read += sizeof(UChar_t) + sizeof(UInt_t);
 
+    // Sanity-cap num_samples; a corrupt header can read garbage and trigger
+    // a multi-GB allocation in TArrayS::Set.
+    const UInt_t kMaxSamples = 1u << 20;
+    if (current_event.num_samples > kMaxSamples) {
+      std::cerr << "Error: implausible num_samples " << current_event.num_samples
+                << " at byte " << bytes_read << " (treating as truncated)"
+                << std::endl;
+      return kFALSE;
+    }
+
     current_event.samples.Set(current_event.num_samples);
-    UShort_t sample_buf;
+    std::vector<UShort_t> sample_buf(current_event.num_samples);
+    file.read(reinterpret_cast<char *>(sample_buf.data()),
+              current_event.num_samples * sizeof(UShort_t));
+    if (file.fail()) {
+      std::cerr << "Warning: Incomplete waveform at byte " << bytes_read
+                << " (truncated file, event discarded)" << std::endl;
+      return kFALSE;
+    }
     for (UInt_t i = 0; i < current_event.num_samples; i++) {
-      file.read(reinterpret_cast<char *>(&sample_buf), sizeof(UShort_t));
-      current_event.samples.SetAt(static_cast<Short_t>(sample_buf), i);
+      current_event.samples.SetAt(static_cast<Short_t>(sample_buf[i]), i);
     }
     bytes_read += current_event.num_samples * sizeof(UShort_t);
   }

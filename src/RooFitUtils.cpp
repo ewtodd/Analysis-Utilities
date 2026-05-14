@@ -1077,6 +1077,11 @@ void RooFitUtils::PlotFitSinglePeak(const TString input_name,
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
       peak_name + "_" + input_name, "fits", label, kTRUE);
+
+  delete total_graph;
+  for (Int_t i = 0; i < (Int_t)components.size(); i++) {
+    delete components[i];
+  }
 }
 
 void RooFitUtils::PlotFitDoublePeak(const TString input_name,
@@ -1120,6 +1125,11 @@ void RooFitUtils::PlotFitDoublePeak(const TString input_name,
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
       peak_name + "_" + input_name, "fits", label, kTRUE);
+
+  delete total_graph;
+  for (Int_t i = 0; i < (Int_t)components.size(); i++) {
+    delete components[i];
+  }
 }
 
 void RooFitUtils::PlotFitTriplePeak(const TString input_name,
@@ -1165,6 +1175,11 @@ void RooFitUtils::PlotFitTriplePeak(const TString input_name,
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
       peak_name + "_" + input_name, "fits", label, kTRUE);
+
+  delete total_graph;
+  for (Int_t i = 0; i < (Int_t)components.size(); i++) {
+    delete components[i];
+  }
 }
 
 FitResult RooFitUtils::FitSinglePeak(const TString input_name,

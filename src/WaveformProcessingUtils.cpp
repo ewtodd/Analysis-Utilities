@@ -22,17 +22,19 @@ WaveformProcessingUtils::WaveformProcessingUtils(
       input_format_(config.input_format) {}
 
 WaveformProcessingUtils::~WaveformProcessingUtils() {
-  if (save_waveform_) {
-    delete save_waveform_;
-    save_waveform_ = nullptr;
-  }
   if (output_file_) {
     if (output_file_->IsOpen()) {
       output_file_->Close();
     }
     delete output_file_;
     output_file_ = nullptr;
+    if (store_waveforms_) {
+      // The TFile cascade freed save_waveform_ through its branch.
+      save_waveform_ = nullptr;
+    }
   }
+  delete save_waveform_;
+  save_waveform_ = nullptr;
 }
 
 Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayS &samples) {
@@ -297,6 +299,9 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
                                             const TString output_name) {
   current_output_name_ = output_name;
   sample_waveforms_saved_ = 0;
+  if (!save_waveform_) {
+    save_waveform_ = new TArrayF();
+  }
 
   const TString base_dir = IO::GetRootFilesBaseDir();
   if (gSystem->AccessPathName(base_dir)) {
@@ -372,6 +377,7 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
 
   delete samples;
   file->Close();
+  delete file;
 
   output_file_->cd();
   output_tree_->Write("", TObject::kOverwrite);
@@ -379,6 +385,9 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   delete output_file_;
   output_file_ = nullptr;
   output_tree_ = nullptr;
+  if (store_waveforms_) {
+    save_waveform_ = nullptr;
+  }
 
   if (verbose_) {
     PrintAllStatistics();

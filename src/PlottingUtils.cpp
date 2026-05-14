@@ -351,6 +351,8 @@ void PlottingUtils::PlotFitWithResiduals(
   gROOT->GetListOfCanvases()->Remove(canvas);
   canvas->SetBatch(kTRUE);
   delete canvas;
+  delete residuals;
+  delete zero_line;
 }
 
 void PlottingUtils::PlotPullHistogram(TGraph *residuals,
