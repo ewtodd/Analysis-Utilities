@@ -117,6 +117,22 @@ InteractiveRooFitEditor::~InteractiveRooFitEditor() {
     redraw_timer_->TurnOff();
     delete redraw_timer_;
   }
+
+  // Drawing primitives drawn on the embedded canvas — TPad does not
+  // auto-delete user primitives, so they have to go by hand.
+  for (Int_t p = 0; p < 3; p++) {
+    for (Int_t c = 0; c < 4; c++) {
+      delete comp_graphs_[p][c];
+    }
+  }
+  delete chi2_label_;
+  delete zero_line_;
+  delete res_graph_;
+  delete bkg_graph_;
+  delete total_graph_;
+  delete hist_draw_;
+  delete residual_pad_;
+  delete main_pad_;
 }
 
 void InteractiveRooFitEditor::BuildGUI() {

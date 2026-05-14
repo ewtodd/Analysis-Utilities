@@ -125,6 +125,25 @@ InteractiveSimultaneousFitEditor::~InteractiveSimultaneousFitEditor() {
     redraw_timer_->TurnOff();
     delete redraw_timer_;
   }
+
+  // Drawing primitives drawn on each channel's embedded canvas — TPad does
+  // not auto-delete user primitives, so they have to go by hand.
+  for (Int_t ci = 0; ci < (Int_t)channels_.size(); ci++) {
+    SimEditorChannelView &cv = channels_[ci];
+    for (Int_t p = 0; p < 3; p++) {
+      for (Int_t c = 0; c < 4; c++) {
+        delete cv.comp_graphs[p][c];
+      }
+    }
+    delete cv.chi2_label;
+    delete cv.zero_line;
+    delete cv.res_graph;
+    delete cv.bkg_graph;
+    delete cv.total_graph;
+    delete cv.hist_draw;
+    delete cv.residual_pad;
+    delete cv.main_pad;
+  }
 }
 
 Int_t InteractiveSimultaneousFitEditor::ChannelIndexFromWidgetId(Int_t base,
