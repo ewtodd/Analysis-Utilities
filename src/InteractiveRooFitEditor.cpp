@@ -471,7 +471,7 @@ void InteractiveRooFitEditor::UpdateAllGraphs() {
     Double_t xv = range_low_ + i * x_step;
     x_->setVal(xv);
     bkg_graph_->SetPoint(i, xv,
-                          bkg_yield * bkg_->bkg_pdf->getVal(&nset) * bin_width);
+                         bkg_yield * bkg_->bkg_pdf->getVal(&nset) * bin_width);
   }
 
   for (Int_t pi = 0; pi < num_peaks_; pi++) {
@@ -487,21 +487,15 @@ void InteractiveRooFitEditor::UpdateAllGraphs() {
       x_->setVal(xv);
       Double_t bkg_v = bkg_yield * bkg_->bkg_pdf->getVal(&nset) * bin_width;
 
-      comp_graphs_[pi][0]->SetPoint(i, xv,
-                                     gy * p.gauss_pdf->getVal(&nset) *
-                                             bin_width +
-                                         bkg_v);
-      comp_graphs_[pi][1]->SetPoint(i, xv,
-                                     sy * p.step_pdf->getVal(&nset) *
-                                             bin_width +
-                                         bkg_v);
+      comp_graphs_[pi][0]->SetPoint(
+          i, xv, gy * p.gauss_pdf->getVal(&nset) * bin_width + bkg_v);
+      comp_graphs_[pi][1]->SetPoint(
+          i, xv, sy * p.step_pdf->getVal(&nset) * bin_width + bkg_v);
       Double_t y_low = lexp_y * p.low_exp_pdf->getVal(&nset) * bin_width +
                        llin_y * p.low_lin_pdf->getVal(&nset) * bin_width;
       comp_graphs_[pi][2]->SetPoint(i, xv, y_low + bkg_v);
-      comp_graphs_[pi][3]->SetPoint(i, xv,
-                                     hexp_y * p.high_exp_pdf->getVal(&nset) *
-                                             bin_width +
-                                         bkg_v);
+      comp_graphs_[pi][3]->SetPoint(
+          i, xv, hexp_y * p.high_exp_pdf->getVal(&nset) * bin_width + bkg_v);
     }
   }
 
@@ -667,7 +661,7 @@ void InteractiveRooFitEditor::OnEntryChanged(Int_t param_idx) {
   }
 
   params_[param_idx]->setRange(current_bounds_low_[param_idx],
-                                current_bounds_high_[param_idx]);
+                               current_bounds_high_[param_idx]);
   params_[param_idx]->setVal(val);
 
   syncing_ = kTRUE;
@@ -722,7 +716,7 @@ void InteractiveRooFitEditor::OnFixToggled(Int_t param_idx) {
     value_entries_[param_idx]->GetNumberEntry()->SetEnabled(kFALSE);
   } else {
     params_[param_idx]->setRange(current_bounds_low_[param_idx],
-                                  current_bounds_high_[param_idx]);
+                                 current_bounds_high_[param_idx]);
     params_[param_idx]->setConstant(kFALSE);
     sliders_[param_idx]->SetEnabled(kTRUE);
     value_entries_[param_idx]->GetNumberEntry()->SetEnabled(kTRUE);
@@ -748,10 +742,9 @@ void InteractiveRooFitEditor::OnRangeChanged() {
   x_->setRange("fitrange", range_low_, range_high_);
 
   if (events_) {
-    RooFitUtils::RefillDisplayHistogram(hist_draw_, *events_,
-                                         (Float_t)range_low_,
-                                         (Float_t)range_high_,
-                                         display_bin_width_kev_);
+    RooFitUtils::RefillDisplayHistogram(
+        hist_draw_, *events_, (Float_t)range_low_, (Float_t)range_high_,
+        display_bin_width_kev_);
   }
   hist_draw_->GetXaxis()->SetRangeUser(0.9 * range_low_, 1.1 * range_high_);
 
@@ -770,14 +763,11 @@ void InteractiveRooFitEditor::DoRefit() {
     }
   }
 
-  RooFitResult *res =
-      total_pdf_->fitTo(*data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-                         RooFit::Range("fitrange"),
-                         RooFit::SumW2Error(kFALSE),
-                         RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1),
-                         RooFit::Strategy(2),
-                         RooFit::Minimizer("Minuit2", "migrad"),
-                         RooFit::EvalBackend::Cpu());
+  RooFitResult *res = total_pdf_->fitTo(
+      *data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
+      RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
+      RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1), RooFit::Strategy(2),
+      RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
   if (res)
     delete res;
 
@@ -837,7 +827,7 @@ void InteractiveRooFitEditor::DoReset() {
 }
 
 Bool_t InteractiveRooFitEditor::ProcessMessage(Long_t msg, Long_t parm1,
-                                                Long_t parm2) {
+                                               Long_t parm2) {
   if (syncing_)
     return kTRUE;
 
@@ -929,7 +919,7 @@ Bool_t InteractiveRooFitEditor::IsFixed(Int_t param_idx) {
 }
 
 void InteractiveRooFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
-                                                Double_t &hi) {
+                                               Double_t &hi) {
   Double_t peak_height = hist_->GetMaximum();
   Double_t range_width = range_high_ - range_low_;
 
@@ -989,15 +979,12 @@ Int_t InteractiveRooFitEditor::PeakStyle(Int_t peak_idx) {
   return 4;
 }
 
-Bool_t LaunchInteractiveRooFitEditor(TH1 *hist,
-                                     const std::vector<Double_t> *events,
-                                     Float_t display_bin_width_kev,
-                                     RooAbsPdf *total_pdf, RooRealVar *x,
-                                     RooAbsData *data,
-                                     std::vector<RooFitPeakModel> *peaks,
-                                     RooFitBackgroundModel *bkg,
-                                     Double_t range_low, Double_t range_high,
-                                     const TString &info_label) {
+Bool_t LaunchInteractiveRooFitEditor(
+    TH1 *hist, const std::vector<Double_t> *events,
+    Float_t display_bin_width_kev, RooAbsPdf *total_pdf, RooRealVar *x,
+    RooAbsData *data, std::vector<RooFitPeakModel> *peaks,
+    RooFitBackgroundModel *bkg, Double_t range_low, Double_t range_high,
+    const TString &info_label) {
   if (!gClient) {
     std::cerr << "InteractiveRooFitEditor: GUI not available (gClient is null)."
               << std::endl;

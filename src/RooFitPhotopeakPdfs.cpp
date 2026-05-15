@@ -24,9 +24,7 @@ Double_t SigmoidNeg(Double_t z) {
   return std::exp(-z) / (1.0 + std::exp(-z));
 }
 
-Double_t StepAntideriv(Double_t z) {
-  return -SoftPlusNeg(z) + SigmoidNeg(z);
-}
+Double_t StepAntideriv(Double_t z) { return -SoftPlusNeg(z) + SigmoidNeg(z); }
 
 Double_t ExpTailDensity(Double_t y, Double_t sigma, Double_t tau) {
   Double_t sqrt2_sigma = std::sqrt(2.0) * sigma;
@@ -58,8 +56,7 @@ Double_t LowLinAntideriv(Double_t y, Double_t sigma, Double_t slope) {
   Double_t gauss = std::exp(-(by * by));
   Double_t inv_beta_sqrt_pi = 1.0 / (beta * std::sqrt(M_PI));
   Double_t flat = y * erfc_by - gauss * inv_beta_sqrt_pi;
-  Double_t lin = 0.5 * y * y * erfc_by -
-                 y * gauss * inv_beta_sqrt_pi / 2.0 +
+  Double_t lin = 0.5 * y * y * erfc_by - y * gauss * inv_beta_sqrt_pi / 2.0 +
                  erf_by / (4.0 * beta * beta);
   return flat + slope * lin;
 }
@@ -91,9 +88,9 @@ Double_t LowLinIntegral(Double_t y_lo, Double_t y_hi, Double_t sigma,
 } // namespace
 
 RooStepShelf::RooStepShelf(const char *name, const char *title, RooAbsReal &x,
-                            RooAbsReal &mu, RooAbsReal &sigma)
-    : RooAbsPdf(name, title), x_("x", "x", this, x),
-      mu_("mu", "mu", this, mu), sigma_("sigma", "sigma", this, sigma) {}
+                           RooAbsReal &mu, RooAbsReal &sigma)
+    : RooAbsPdf(name, title), x_("x", "x", this, x), mu_("mu", "mu", this, mu),
+      sigma_("sigma", "sigma", this, sigma) {}
 
 RooStepShelf::RooStepShelf(const RooStepShelf &other, const char *name)
     : RooAbsPdf(other, name), x_("x", this, other.x_),
@@ -134,12 +131,10 @@ Double_t RooStepShelf::analyticalIntegral(Int_t code,
   return val;
 }
 
-RooLowExpTail::RooLowExpTail(const char *name, const char *title,
-                              RooAbsReal &x, RooAbsReal &mu, RooAbsReal &sigma,
-                              RooAbsReal &tau)
-    : RooAbsPdf(name, title), x_("x", "x", this, x),
-      mu_("mu", "mu", this, mu), sigma_("sigma", "sigma", this, sigma),
-      tau_("tau", "tau", this, tau) {}
+RooLowExpTail::RooLowExpTail(const char *name, const char *title, RooAbsReal &x,
+                             RooAbsReal &mu, RooAbsReal &sigma, RooAbsReal &tau)
+    : RooAbsPdf(name, title), x_("x", "x", this, x), mu_("mu", "mu", this, mu),
+      sigma_("sigma", "sigma", this, sigma), tau_("tau", "tau", this, tau) {}
 
 RooLowExpTail::RooLowExpTail(const RooLowExpTail &other, const char *name)
     : RooAbsPdf(other, name), x_("x", this, other.x_),
@@ -157,15 +152,15 @@ Double_t RooLowExpTail::evaluate() const {
 }
 
 Int_t RooLowExpTail::getAnalyticalIntegral(RooArgSet &allVars,
-                                            RooArgSet &analVars,
-                                            const char * /*rangeName*/) const {
+                                           RooArgSet &analVars,
+                                           const char * /*rangeName*/) const {
   if (matchArgs(allVars, analVars, x_))
     return 1;
   return 0;
 }
 
 Double_t RooLowExpTail::analyticalIntegral(Int_t code,
-                                            const char *rangeName) const {
+                                           const char *rangeName) const {
   if (code != 1)
     return 1e-300;
   Double_t sigma = (Double_t)sigma_;
@@ -178,18 +173,18 @@ Double_t RooLowExpTail::analyticalIntegral(Int_t code,
   Double_t x_hi = x_.max(rangeName);
   Double_t y_lo = x_lo - mu;
   Double_t y_hi = x_hi - mu;
-  Double_t val = ExpTailAntideriv(y_hi, sigma, tau) -
-                 ExpTailAntideriv(y_lo, sigma, tau);
+  Double_t val =
+      ExpTailAntideriv(y_hi, sigma, tau) - ExpTailAntideriv(y_lo, sigma, tau);
   if (!std::isfinite(val) || val < 1e-300)
     return 1e-300;
   return val;
 }
 
-RooLowLinTail::RooLowLinTail(const char *name, const char *title,
-                              RooAbsReal &x, RooAbsReal &mu, RooAbsReal &sigma,
-                              RooAbsReal &slope)
-    : RooAbsPdf(name, title), x_("x", "x", this, x),
-      mu_("mu", "mu", this, mu), sigma_("sigma", "sigma", this, sigma),
+RooLowLinTail::RooLowLinTail(const char *name, const char *title, RooAbsReal &x,
+                             RooAbsReal &mu, RooAbsReal &sigma,
+                             RooAbsReal &slope)
+    : RooAbsPdf(name, title), x_("x", "x", this, x), mu_("mu", "mu", this, mu),
+      sigma_("sigma", "sigma", this, sigma),
       slope_("slope", "slope", this, slope) {}
 
 RooLowLinTail::RooLowLinTail(const RooLowLinTail &other, const char *name)
@@ -207,15 +202,15 @@ Double_t RooLowLinTail::evaluate() const {
 }
 
 Int_t RooLowLinTail::getAnalyticalIntegral(RooArgSet &allVars,
-                                            RooArgSet &analVars,
-                                            const char * /*rangeName*/) const {
+                                           RooArgSet &analVars,
+                                           const char * /*rangeName*/) const {
   if (matchArgs(allVars, analVars, x_))
     return 1;
   return 0;
 }
 
 Double_t RooLowLinTail::analyticalIntegral(Int_t code,
-                                            const char *rangeName) const {
+                                           const char *rangeName) const {
   if (code != 1)
     return 0.0;
   Double_t sigma = (Double_t)sigma_;
@@ -231,11 +226,10 @@ Double_t RooLowLinTail::analyticalIntegral(Int_t code,
 }
 
 RooHighExpTail::RooHighExpTail(const char *name, const char *title,
-                                RooAbsReal &x, RooAbsReal &mu,
-                                RooAbsReal &sigma, RooAbsReal &tau)
-    : RooAbsPdf(name, title), x_("x", "x", this, x),
-      mu_("mu", "mu", this, mu), sigma_("sigma", "sigma", this, sigma),
-      tau_("tau", "tau", this, tau) {}
+                               RooAbsReal &x, RooAbsReal &mu, RooAbsReal &sigma,
+                               RooAbsReal &tau)
+    : RooAbsPdf(name, title), x_("x", "x", this, x), mu_("mu", "mu", this, mu),
+      sigma_("sigma", "sigma", this, sigma), tau_("tau", "tau", this, tau) {}
 
 RooHighExpTail::RooHighExpTail(const RooHighExpTail &other, const char *name)
     : RooAbsPdf(other, name), x_("x", this, other.x_),
@@ -253,15 +247,15 @@ Double_t RooHighExpTail::evaluate() const {
 }
 
 Int_t RooHighExpTail::getAnalyticalIntegral(RooArgSet &allVars,
-                                             RooArgSet &analVars,
-                                             const char * /*rangeName*/) const {
+                                            RooArgSet &analVars,
+                                            const char * /*rangeName*/) const {
   if (matchArgs(allVars, analVars, x_))
     return 1;
   return 0;
 }
 
 Double_t RooHighExpTail::analyticalIntegral(Int_t code,
-                                             const char *rangeName) const {
+                                            const char *rangeName) const {
   if (code != 1)
     return 1e-300;
   Double_t sigma = (Double_t)sigma_;
@@ -274,8 +268,8 @@ Double_t RooHighExpTail::analyticalIntegral(Int_t code,
   Double_t x_hi = x_.max(rangeName);
   Double_t z_lo = mu - x_lo;
   Double_t z_hi = mu - x_hi;
-  Double_t val = ExpTailAntideriv(z_lo, sigma, tau) -
-                 ExpTailAntideriv(z_hi, sigma, tau);
+  Double_t val =
+      ExpTailAntideriv(z_lo, sigma, tau) - ExpTailAntideriv(z_hi, sigma, tau);
   if (!std::isfinite(val) || val < 1e-300)
     return 1e-300;
   return val;

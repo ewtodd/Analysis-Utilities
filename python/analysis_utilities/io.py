@@ -68,6 +68,7 @@ def open_for_writing(subpath: str, mode: str = "RECREATE") -> "ROOT.TFile":
     ROOT.gSystem.mkdir(parent, True)
     return ROOT.TFile(full, mode)
 
+
 _TYPE_MAP = {
     "Float_t": ("f", np.float32),
     "float": ("f", np.float32),

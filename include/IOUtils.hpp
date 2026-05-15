@@ -9,7 +9,7 @@ namespace IO {
 void SetRootFilesBaseDir(const TString &dir);
 TString GetRootFilesBaseDir();
 TFile *OpenForReading(const TString &subpath);
-TFile *OpenForWriting(const TString &subpath, const char *mode = "RECREATE");
+TFile *OpenForWriting(const TString &subpath, const TString mode = "RECREATE");
 } // namespace IO
 
 #endif

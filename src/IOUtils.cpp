@@ -27,7 +27,7 @@ TFile *IO::OpenForReading(const TString &subpath) {
   return new TFile(full, "READ");
 }
 
-TFile *IO::OpenForWriting(const TString &subpath, const char *mode) {
+TFile *IO::OpenForWriting(const TString &subpath, const TString mode) {
   TString full = JoinPath(subpath);
   TString parent = gSystem->DirName(full);
   gSystem->mkdir(parent, kTRUE);

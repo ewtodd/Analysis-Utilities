@@ -76,8 +76,8 @@ void RooFitUtils::InitState() {
   RooRealVar::enableSilentClipping();
 }
 
-std::vector<Double_t> RooFitUtils::LoadEventsFromTree(
-    TTree *tree, const TString &branch_name) {
+std::vector<Double_t>
+RooFitUtils::LoadEventsFromTree(TTree *tree, const TString &branch_name) {
   std::vector<Double_t> out;
   if (!tree)
     return out;
@@ -111,16 +111,14 @@ TH1F *RooFitUtils::BuildDisplayHistogramFrom(
     Float_t fit_range_high, Float_t display_bin_width_kev) {
   Float_t hist_lo = 0.85f * fit_range_low;
   Float_t hist_hi = 1.15f * fit_range_high;
-  Int_t nbins =
-      TMath::Max(1, (Int_t)TMath::Nint((hist_hi - hist_lo) /
-                                        display_bin_width_kev));
+  Int_t nbins = TMath::Max(
+      1, (Int_t)TMath::Nint((hist_hi - hist_lo) / display_bin_width_kev));
   hist_hi = hist_lo + nbins * display_bin_width_kev;
   TString hname = PlottingUtils::GetRandomName();
-  TH1F *hist =
-      new TH1F(hname,
-               TString::Format("; Energy [keV]; Counts / %.0f eV",
-                                display_bin_width_kev * 1000.0),
-               nbins, hist_lo, hist_hi);
+  TH1F *hist = new TH1F(hname,
+                        TString::Format("; Energy [keV]; Counts / %.0f eV",
+                                        display_bin_width_kev * 1000.0),
+                        nbins, hist_lo, hist_hi);
   hist->SetDirectory(0);
   for (size_t i = 0; i < events.size(); i++) {
     Double_t e = events[i];
@@ -131,15 +129,14 @@ TH1F *RooFitUtils::BuildDisplayHistogramFrom(
 }
 
 void RooFitUtils::RefillDisplayHistogram(TH1 *hist,
-                                          const std::vector<Double_t> &events,
-                                          Float_t fit_range_low,
-                                          Float_t fit_range_high,
-                                          Float_t display_bin_width_kev) {
+                                         const std::vector<Double_t> &events,
+                                         Float_t fit_range_low,
+                                         Float_t fit_range_high,
+                                         Float_t display_bin_width_kev) {
   Float_t hist_lo = 0.85f * fit_range_low;
   Float_t hist_hi = 1.15f * fit_range_high;
-  Int_t nbins =
-      TMath::Max(1, (Int_t)TMath::Nint((hist_hi - hist_lo) /
-                                        display_bin_width_kev));
+  Int_t nbins = TMath::Max(
+      1, (Int_t)TMath::Nint((hist_hi - hist_lo) / display_bin_width_kev));
   hist_hi = hist_lo + nbins * display_bin_width_kev;
   hist->SetBins(nbins, hist_lo, hist_hi);
   hist->Reset();
@@ -150,8 +147,9 @@ void RooFitUtils::RefillDisplayHistogram(TH1 *hist,
   }
 }
 
-RooDataSet *RooFitUtils::BuildUnbinnedDataFrom(
-    const std::vector<Double_t> &events, RooRealVar *x) {
+RooDataSet *
+RooFitUtils::BuildUnbinnedDataFrom(const std::vector<Double_t> &events,
+                                   RooRealVar *x) {
   RooArgSet vars(*x);
   RooDataSet *ds = new RooDataSet("unbinned_data", "unbinned_data", vars);
   Double_t xmin = x->getMin();
@@ -168,9 +166,8 @@ RooDataSet *RooFitUtils::BuildUnbinnedDataFrom(
 
 void RooFitUtils::BuildDisplayHistogram() {
   delete working_hist_;
-  working_hist_ = BuildDisplayHistogramFrom(events_, fit_range_low_,
-                                             fit_range_high_,
-                                             display_bin_width_kev_);
+  working_hist_ = BuildDisplayHistogramFrom(
+      events_, fit_range_low_, fit_range_high_, display_bin_width_kev_);
 }
 
 void RooFitUtils::BuildUnbinnedData() {
@@ -322,27 +319,27 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   Double_t net_height = local_height - bkg_floor;
   if (net_height < 0.1 * local_height)
     net_height = 0.1 * local_height;
-  Double_t total_init = net_height * sigma_init *
-                         TMath::Sqrt(2.0 * TMath::Pi());
-  p.gaus_yield = new RooRealVar("GausAmplitude" + suffix,
-                                "GausAmplitude" + suffix, total_init, 0,
-                                peak_height * range_width * 10.0);
+  Double_t total_init =
+      net_height * sigma_init * TMath::Sqrt(2.0 * TMath::Pi());
+  p.gaus_yield =
+      new RooRealVar("GausAmplitude" + suffix, "GausAmplitude" + suffix,
+                     total_init, 0, peak_height * range_width * 10.0);
 
   p.ratio_step = new RooRealVar("StepAmplitude" + suffix,
                                 "StepAmplitude" + suffix, 0.0, 0.0, 0.5);
-  p.ratio_low_exp = new RooRealVar("LowExpTailAmplitude" + suffix,
-                                   "LowExpTailAmplitude" + suffix, 0.0, 0.0,
-                                   0.5);
+  p.ratio_low_exp =
+      new RooRealVar("LowExpTailAmplitude" + suffix,
+                     "LowExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
   p.tau_low_exp = new RooRealVar("LowExpTailRatio" + suffix,
                                  "LowExpTailRatio" + suffix, 1.5, 1.0, 100.0);
-  p.ratio_low_lin = new RooRealVar("LowLinTailAmplitude" + suffix,
-                                   "LowLinTailAmplitude" + suffix, 0.0, 0.0,
-                                   0.5);
+  p.ratio_low_lin =
+      new RooRealVar("LowLinTailAmplitude" + suffix,
+                     "LowLinTailAmplitude" + suffix, 0.0, 0.0, 0.5);
   p.slope_low_lin = new RooRealVar("LowLinTailSlope" + suffix,
                                    "LowLinTailSlope" + suffix, 0.0, -0.1, 0.1);
-  p.ratio_high_exp = new RooRealVar("HighExpTailAmplitude" + suffix,
-                                    "HighExpTailAmplitude" + suffix, 0.0, 0.0,
-                                    0.5);
+  p.ratio_high_exp =
+      new RooRealVar("HighExpTailAmplitude" + suffix,
+                     "HighExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
   p.tau_high_exp = new RooRealVar("HighExpTailRatio" + suffix,
                                   "HighExpTailRatio" + suffix, 1.5, 1.0, 100.0);
 
@@ -357,19 +354,16 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   RegisterOwned(p.ratio_high_exp);
   RegisterOwned(p.tau_high_exp);
 
-  p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + suffix, *x_, *p.mu,
-                                              *p.sigma);
-  p.step_pdf = RooFitFunctions::MakeStepShelf("step_pdf" + suffix, *x_, *p.mu,
-                                              *p.sigma);
-  p.low_exp_pdf = RooFitFunctions::MakeLowExpTail("low_exp_pdf" + suffix, *x_,
-                                                  *p.mu, *p.sigma,
-                                                  *p.tau_low_exp);
-  p.low_lin_pdf = RooFitFunctions::MakeLowLinTail("low_lin_pdf" + suffix, *x_,
-                                                  *p.mu, *p.sigma,
-                                                  *p.slope_low_lin);
-  p.high_exp_pdf = RooFitFunctions::MakeHighExpTail("high_exp_pdf" + suffix,
-                                                    *x_, *p.mu, *p.sigma,
-                                                    *p.tau_high_exp);
+  p.gauss_pdf =
+      RooFitFunctions::MakeGaussian("gauss_pdf" + suffix, *x_, *p.mu, *p.sigma);
+  p.step_pdf =
+      RooFitFunctions::MakeStepShelf("step_pdf" + suffix, *x_, *p.mu, *p.sigma);
+  p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
+      "low_exp_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.tau_low_exp);
+  p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
+      "low_lin_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.slope_low_lin);
+  p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
+      "high_exp_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.tau_high_exp);
 
   RegisterOwned(p.gauss_pdf);
   RegisterOwned(p.step_pdf);
@@ -379,15 +373,15 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
 
   p.step_yield = new RooFormulaVar("step_yield" + suffix, "@0*@1",
                                    RooArgList(*p.gaus_yield, *p.ratio_step));
-  p.low_exp_yield = new RooFormulaVar(
-      "low_exp_yield" + suffix, "@0*@1",
-      RooArgList(*p.gaus_yield, *p.ratio_low_exp));
-  p.low_lin_yield = new RooFormulaVar(
-      "low_lin_yield" + suffix, "@0*@1",
-      RooArgList(*p.gaus_yield, *p.ratio_low_lin));
-  p.high_exp_yield = new RooFormulaVar(
-      "high_exp_yield" + suffix, "@0*@1",
-      RooArgList(*p.gaus_yield, *p.ratio_high_exp));
+  p.low_exp_yield =
+      new RooFormulaVar("low_exp_yield" + suffix, "@0*@1",
+                        RooArgList(*p.gaus_yield, *p.ratio_low_exp));
+  p.low_lin_yield =
+      new RooFormulaVar("low_lin_yield" + suffix, "@0*@1",
+                        RooArgList(*p.gaus_yield, *p.ratio_low_lin));
+  p.high_exp_yield =
+      new RooFormulaVar("high_exp_yield" + suffix, "@0*@1",
+                        RooArgList(*p.gaus_yield, *p.ratio_high_exp));
 
   RegisterOwned(p.step_yield);
   RegisterOwned(p.low_exp_yield);
@@ -399,9 +393,9 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
 
 void RooFitUtils::BuildBackground(Double_t bkg_estimate, Double_t peak_height,
                                   Double_t range_width) {
-  bkg_.bkg_yield = new RooRealVar("BkgConstant", "BkgConstant",
-                                  bkg_estimate * range_width, 0,
-                                  peak_height * range_width * 10.0);
+  bkg_.bkg_yield =
+      new RooRealVar("BkgConstant", "BkgConstant", bkg_estimate * range_width,
+                     0, peak_height * range_width * 10.0);
   Double_t slope_bound = 0.9 / fit_range_high_;
   bkg_.bkg_slope =
       new RooRealVar("BkgSlope", "BkgSlope", 0.0, -slope_bound, slope_bound);
@@ -414,8 +408,8 @@ void RooFitUtils::BuildBackground(Double_t bkg_estimate, Double_t peak_height,
     bkg_.bkg_slope->setVal(0.0);
     bkg_.bkg_slope->setConstant(kTRUE);
   } else {
-    bkg_.bkg_pdf = RooFitFunctions::MakeLinearBackground("bkg_pdf", *x_,
-                                                          *bkg_.bkg_slope);
+    bkg_.bkg_pdf =
+        RooFitFunctions::MakeLinearBackground("bkg_pdf", *x_, *bkg_.bkg_slope);
   }
   RegisterOwned(bkg_.bkg_pdf);
 }
@@ -568,21 +562,17 @@ std::vector<RooRealVar *> RooFitUtils::CollectFloatingParams() {
 
 RooFitResult *RooFitUtils::RunFit(Bool_t quiet) {
   Int_t print_level = quiet ? -1 : 0;
-  RooFitResult *result =
-      total_pdf_->fitTo(*unbinned_data_, RooFit::Save(kTRUE),
-                         RooFit::Extended(kTRUE),
-                         RooFit::Range(kFitRangeName),
-                         RooFit::SumW2Error(kFALSE),
-                         RooFit::PrintLevel(print_level),
-                         RooFit::PrintEvalErrors(-1),
-                         RooFit::Strategy(2),
-                         RooFit::Minimizer("Minuit2", "migrad"),
-                         RooFit::EvalBackend::Cpu());
+  RooFitResult *result = total_pdf_->fitTo(
+      *unbinned_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
+      RooFit::Range(kFitRangeName), RooFit::SumW2Error(kFALSE),
+      RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(-1),
+      RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
+      RooFit::EvalBackend::Cpu());
   return result;
 }
 
 Double_t RooFitUtils::ComputeReducedChi2(RooFitResult *fit_result,
-                                          Int_t &ndof) {
+                                         Int_t &ndof) {
   RooArgSet nset(*x_);
   Double_t total_exp = total_pdf_->expectedEvents(&nset);
   Double_t bin_width = working_hist_->GetBinWidth(1);
@@ -608,7 +598,7 @@ Double_t RooFitUtils::ComputeReducedChi2(RooFitResult *fit_result,
   x_->setVal(saved);
 
   Int_t npars = fit_result ? fit_result->floatParsFinal().size()
-                            : (Int_t)CollectFloatingParams().size();
+                           : (Int_t)CollectFloatingParams().size();
   ndof = nbins_in_range - npars;
   if (ndof <= 0)
     return -1;
@@ -616,8 +606,8 @@ Double_t RooFitUtils::ComputeReducedChi2(RooFitResult *fit_result,
 }
 
 void RooFitUtils::SnapshotParams(std::vector<Double_t> &vals,
-                                  std::vector<Double_t> &errs,
-                                  std::vector<Bool_t> &consts) {
+                                 std::vector<Double_t> &errs,
+                                 std::vector<Bool_t> &consts) {
   std::vector<RooRealVar *> all = CollectAllParams();
   vals.resize(all.size());
   errs.resize(all.size());
@@ -630,8 +620,8 @@ void RooFitUtils::SnapshotParams(std::vector<Double_t> &vals,
 }
 
 void RooFitUtils::RestoreParams(const std::vector<Double_t> &vals,
-                                 const std::vector<Double_t> &errs,
-                                 const std::vector<Bool_t> &consts) {
+                                const std::vector<Double_t> &errs,
+                                const std::vector<Bool_t> &consts) {
   std::vector<RooRealVar *> all = CollectAllParams();
   for (size_t i = 0; i < all.size() && i < vals.size(); i++) {
     all[i]->setVal(vals[i]);
@@ -641,9 +631,9 @@ void RooFitUtils::RestoreParams(const std::vector<Double_t> &vals,
 }
 
 void RooFitUtils::TestLowSideGroup(Int_t peak_idx, Double_t &best_chi2,
-                                    std::vector<Double_t> &best_vals,
-                                    std::vector<Double_t> &best_errs,
-                                    std::vector<Bool_t> &best_const) {
+                                   std::vector<Double_t> &best_vals,
+                                   std::vector<Double_t> &best_errs,
+                                   std::vector<Bool_t> &best_const) {
   Bool_t any_low_side = use_step_ || use_low_exp_tail_ || use_low_lin_tail_;
   if (!any_low_side)
     return;
@@ -686,8 +676,8 @@ void RooFitUtils::TestLowSideGroup(Int_t peak_idx, Double_t &best_chi2,
         best_chi2 = c2;
         SnapshotParams(best_vals, best_errs, best_const);
       } else {
-        std::cout << "  " << comps[ci] << " peak " << peak_idx + 1 << " retained"
-                  << std::endl;
+        std::cout << "  " << comps[ci] << " peak " << peak_idx + 1
+                  << " retained" << std::endl;
         ReleaseComponent(peak_idx, comps[ci]);
         RestoreParams(best_vals, best_errs, best_const);
       }
@@ -706,9 +696,9 @@ void RooFitUtils::TestLowSideGroup(Int_t peak_idx, Double_t &best_chi2,
 }
 
 void RooFitUtils::TestHighTailIndependent(Int_t peak_idx, Double_t &best_chi2,
-                                           std::vector<Double_t> &best_vals,
-                                           std::vector<Double_t> &best_errs,
-                                           std::vector<Bool_t> &best_const) {
+                                          std::vector<Double_t> &best_vals,
+                                          std::vector<Double_t> &best_errs,
+                                          std::vector<Bool_t> &best_const) {
   if (!use_high_exp_tail_)
     return;
 
@@ -794,8 +784,7 @@ void RooFitUtils::SaveInteractiveParams(const TString &input_name,
   std::vector<RooRealVar *> all = CollectAllParams();
   for (size_t i = 0; i < all.size(); i++) {
     out << all[i]->GetName() << " " << all[i]->getVal() << " "
-        << all[i]->getError() << " "
-        << (all[i]->isConstant() ? 1 : 0) << "\n";
+        << all[i]->getError() << " " << (all[i]->isConstant() ? 1 : 0) << "\n";
   }
   out.close();
   std::cout << "Saved interactive params to " << filename << std::endl;
@@ -846,7 +835,7 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
 }
 
 void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
-                                            const TString &base_label) {
+                                           const TString &base_label) {
   TString fits_dir = PlottingUtils::GetPlotsBaseDir() + "/fits";
   gSystem->mkdir(fits_dir, kTRUE);
   TString filename =
@@ -892,15 +881,15 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
 
   for (size_t i = 0; i < ordered.size(); i++) {
     out << ordered[i]->GetName() << " " << ordered[i]->getVal() << " "
-        << ordered[i]->getError() << " "
-        << (ordered[i]->isConstant() ? 1 : 0) << "\n";
+        << ordered[i]->getError() << " " << (ordered[i]->isConstant() ? 1 : 0)
+        << "\n";
   }
   out.close();
   std::cout << "Saved sim interactive params to " << filename << std::endl;
 }
 
 Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
-                                              const TString &base_label) {
+                                             const TString &base_label) {
   TString filename = PlottingUtils::GetPlotsBaseDir() + "/fits/" + base_label +
                      "_" + input_name + ".simroofits";
   std::ifstream in(filename.Data());
@@ -974,8 +963,7 @@ void RooFitUtils::AppendPeakGraphs(std::vector<TGraph *> &components,
     Double_t xv = fit_range_low_ + i * x_step;
     x_->setVal(xv);
     Double_t y = gy * p.gauss_pdf->getVal(&nset) * bin_width;
-    Double_t bkg_v =
-        bkg_yield_val * background_pdf->getVal(&nset) * bin_width;
+    Double_t bkg_v = bkg_yield_val * background_pdf->getVal(&nset) * bin_width;
     peak_graph->SetPoint(i, xv, y + bkg_v);
   }
   peak_graph->SetLineColor(kBlack);
@@ -1072,7 +1060,7 @@ void RooFitUtils::PlotFitSinglePeak(const TString input_name,
   std::vector<TGraph *> components;
   components.push_back(background_graph);
   AppendPeakGraphs(components, 0, 1, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
-                    bin_width);
+                   bin_width);
 
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
@@ -1118,9 +1106,9 @@ void RooFitUtils::PlotFitDoublePeak(const TString input_name,
   std::vector<TGraph *> components;
   components.push_back(background_graph);
   AppendPeakGraphs(components, 0, 1, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
-                    bin_width);
+                   bin_width);
   AppendPeakGraphs(components, 1, 3, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
-                    bin_width);
+                   bin_width);
 
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
@@ -1166,11 +1154,11 @@ void RooFitUtils::PlotFitTriplePeak(const TString input_name,
   std::vector<TGraph *> components;
   components.push_back(background_graph);
   AppendPeakGraphs(components, 0, 1, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
-                    bin_width);
+                   bin_width);
   AppendPeakGraphs(components, 1, 3, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
-                    bin_width);
+                   bin_width);
   AppendPeakGraphs(components, 2, 4, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
-                    bin_width);
+                   bin_width);
 
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
@@ -1225,11 +1213,10 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
     } else {
       Bool_t was_batch = gROOT->IsBatch();
       gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(working_hist_, &events_,
-                                         display_bin_width_kev_, total_pdf_,
-                                         x_, unbinned_data_, &peaks_, &bkg_,
-                                         fit_range_low_, fit_range_high_,
-                                         peak_name + " / " + input_name)) {
+      if (LaunchInteractiveRooFitEditor(
+              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
+              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
+              peak_name + " / " + input_name)) {
         fit_range_low_ = x_->getMin("fitrange");
         fit_range_high_ = x_->getMax("fitrange");
         BuildDisplayHistogram();
@@ -1304,8 +1291,8 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
 }
 
 FitResult RooFitUtils::FitDoublePeak(const TString input_name,
-                                     const TString peak_name,
-                                     Double_t mu1_init, Double_t mu2_init) {
+                                     const TString peak_name, Double_t mu1_init,
+                                     Double_t mu2_init) {
   FitResult results;
   results.peaks.emplace_back();
   results.peaks.emplace_back();
@@ -1361,11 +1348,10 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     } else {
       Bool_t was_batch = gROOT->IsBatch();
       gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(working_hist_, &events_,
-                                         display_bin_width_kev_, total_pdf_,
-                                         x_, unbinned_data_, &peaks_, &bkg_,
-                                         fit_range_low_, fit_range_high_,
-                                         peak_name + " / " + input_name)) {
+      if (LaunchInteractiveRooFitEditor(
+              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
+              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
+              peak_name + " / " + input_name)) {
         fit_range_low_ = x_->getMin("fitrange");
         fit_range_high_ = x_->getMax("fitrange");
         BuildDisplayHistogram();
@@ -1430,7 +1416,11 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
         best_chi2 = c2;
         SnapshotParams(best_vals, best_errs, best_const);
 
-        struct CompRef { Int_t peak_idx; TString comp; Bool_t enabled; };
+        struct CompRef {
+          Int_t peak_idx;
+          TString comp;
+          Bool_t enabled;
+        };
         CompRef refs[4] = {
             {0, "high_exp", use_high_exp_tail_},
             {1, "step", use_step_},
@@ -1561,8 +1551,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     p.ratio_high_exp->setVal(constrained_peak.high_exp_tail_amplitude / cga);
     p.ratio_high_exp->setConstant(kTRUE);
     p.tau_high_exp->setVal(constrained_peak.high_exp_tail_ratio > 0
-                                ? constrained_peak.high_exp_tail_ratio
-                                : 1.0);
+                               ? constrained_peak.high_exp_tail_ratio
+                               : 1.0);
     p.tau_high_exp->setConstant(kTRUE);
   }
   ConfigureComponentFlagsForPeak(1);
@@ -1580,11 +1570,10 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     } else {
       Bool_t was_batch = gROOT->IsBatch();
       gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(working_hist_, &events_,
-                                         display_bin_width_kev_, total_pdf_,
-                                         x_, unbinned_data_, &peaks_, &bkg_,
-                                         fit_range_low_, fit_range_high_,
-                                         peak_name + " / " + input_name)) {
+      if (LaunchInteractiveRooFitEditor(
+              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
+              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
+              peak_name + " / " + input_name)) {
         fit_range_low_ = x_->getMin("fitrange");
         fit_range_high_ = x_->getMax("fitrange");
         BuildDisplayHistogram();
@@ -1701,7 +1690,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     p.ratio_low_exp->setVal(cp.low_exp_tail_amplitude / cga);
     p.ratio_low_exp->setConstant(kTRUE);
     p.tau_low_exp->setVal(cp.low_exp_tail_ratio > 0 ? cp.low_exp_tail_ratio
-                                                      : 1.0);
+                                                    : 1.0);
     p.tau_low_exp->setConstant(kTRUE);
     p.ratio_low_lin->setVal(cp.low_lin_tail_amplitude / cga);
     p.ratio_low_lin->setConstant(kTRUE);
@@ -1710,7 +1699,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     p.ratio_high_exp->setVal(cp.high_exp_tail_amplitude / cga);
     p.ratio_high_exp->setConstant(kTRUE);
     p.tau_high_exp->setVal(cp.high_exp_tail_ratio > 0 ? cp.high_exp_tail_ratio
-                                                         : 1.0);
+                                                      : 1.0);
     p.tau_high_exp->setConstant(kTRUE);
   }
   ConfigureComponentFlagsForPeak(2);
@@ -1728,11 +1717,10 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     } else {
       Bool_t was_batch = gROOT->IsBatch();
       gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(working_hist_, &events_,
-                                         display_bin_width_kev_, total_pdf_,
-                                         x_, unbinned_data_, &peaks_, &bkg_,
-                                         fit_range_low_, fit_range_high_,
-                                         peak_name + " / " + input_name)) {
+      if (LaunchInteractiveRooFitEditor(
+              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
+              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
+              peak_name + " / " + input_name)) {
         fit_range_low_ = x_->getMin("fitrange");
         fit_range_high_ = x_->getMax("fitrange");
         BuildDisplayHistogram();
@@ -1802,7 +1790,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
 }
 
 TString RooFitUtils::ParamFullName(const TString &channel,
-                                    const TString &param) {
+                                   const TString &param) {
   return channel + ":" + param;
 }
 
@@ -1812,16 +1800,16 @@ TString RooFitUtils::SourceForTarget(const TString &target) {
         ParamFullName(sim_links_[i].target_channel, sim_links_[i].target_param);
     if (full_target == target) {
       return ParamFullName(sim_links_[i].source_channel,
-                            sim_links_[i].source_param);
+                           sim_links_[i].source_param);
     }
   }
   return "";
 }
 
-RooRealVar *RooFitUtils::ResolveOrCreate(
-    const TString &channel, const TString &param_name,
-    std::map<TString, RooRealVar *> &registry, Double_t init_val, Double_t lo,
-    Double_t hi) {
+RooRealVar *
+RooFitUtils::ResolveOrCreate(const TString &channel, const TString &param_name,
+                             std::map<TString, RooRealVar *> &registry,
+                             Double_t init_val, Double_t lo, Double_t hi) {
   TString full = ParamFullName(channel, param_name);
   TString source = SourceForTarget(full);
   if (source.Length() > 0) {
@@ -1840,13 +1828,14 @@ RooRealVar *RooFitUtils::ResolveOrCreate(
   return v;
 }
 
-void RooFitUtils::AddChannel(
-    const TString &name, const std::vector<Double_t> &events,
-    Float_t fit_range_low, Float_t fit_range_high,
-    Float_t display_bin_width_kev, Int_t num_peaks,
-    const std::vector<Double_t> &mu_inits, Bool_t use_flat_background,
-    Bool_t use_step, Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
-    Bool_t use_high_exp_tail) {
+void RooFitUtils::AddChannel(const TString &name,
+                             const std::vector<Double_t> &events,
+                             Float_t fit_range_low, Float_t fit_range_high,
+                             Float_t display_bin_width_kev, Int_t num_peaks,
+                             const std::vector<Double_t> &mu_inits,
+                             Bool_t use_flat_background, Bool_t use_step,
+                             Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
+                             Bool_t use_high_exp_tail) {
   if (!sim_mode_) {
     std::cerr << "ERROR: AddChannel called on a single-channel RooFitUtils "
                  "instance; construct with the default ctor for sim mode."
@@ -1862,7 +1851,7 @@ void RooFitUtils::AddChannel(
   cfg.name = name;
   cfg.events = events;
   cfg.hist = BuildDisplayHistogramFrom(events, fit_range_low, fit_range_high,
-                                        display_bin_width_kev);
+                                       display_bin_width_kev);
   cfg.fit_range_low = fit_range_low;
   cfg.fit_range_high = fit_range_high;
   cfg.display_bin_width_kev = display_bin_width_kev;
@@ -1893,21 +1882,20 @@ void RooFitUtils::LinkParameter(const TString &target, const TString &source) {
 }
 
 void RooFitUtils::LinkPeakShape(const TString &target_channel,
-                                 Int_t target_peak,
-                                 const TString &source_channel,
-                                 Int_t source_peak) {
+                                Int_t target_peak,
+                                const TString &source_channel,
+                                Int_t source_peak) {
   TString t_suffix = TString::Format("%d", target_peak + 1);
   TString s_suffix = TString::Format("%d", source_peak + 1);
-  const char *shape_params[9] = {
-      "Mu",
-      "Sigma",
-      "StepAmplitude",
-      "LowExpTailAmplitude",
-      "LowExpTailRatio",
-      "LowLinTailAmplitude",
-      "LowLinTailSlope",
-      "HighExpTailAmplitude",
-      "HighExpTailRatio"};
+  const char *shape_params[9] = {"Mu",
+                                 "Sigma",
+                                 "StepAmplitude",
+                                 "LowExpTailAmplitude",
+                                 "LowExpTailRatio",
+                                 "LowLinTailAmplitude",
+                                 "LowLinTailSlope",
+                                 "HighExpTailAmplitude",
+                                 "HighExpTailRatio"};
   for (Int_t i = 0; i < 9; i++) {
     LinkParameter(target_channel + ":" + shape_params[i] + t_suffix,
                   source_channel + ":" + shape_params[i] + s_suffix);
@@ -1915,13 +1903,12 @@ void RooFitUtils::LinkPeakShape(const TString &target_channel,
 }
 
 void RooFitUtils::SeedChannel(const TString &channel_name,
-                               const FitResult &result) {
+                              const FitResult &result) {
   sim_seeds_[channel_name] = result;
 }
 
-void RooFitUtils::BuildChannelModel(
-    const RooFitChannelConfig &cfg,
-    std::map<TString, RooRealVar *> &registry) {
+void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
+                                    std::map<TString, RooRealVar *> &registry) {
   Double_t range_width = cfg.fit_range_high - cfg.fit_range_low;
   Double_t sigma_lo = cfg.hist->GetBinWidth(1);
   Double_t sigma_hi = range_width * 0.1;
@@ -1980,33 +1967,32 @@ void RooFitUtils::BuildChannelModel(
         net_height * sigma_init * TMath::Sqrt(2.0 * TMath::Pi());
 
     p.mu = ResolveOrCreate(cfg.name, "Mu" + suffix, registry, mu_init,
-                            cfg.fit_range_low, cfg.fit_range_high);
-    p.sigma = ResolveOrCreate(cfg.name, "Sigma" + suffix, registry,
-                                sigma_init, sigma_lo, sigma_hi);
-    p.gaus_yield = ResolveOrCreate(cfg.name, "GausAmplitude" + suffix,
-                                    registry, total_init, 0,
-                                    peak_height * range_width * 10.0);
-    p.ratio_step = ResolveOrCreate(cfg.name, "StepAmplitude" + suffix,
-                                    registry, 0.0, 0.0, 0.5);
+                           cfg.fit_range_low, cfg.fit_range_high);
+    p.sigma = ResolveOrCreate(cfg.name, "Sigma" + suffix, registry, sigma_init,
+                              sigma_lo, sigma_hi);
+    p.gaus_yield =
+        ResolveOrCreate(cfg.name, "GausAmplitude" + suffix, registry,
+                        total_init, 0, peak_height * range_width * 10.0);
+    p.ratio_step = ResolveOrCreate(cfg.name, "StepAmplitude" + suffix, registry,
+                                   0.0, 0.0, 0.5);
     p.ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailAmplitude" + suffix,
-                                       registry, 0.0, 0.0, 0.5);
+                                      registry, 0.0, 0.0, 0.5);
     p.tau_low_exp = ResolveOrCreate(cfg.name, "LowExpTailRatio" + suffix,
-                                     registry, 1.5, 1.0, 100.0);
+                                    registry, 1.5, 1.0, 100.0);
     p.ratio_low_lin = ResolveOrCreate(cfg.name, "LowLinTailAmplitude" + suffix,
-                                       registry, 0.0, 0.0, 0.5);
+                                      registry, 0.0, 0.0, 0.5);
     p.slope_low_lin = ResolveOrCreate(cfg.name, "LowLinTailSlope" + suffix,
-                                       registry, 0.0, -0.1, 0.1);
-    p.ratio_high_exp = ResolveOrCreate(cfg.name,
-                                        "HighExpTailAmplitude" + suffix,
-                                        registry, 0.0, 0.0, 0.5);
+                                      registry, 0.0, -0.1, 0.1);
+    p.ratio_high_exp = ResolveOrCreate(
+        cfg.name, "HighExpTailAmplitude" + suffix, registry, 0.0, 0.0, 0.5);
     p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix,
-                                      registry, 1.5, 1.0, 100.0);
+                                     registry, 1.5, 1.0, 100.0);
 
     TString pdf_suffix = "_" + cfg.name + "_" + suffix;
     p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + pdf_suffix, *x_,
-                                                 *p.mu, *p.sigma);
+                                                *p.mu, *p.sigma);
     p.step_pdf = RooFitFunctions::MakeStepShelf("step_pdf" + pdf_suffix, *x_,
-                                                 *p.mu, *p.sigma);
+                                                *p.mu, *p.sigma);
     p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
         "low_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_low_exp);
     p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
@@ -2019,18 +2005,18 @@ void RooFitUtils::BuildChannelModel(
     RegisterOwned(p.low_lin_pdf);
     RegisterOwned(p.high_exp_pdf);
 
-    p.step_yield = new RooFormulaVar(("step_yield" + pdf_suffix).Data(),
-                                      "@0*@1",
-                                      RooArgList(*p.gaus_yield, *p.ratio_step));
-    p.low_exp_yield = new RooFormulaVar(
-        ("low_exp_yield" + pdf_suffix).Data(), "@0*@1",
-        RooArgList(*p.gaus_yield, *p.ratio_low_exp));
-    p.low_lin_yield = new RooFormulaVar(
-        ("low_lin_yield" + pdf_suffix).Data(), "@0*@1",
-        RooArgList(*p.gaus_yield, *p.ratio_low_lin));
-    p.high_exp_yield = new RooFormulaVar(
-        ("high_exp_yield" + pdf_suffix).Data(), "@0*@1",
-        RooArgList(*p.gaus_yield, *p.ratio_high_exp));
+    p.step_yield =
+        new RooFormulaVar(("step_yield" + pdf_suffix).Data(), "@0*@1",
+                          RooArgList(*p.gaus_yield, *p.ratio_step));
+    p.low_exp_yield =
+        new RooFormulaVar(("low_exp_yield" + pdf_suffix).Data(), "@0*@1",
+                          RooArgList(*p.gaus_yield, *p.ratio_low_exp));
+    p.low_lin_yield =
+        new RooFormulaVar(("low_lin_yield" + pdf_suffix).Data(), "@0*@1",
+                          RooArgList(*p.gaus_yield, *p.ratio_low_lin));
+    p.high_exp_yield =
+        new RooFormulaVar(("high_exp_yield" + pdf_suffix).Data(), "@0*@1",
+                          RooArgList(*p.gaus_yield, *p.ratio_high_exp));
     RegisterOwned(p.step_yield);
     RegisterOwned(p.low_exp_yield);
     RegisterOwned(p.low_lin_yield);
@@ -2066,15 +2052,13 @@ void RooFitUtils::BuildChannelModel(
     std::vector<Int_t> sorted_idx(cfg.num_peaks);
     for (Int_t i = 0; i < cfg.num_peaks; i++)
       sorted_idx[i] = i;
-    std::sort(sorted_idx.begin(), sorted_idx.end(),
-              [&](Int_t a, Int_t b) {
-                return cfg.mu_inits[a] < cfg.mu_inits[b];
-              });
+    std::sort(sorted_idx.begin(), sorted_idx.end(), [&](Int_t a, Int_t b) {
+      return cfg.mu_inits[a] < cfg.mu_inits[b];
+    });
     for (Int_t k = 0; k < cfg.num_peaks - 1; k++) {
       Int_t left = sorted_idx[k];
       Int_t right = sorted_idx[k + 1];
-      Double_t midpoint =
-          0.5 * (cfg.mu_inits[left] + cfg.mu_inits[right]);
+      Double_t midpoint = 0.5 * (cfg.mu_inits[left] + cfg.mu_inits[right]);
       peaks[left].mu->setMax(midpoint);
       peaks[right].mu->setMin(midpoint);
     }
@@ -2096,11 +2080,11 @@ void RooFitUtils::BuildChannelModel(
   bkg_estimate = (bkg_left + bkg_right) / (2.0 * nside);
 
   bkg.bkg_yield = ResolveOrCreate(cfg.name, "BkgConstant", registry,
-                                   bkg_estimate * range_width, 0,
-                                   peak_height * range_width * 10.0);
+                                  bkg_estimate * range_width, 0,
+                                  peak_height * range_width * 10.0);
   Double_t slope_bound = 0.9 / cfg.fit_range_high;
   bkg.bkg_slope = ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0,
-                                   -slope_bound, slope_bound);
+                                  -slope_bound, slope_bound);
   TString bkg_pdf_name = "bkg_pdf_" + cfg.name;
   if (cfg.use_flat_background) {
     bkg.bkg_pdf = RooFitFunctions::MakeFlatBackground(bkg_pdf_name, *x_);
@@ -2108,7 +2092,7 @@ void RooFitUtils::BuildChannelModel(
     bkg.bkg_slope->setConstant(kTRUE);
   } else {
     bkg.bkg_pdf = RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_,
-                                                         *bkg.bkg_slope);
+                                                        *bkg.bkg_slope);
   }
   RegisterOwned(bkg.bkg_pdf);
 
@@ -2130,8 +2114,8 @@ void RooFitUtils::BuildChannelModel(
   coef_list.add(*bkg.bkg_yield);
 
   TString sum_name = "total_pdf_" + cfg.name;
-  RooAddPdf *sum = new RooAddPdf(sum_name.Data(), sum_name.Data(), pdf_list,
-                                  coef_list);
+  RooAddPdf *sum =
+      new RooAddPdf(sum_name.Data(), sum_name.Data(), pdf_list, coef_list);
   RegisterOwned(sum);
   sim_channel_pdfs_[cfg.name] = sum;
   sim_channel_peaks_[cfg.name] = peaks;
@@ -2139,7 +2123,7 @@ void RooFitUtils::BuildChannelModel(
 
   RooArgSet vars(*x_);
   RooDataSet *ds = new RooDataSet(("data_" + cfg.name).Data(),
-                                   ("data_" + cfg.name).Data(), vars);
+                                  ("data_" + cfg.name).Data(), vars);
   Double_t xmin = x_->getMin();
   Double_t xmax = x_->getMax();
   for (size_t i = 0; i < cfg.events.size(); i++) {
@@ -2271,11 +2255,11 @@ PeakFitResult RooFitUtils::ExtractPeakResultFor(const RooFitPeakModel &p) {
 }
 
 void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
-                               const std::vector<RooFitPeakModel> &peaks,
-                               const RooFitBackgroundModel &bkg,
-                               const TString &input_name,
-                               const TString &base_label,
-                               const TString &chi2_label) {
+                              const std::vector<RooFitPeakModel> &peaks,
+                              const RooFitBackgroundModel &bkg,
+                              const TString &input_name,
+                              const TString &base_label,
+                              const TString &chi2_label) {
   RooFitChannelConfig const *cfg = nullptr;
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     if (sim_channels_[i].name == channel) {
@@ -2320,7 +2304,7 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
 }
 
 std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
-                                                     const TString &base_label) {
+                                                    const TString &base_label) {
   std::vector<FitResult> results;
   if (sim_channels_.empty()) {
     std::cerr << "ERROR: FitSimultaneous called with no channels" << std::endl;
@@ -2359,8 +2343,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   }
   sim_combined_data_ =
       new RooDataSet("combined_data", "combined_data", RooArgSet(*x_),
-                      RooFit::Index(*sim_category_),
-                      RooFit::Import(data_map));
+                     RooFit::Index(*sim_category_), RooFit::Import(data_map));
 
   sim_pdf_ = new RooSimultaneous("sim_pdf", "sim_pdf", *sim_category_);
   for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2430,8 +2413,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     fit_result = sim_pdf_->fitTo(
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
         RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
-        RooFit::PrintLevel(0), RooFit::PrintEvalErrors(-1),
-        RooFit::Strategy(1),
+        RooFit::PrintLevel(0), RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
         RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
     sim_valid = (fit_result && fit_result->status() == 0);
     if (!sim_valid) {
@@ -2443,9 +2425,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     const RooFitChannelConfig &cfg = sim_channels_[i];
     Int_t ndof = 0;
-    Double_t chi2 = ComputeChannelChi2(
-        cfg.name, sim_channel_peaks_[cfg.name], sim_channel_bkg_[cfg.name],
-        ndof);
+    Double_t chi2 = ComputeChannelChi2(cfg.name, sim_channel_peaks_[cfg.name],
+                                       sim_channel_bkg_[cfg.name], ndof);
     std::cout << "Channel '" << cfg.name << "' chi2/ndf = " << chi2
               << " (ndof=" << ndof << ")" << std::endl;
 
@@ -2464,8 +2445,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
 
     TString chi2_label = Form("#chi^{2}/ndf = %.3f", chi2);
     PlotChannel(cfg.name, cfg.num_peaks, sim_channel_peaks_[cfg.name],
-                sim_channel_bkg_[cfg.name], input_name, base_label,
-                chi2_label);
+                sim_channel_bkg_[cfg.name], input_name, base_label, chi2_label);
   }
 
   delete fit_result;

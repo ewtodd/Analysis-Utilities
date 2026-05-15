@@ -2,8 +2,7 @@
 
 from analysis_utilities.init_utils import set_root_preferences
 from analysis_utilities.io import (get_root_files_base_dir, open_for_reading,
-                                     open_for_writing,
-                                     set_root_files_base_dir)
+                                   open_for_writing, set_root_files_base_dir)
 
 __version__ = "@VERSION@"
 

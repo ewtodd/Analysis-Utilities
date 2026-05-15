@@ -136,14 +136,12 @@ private:
 
 public:
   InteractiveRooFitEditor(const TGWindow *parent, TH1 *hist,
-                           const std::vector<Double_t> *events,
-                           Float_t display_bin_width_kev,
-                           RooAbsPdf *total_pdf, RooRealVar *x,
-                           RooAbsData *data,
-                           std::vector<RooFitPeakModel> *peaks,
-                           RooFitBackgroundModel *bkg, Double_t range_low,
-                           Double_t range_high,
-                           const TString &info_label = "");
+                          const std::vector<Double_t> *events,
+                          Float_t display_bin_width_kev, RooAbsPdf *total_pdf,
+                          RooRealVar *x, RooAbsData *data,
+                          std::vector<RooFitPeakModel> *peaks,
+                          RooFitBackgroundModel *bkg, Double_t range_low,
+                          Double_t range_high, const TString &info_label = "");
   virtual ~InteractiveRooFitEditor();
 
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);
@@ -156,14 +154,11 @@ public:
   TRootEmbeddedCanvas *GetEmbeddedCanvas() { return embedded_canvas_; }
 };
 
-Bool_t LaunchInteractiveRooFitEditor(TH1 *hist,
-                                     const std::vector<Double_t> *events,
-                                     Float_t display_bin_width_kev,
-                                     RooAbsPdf *total_pdf, RooRealVar *x,
-                                     RooAbsData *data,
-                                     std::vector<RooFitPeakModel> *peaks,
-                                     RooFitBackgroundModel *bkg,
-                                     Double_t range_low, Double_t range_high,
-                                     const TString &info_label);
+Bool_t LaunchInteractiveRooFitEditor(
+    TH1 *hist, const std::vector<Double_t> *events,
+    Float_t display_bin_width_kev, RooAbsPdf *total_pdf, RooRealVar *x,
+    RooAbsData *data, std::vector<RooFitPeakModel> *peaks,
+    RooFitBackgroundModel *bkg, Double_t range_low, Double_t range_high,
+    const TString &info_label);
 
 #endif

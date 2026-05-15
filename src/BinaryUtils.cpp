@@ -239,9 +239,9 @@ Bool_t CoMPASSReader::ReadEvent() {
     // a multi-GB allocation in TArrayS::Set.
     const UInt_t kMaxSamples = 1u << 20;
     if (current_event.num_samples > kMaxSamples) {
-      std::cerr << "Error: implausible num_samples " << current_event.num_samples
-                << " at byte " << bytes_read << " (treating as truncated)"
-                << std::endl;
+      std::cerr << "Error: implausible num_samples "
+                << current_event.num_samples << " at byte " << bytes_read
+                << " (treating as truncated)" << std::endl;
       return kFALSE;
     }
 
