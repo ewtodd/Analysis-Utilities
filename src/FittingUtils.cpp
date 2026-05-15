@@ -1225,7 +1225,7 @@ FitResult FittingUtils::FitDoublePeak(const TString input_name,
   results.peaks.emplace_back(); // peak 2, default -1
 
   if (mu1_init > mu2_init) {
-    std::cout << "Warning: mu1_init > mu2_init, swapping initial values"
+    std::cout << "WARNING: mu1_init > mu2_init, swapping initial values"
               << std::endl;
     Double_t temp = mu1_init;
     mu1_init = mu2_init;

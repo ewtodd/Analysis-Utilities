@@ -154,7 +154,7 @@ Bool_t CoMPASSReader::Open(const char *fname) {
   bytes_read += sizeof(UShort_t);
 
   if ((global_header & 0xCAE0) != 0xCAE0) {
-    std::cerr << "Warning: Header does not match 0xCAEx pattern: 0x" << std::hex
+    std::cerr << "WARNING: Header does not match 0xCAEx pattern: 0x" << std::hex
               << global_header << std::dec << std::endl;
   }
 
@@ -180,7 +180,7 @@ Bool_t CoMPASSReader::Open(const char *fname, UShort_t header_override) {
     bytes_read += sizeof(UShort_t);
 
     if ((global_header & 0xCAE0) != 0xCAE0) {
-      std::cerr << "Warning: Header does not match 0xCAEx pattern: 0x"
+      std::cerr << "WARNING: Header does not match 0xCAEx pattern: 0x"
                 << std::hex << global_header << std::dec << std::endl;
     }
 
@@ -239,7 +239,7 @@ Bool_t CoMPASSReader::ReadEvent() {
     // a multi-GB allocation in TArrayS::Set.
     const UInt_t kMaxSamples = 1u << 20;
     if (current_event.num_samples > kMaxSamples) {
-      std::cerr << "Error: implausible num_samples "
+      std::cerr << "ERROR: implausible num_samples "
                 << current_event.num_samples << " at byte " << bytes_read
                 << " (treating as truncated)" << std::endl;
       return kFALSE;
@@ -250,7 +250,7 @@ Bool_t CoMPASSReader::ReadEvent() {
     file.read(reinterpret_cast<char *>(sample_buf.data()),
               current_event.num_samples * sizeof(UShort_t));
     if (file.fail()) {
-      std::cerr << "Warning: Incomplete waveform at byte " << bytes_read
+      std::cerr << "WARNING: Incomplete waveform at byte " << bytes_read
                 << " (truncated file, event discarded)" << std::endl;
       return kFALSE;
     }
@@ -293,7 +293,7 @@ Bool_t WaveDump742Reader::ReadEvent() {
   file.read(reinterpret_cast<char *>(headers), 8 * sizeof(UInt_t));
   if (file.fail()) {
     if (file.gcount() > 0) {
-      std::cerr << "Warning: Incomplete event header at byte " << bytes_read
+      std::cerr << "WARNING: Incomplete event header at byte " << bytes_read
                 << " (" << file.gcount() << " of " << 8 * sizeof(UInt_t)
                 << " header bytes read, truncated file)" << std::endl;
     }
@@ -313,7 +313,7 @@ Bool_t WaveDump742Reader::ReadEvent() {
   // event_size is in bytes and includes the 8-word (32-byte) header
   UInt_t header_bytes = 8 * sizeof(UInt_t);
   if (current_event.event_size <= header_bytes) {
-    std::cerr << "Error: Invalid event_size " << current_event.event_size
+    std::cerr << "ERROR: Invalid event_size " << current_event.event_size
               << " at event " << current_event.event_counter << std::endl;
     return kFALSE;
   }
@@ -327,7 +327,7 @@ Bool_t WaveDump742Reader::ReadEvent() {
     std::vector<Float_t> float_samples(sample_size);
     file.read(reinterpret_cast<char *>(float_samples.data()), sample_bytes);
     if (file.fail()) {
-      std::cerr << "Warning: Incomplete event at byte " << bytes_read
+      std::cerr << "WARNING: Incomplete event at byte " << bytes_read
                 << " (truncated file, event " << current_event.event_counter
                 << " discarded)" << std::endl;
       return kFALSE;
@@ -339,7 +339,7 @@ Bool_t WaveDump742Reader::ReadEvent() {
     std::vector<UInt_t> int_samples(sample_size);
     file.read(reinterpret_cast<char *>(int_samples.data()), sample_bytes);
     if (file.fail()) {
-      std::cerr << "Warning: Incomplete event at byte " << bytes_read
+      std::cerr << "WARNING: Incomplete event at byte " << bytes_read
                 << " (truncated file, event " << current_event.event_counter
                 << " discarded)" << std::endl;
       return kFALSE;
