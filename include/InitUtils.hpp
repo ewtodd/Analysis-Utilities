@@ -11,9 +11,10 @@
 
 class InitUtils {
 public:
-  static void SetROOTPreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG,
-                                 const TString &plots_dir = "",
-                                 const TString &root_files_dir = "");
+  static void
+  SetROOTPreferences(PlotSaveFormat save_format = PlotSaveFormat::kPNG,
+                     const TString &plots_dir = "",
+                     const TString &root_files_dir = "");
   static Bool_t ConvertWavedumpBinToROOT(const TString input_filename,
                                          const TString output_name,
                                          Bool_t corrections_enabled = kTRUE);

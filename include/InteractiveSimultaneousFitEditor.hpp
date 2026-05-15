@@ -3,8 +3,8 @@
 
 #include "RooFitUtils.hpp"
 
-#include <RooAbsPdf.h>
 #include <RooAbsData.h>
+#include <RooAbsPdf.h>
 #include <RooRealVar.h>
 #include <RooSimultaneous.h>
 #include <TCanvas.h>
@@ -115,7 +115,7 @@ private:
   void BuildPeakSubTab(TGCompositeFrame *parent, Int_t ch_idx, Int_t peak_idx);
   void BuildBackgroundSubTab(TGCompositeFrame *parent, Int_t ch_idx);
   void AddParamRow(TGCompositeFrame *parent, Int_t ch_idx, Int_t param_idx,
-                    const char *name);
+                   const char *name);
 
   void InitDrawing();
   void InitChannelDrawing(SimEditorChannelView &cv);
@@ -142,10 +142,8 @@ private:
   Double_t SliderToVal(Int_t ch_idx, Int_t param_idx, Int_t pos);
   Bool_t IsFixed(Int_t ch_idx, Int_t param_idx);
   void GetDefaultBounds(Int_t ch_idx, Int_t param_idx, Double_t &lo,
-                         Double_t &hi);
-  Int_t BkgConstIdx(Int_t ch_idx) {
-    return channels_[ch_idx].num_peaks * 10;
-  }
+                        Double_t &hi);
+  Int_t BkgConstIdx(Int_t ch_idx) { return channels_[ch_idx].num_peaks * 10; }
   Int_t BkgSlopeIdx(Int_t ch_idx) {
     return channels_[ch_idx].num_peaks * 10 + 1;
   }
@@ -156,8 +154,7 @@ public:
       const TGWindow *parent, RooSimultaneous *sim_pdf,
       RooAbsData *combined_data, RooRealVar *x,
       const std::vector<SimEditorChannelView> &channel_views,
-      Double_t range_low, Double_t range_high,
-      const TString &info_label = "");
+      Double_t range_low, Double_t range_high, const TString &info_label = "");
   virtual ~InteractiveSimultaneousFitEditor();
 
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);

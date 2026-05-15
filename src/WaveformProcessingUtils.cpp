@@ -264,8 +264,8 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
   }
   std::cout << std::endl;
 
-  TString stats_path = IO::GetRootFilesBaseDir() + "/" + current_output_name_ +
-                       ".stats";
+  TString stats_path =
+      IO::GetRootFilesBaseDir() + "/" + current_output_name_ + ".stats";
   std::ofstream stats_file(stats_path.Data(), std::ios::app);
   if (stats_file.is_open()) {
     stats_file << "Waveform processing statistics..." << std::endl;

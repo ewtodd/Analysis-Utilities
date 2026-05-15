@@ -161,9 +161,9 @@ private:
                          std::map<TString, RooRealVar *> &registry);
   void ApplySeedToChannel(const TString &channel);
   void SaveSimInteractiveParams(const TString &input_name,
-                                 const TString &base_label);
+                                const TString &base_label);
   Bool_t LoadSimInteractiveParams(const TString &input_name,
-                                   const TString &base_label);
+                                  const TString &base_label);
   TString ParamFullName(const TString &channel, const TString &param);
   TString SourceForTarget(const TString &target);
   Double_t ComputeChannelChi2(const TString &channel,
@@ -171,9 +171,8 @@ private:
                               const RooFitBackgroundModel &bkg, Int_t &ndof);
   void PlotChannel(const TString &channel, Int_t num_peaks,
                    const std::vector<RooFitPeakModel> &peaks,
-                   const RooFitBackgroundModel &bkg,
-                   const TString &input_name, const TString &base_label,
-                   const TString &chi2_label);
+                   const RooFitBackgroundModel &bkg, const TString &input_name,
+                   const TString &base_label, const TString &chi2_label);
   PeakFitResult ExtractPeakResultFor(const RooFitPeakModel &p);
 
   Double_t EstimateBackground();
@@ -195,18 +194,18 @@ private:
   Double_t ComputeReducedChi2(RooFitResult *fit_result, Int_t &ndof);
 
   void SnapshotParams(std::vector<Double_t> &vals, std::vector<Double_t> &errs,
-                       std::vector<Bool_t> &consts);
+                      std::vector<Bool_t> &consts);
   void RestoreParams(const std::vector<Double_t> &vals,
-                      const std::vector<Double_t> &errs,
-                      const std::vector<Bool_t> &consts);
+                     const std::vector<Double_t> &errs,
+                     const std::vector<Bool_t> &consts);
   void TestLowSideGroup(Int_t peak_idx, Double_t &best_chi2,
-                         std::vector<Double_t> &best_vals,
-                         std::vector<Double_t> &best_errs,
-                         std::vector<Bool_t> &best_const);
+                        std::vector<Double_t> &best_vals,
+                        std::vector<Double_t> &best_errs,
+                        std::vector<Bool_t> &best_const);
   void TestHighTailIndependent(Int_t peak_idx, Double_t &best_chi2,
-                                 std::vector<Double_t> &best_vals,
-                                 std::vector<Double_t> &best_errs,
-                                 std::vector<Bool_t> &best_const);
+                               std::vector<Double_t> &best_vals,
+                               std::vector<Double_t> &best_errs,
+                               std::vector<Bool_t> &best_const);
 
   PeakFitResult ExtractPeakResult(Int_t peak_idx);
 
@@ -290,17 +289,16 @@ public:
                   Float_t fit_range_low, Float_t fit_range_high,
                   Float_t display_bin_width_kev, Int_t num_peaks,
                   const std::vector<Double_t> &mu_inits,
-                  Bool_t use_flat_background = kFALSE,
-                  Bool_t use_step = kFALSE,
+                  Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
                   Bool_t use_low_exp_tail = kFALSE,
                   Bool_t use_low_lin_tail = kFALSE,
                   Bool_t use_high_exp_tail = kFALSE);
   void LinkParameter(const TString &target, const TString &source);
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
-                      const TString &source_channel, Int_t source_peak);
+                     const TString &source_channel, Int_t source_peak);
   void SeedChannel(const TString &channel_name, const FitResult &result);
   std::vector<FitResult> FitSimultaneous(const TString &input_name,
-                                          const TString &base_label);
+                                         const TString &base_label);
 };
 
 #endif

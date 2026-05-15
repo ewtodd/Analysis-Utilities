@@ -9,10 +9,9 @@
 #include <iostream>
 
 InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
-    const TGWindow *parent, RooSimultaneous *sim_pdf,
-    RooAbsData *combined_data, RooRealVar *x,
-    const std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
-    Double_t range_high, const TString &info_label)
+    const TGWindow *parent, RooSimultaneous *sim_pdf, RooAbsData *combined_data,
+    RooRealVar *x, const std::vector<SimEditorChannelView> &channel_views,
+    Double_t range_low, Double_t range_high, const TString &info_label)
     : TGMainFrame(parent, 1500, 950) {
 
   sim_pdf_ = sim_pdf;
@@ -146,9 +145,8 @@ InteractiveSimultaneousFitEditor::~InteractiveSimultaneousFitEditor() {
   }
 }
 
-Int_t InteractiveSimultaneousFitEditor::ChannelIndexFromWidgetId(Int_t base,
-                                                                  Int_t parm1,
-                                                                  Int_t &local_idx) {
+Int_t InteractiveSimultaneousFitEditor::ChannelIndexFromWidgetId(
+    Int_t base, Int_t parm1, Int_t &local_idx) {
   Int_t offset = parm1 - base;
   Int_t ch_idx = offset / kSliderStride;
   local_idx = offset % kSliderStride;
@@ -165,9 +163,9 @@ void InteractiveSimultaneousFitEditor::BuildGUI() {
            new TGLayoutHints(kLHintsExpandX | kLHintsExpandY, 2, 2, 2, 2));
 
   TGTab *outer_tabs = new TGTab(main_frame, 1500, 900);
-  main_frame->AddFrame(outer_tabs, new TGLayoutHints(kLHintsExpandX |
-                                                      kLHintsExpandY,
-                                                      2, 2, 2, 2));
+  main_frame->AddFrame(
+      outer_tabs,
+      new TGLayoutHints(kLHintsExpandX | kLHintsExpandY, 2, 2, 2, 2));
 
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     TGCompositeFrame *channel_tab =
@@ -181,8 +179,8 @@ void InteractiveSimultaneousFitEditor::BuildGUI() {
 
   if (info_label_text_.Length() > 0) {
     TGLabel *info_label = new TGLabel(bottom, info_label_text_);
-    bottom->AddFrame(info_label,
-                     new TGLayoutHints(kLHintsLeft | kLHintsCenterY, 8, 8, 4, 4));
+    bottom->AddFrame(info_label, new TGLayoutHints(kLHintsLeft | kLHintsCenterY,
+                                                   8, 8, 4, 4));
   }
 
   TGGroupFrame *range_grp =
@@ -229,8 +227,8 @@ void InteractiveSimultaneousFitEditor::BuildGUI() {
   bottom->AddFrame(refit_btn, btn_hints);
 }
 
-void InteractiveSimultaneousFitEditor::BuildChannelTab(
-    TGCompositeFrame *parent, Int_t ch_idx) {
+void InteractiveSimultaneousFitEditor::BuildChannelTab(TGCompositeFrame *parent,
+                                                       Int_t ch_idx) {
   SimEditorChannelView &cv = channels_[ch_idx];
 
   TGHorizontalFrame *row = new TGHorizontalFrame(parent, 1490, 850);
@@ -244,8 +242,8 @@ void InteractiveSimultaneousFitEditor::BuildChannelTab(
                 new TGLayoutHints(kLHintsExpandX | kLHintsExpandY, 2, 2, 2, 2));
 
   TGVerticalFrame *controls = new TGVerticalFrame(row, 540, 800);
-  row->AddFrame(
-      controls, new TGLayoutHints(kLHintsExpandY | kLHintsRight, 2, 2, 2, 2));
+  row->AddFrame(controls,
+                new TGLayoutHints(kLHintsExpandY | kLHintsRight, 2, 2, 2, 2));
 
   TGTab *peak_tabs = new TGTab(controls, 530, 800);
   controls->AddFrame(
@@ -261,8 +259,9 @@ void InteractiveSimultaneousFitEditor::BuildChannelTab(
   BuildBackgroundSubTab(bf, ch_idx);
 }
 
-void InteractiveSimultaneousFitEditor::BuildPeakSubTab(
-    TGCompositeFrame *parent, Int_t ch_idx, Int_t peak_idx) {
+void InteractiveSimultaneousFitEditor::BuildPeakSubTab(TGCompositeFrame *parent,
+                                                       Int_t ch_idx,
+                                                       Int_t peak_idx) {
   Int_t offset = peak_idx * 10;
 
   TGGroupFrame *gaus_grp = new TGGroupFrame(parent, "Gaussian", kVerticalFrame);
@@ -300,9 +299,9 @@ void InteractiveSimultaneousFitEditor::BuildBackgroundSubTab(
 }
 
 void InteractiveSimultaneousFitEditor::AddParamRow(TGCompositeFrame *parent,
-                                                    Int_t ch_idx,
-                                                    Int_t param_idx,
-                                                    const char *name) {
+                                                   Int_t ch_idx,
+                                                   Int_t param_idx,
+                                                   const char *name) {
   SimEditorChannelView &cv = channels_[ch_idx];
   Int_t global_id = ch_idx * kSliderStride + param_idx;
 
@@ -502,16 +501,15 @@ void InteractiveSimultaneousFitEditor::UpdateChannelGraphs(
     Double_t xv = range_low_ + i * x_step;
     x_->setVal(xv);
     cv.total_graph->SetPoint(i, xv,
-                              total_exp * cv.pdf->getVal(&nset) * bin_width);
+                             total_exp * cv.pdf->getVal(&nset) * bin_width);
   }
 
   Double_t bkg_yield = cv.bkg->bkg_yield->getVal();
   for (Int_t i = 0; i < kNDrawPts; i++) {
     Double_t xv = range_low_ + i * x_step;
     x_->setVal(xv);
-    cv.bkg_graph->SetPoint(i, xv,
-                            bkg_yield * cv.bkg->bkg_pdf->getVal(&nset) *
-                                    bin_width);
+    cv.bkg_graph->SetPoint(
+        i, xv, bkg_yield * cv.bkg->bkg_pdf->getVal(&nset) * bin_width);
   }
 
   for (Int_t pi = 0; pi < cv.num_peaks; pi++) {
@@ -525,8 +523,7 @@ void InteractiveSimultaneousFitEditor::UpdateChannelGraphs(
     for (Int_t i = 0; i < kNDrawPts; i++) {
       Double_t xv = range_low_ + i * x_step;
       x_->setVal(xv);
-      Double_t bkg_v =
-          bkg_yield * cv.bkg->bkg_pdf->getVal(&nset) * bin_width;
+      Double_t bkg_v = bkg_yield * cv.bkg->bkg_pdf->getVal(&nset) * bin_width;
 
       cv.comp_graphs[pi][0]->SetPoint(
           i, xv, gy * p.gauss_pdf->getVal(&nset) * bin_width + bkg_v);
@@ -611,7 +608,7 @@ void InteractiveSimultaneousFitEditor::UpdateChannelChi2(
   Int_t ndf = ndf_bins - n_free;
   if (ndf > 0)
     cv.chi2_label->SetText(0.85, 0.85,
-                            Form("#chi^{2}/ndf = %.3f", chi2_sum / ndf));
+                           Form("#chi^{2}/ndf = %.3f", chi2_sum / ndf));
   else
     cv.chi2_label->SetText(0.85, 0.85, "#chi^{2}/ndf = N/A");
 }
@@ -627,7 +624,7 @@ void InteractiveSimultaneousFitEditor::SyncAllWidgets() {
 }
 
 void InteractiveSimultaneousFitEditor::SyncChannelWidget(Int_t ch_idx,
-                                                          Int_t param_idx) {
+                                                         Int_t param_idx) {
   SimEditorChannelView &cv = channels_[ch_idx];
   Double_t val = cv.params[param_idx]->getVal();
   Bool_t fixed = cv.params[param_idx]->isConstant();
@@ -662,7 +659,7 @@ void InteractiveSimultaneousFitEditor::SyncChannelWidget(Int_t ch_idx,
 }
 
 void InteractiveSimultaneousFitEditor::OnSliderMoved(Int_t ch_idx,
-                                                      Int_t param_idx) {
+                                                     Int_t param_idx) {
   if (syncing_)
     return;
   if (IsFixed(ch_idx, param_idx))
@@ -701,14 +698,13 @@ void InteractiveSimultaneousFitEditor::OnEntryChanged(Int_t ch_idx,
   }
 
   cv.params[param_idx]->setRange(cv.current_bounds_low[param_idx],
-                                  cv.current_bounds_high[param_idx]);
+                                 cv.current_bounds_high[param_idx]);
   cv.params[param_idx]->setVal(val);
 
   syncing_ = kTRUE;
   cv.sliders[param_idx]->SetPosition(ValToSlider(ch_idx, param_idx, val));
   if (bounds_changed) {
-    cv.lo_bound_entries[param_idx]->SetNumber(
-        cv.current_bounds_low[param_idx]);
+    cv.lo_bound_entries[param_idx]->SetNumber(cv.current_bounds_low[param_idx]);
     cv.hi_bound_entries[param_idx]->SetNumber(
         cv.current_bounds_high[param_idx]);
   }
@@ -718,7 +714,7 @@ void InteractiveSimultaneousFitEditor::OnEntryChanged(Int_t ch_idx,
 }
 
 void InteractiveSimultaneousFitEditor::OnBoundsChanged(Int_t ch_idx,
-                                                        Int_t param_idx) {
+                                                       Int_t param_idx) {
   if (syncing_)
     return;
 
@@ -751,7 +747,7 @@ void InteractiveSimultaneousFitEditor::OnBoundsChanged(Int_t ch_idx,
 }
 
 void InteractiveSimultaneousFitEditor::OnFixToggled(Int_t ch_idx,
-                                                     Int_t param_idx) {
+                                                    Int_t param_idx) {
   SimEditorChannelView &cv = channels_[ch_idx];
   Bool_t now_fixed = (cv.fix_checks[param_idx]->GetState() == kButtonDown);
 
@@ -761,7 +757,7 @@ void InteractiveSimultaneousFitEditor::OnFixToggled(Int_t ch_idx,
     cv.value_entries[param_idx]->GetNumberEntry()->SetEnabled(kFALSE);
   } else {
     cv.params[param_idx]->setRange(cv.current_bounds_low[param_idx],
-                                    cv.current_bounds_high[param_idx]);
+                                   cv.current_bounds_high[param_idx]);
     cv.params[param_idx]->setConstant(kFALSE);
     cv.sliders[param_idx]->SetEnabled(kTRUE);
     cv.value_entries[param_idx]->GetNumberEntry()->SetEnabled(kTRUE);
@@ -786,13 +782,11 @@ void InteractiveSimultaneousFitEditor::OnRangeChanged() {
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     SimEditorChannelView &cv = channels_[ci];
     if (cv.events) {
-      RooFitUtils::RefillDisplayHistogram(cv.hist_draw, *cv.events,
-                                           (Float_t)range_low_,
-                                           (Float_t)range_high_,
-                                           cv.display_bin_width_kev);
+      RooFitUtils::RefillDisplayHistogram(
+          cv.hist_draw, *cv.events, (Float_t)range_low_, (Float_t)range_high_,
+          cv.display_bin_width_kev);
     }
-    cv.hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
-                                            1.1 * range_high_);
+    cv.hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_, 1.1 * range_high_);
   }
 
   syncing_ = kTRUE;
@@ -809,7 +803,7 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
     for (Int_t i = 0; i < (Int_t)cv.params.size(); i++) {
       if (!IsFixed((Int_t)ci, i)) {
         cv.params[i]->setRange(cv.current_bounds_low[i],
-                                cv.current_bounds_high[i]);
+                               cv.current_bounds_high[i]);
       }
     }
   }
@@ -817,8 +811,7 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
   RooFitResult *res = sim_pdf_->fitTo(
       *combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
       RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
-      RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1),
-      RooFit::Strategy(1),
+      RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
       RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
   if (res)
     delete res;
@@ -842,7 +835,7 @@ void InteractiveSimultaneousFitEditor::DoCancel() {
         cv.params[i]->setConstant(kTRUE);
       } else {
         cv.params[i]->setRange(cv.original_bounds_low[i],
-                                cv.original_bounds_high[i]);
+                               cv.original_bounds_high[i]);
         cv.params[i]->setConstant(kFALSE);
       }
     }
@@ -864,7 +857,7 @@ void InteractiveSimultaneousFitEditor::DoReset() {
         cv.params[i]->setConstant(kTRUE);
       } else {
         cv.params[i]->setRange(cv.original_bounds_low[i],
-                                cv.original_bounds_high[i]);
+                               cv.original_bounds_high[i]);
         cv.params[i]->setConstant(kFALSE);
       }
     }
@@ -875,7 +868,7 @@ void InteractiveSimultaneousFitEditor::DoReset() {
   x_->setRange("fitrange", range_low_, range_high_);
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     channels_[ci].hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
-                                                       1.1 * range_high_);
+                                                      1.1 * range_high_);
   }
   syncing_ = kTRUE;
   range_slider_->SetPosition(range_low_, range_high_);
@@ -889,8 +882,8 @@ void InteractiveSimultaneousFitEditor::DoReset() {
 }
 
 Bool_t InteractiveSimultaneousFitEditor::ProcessMessage(Long_t msg,
-                                                          Long_t parm1,
-                                                          Long_t parm2) {
+                                                        Long_t parm1,
+                                                        Long_t parm2) {
   if (syncing_)
     return kTRUE;
   (void)parm2;
@@ -970,8 +963,8 @@ Bool_t InteractiveSimultaneousFitEditor::HandleTimer(TTimer *timer) {
 void InteractiveSimultaneousFitEditor::CloseWindow() { DoCancel(); }
 
 Int_t InteractiveSimultaneousFitEditor::ValToSlider(Int_t ch_idx,
-                                                     Int_t param_idx,
-                                                     Double_t val) {
+                                                    Int_t param_idx,
+                                                    Double_t val) {
   SimEditorChannelView &cv = channels_[ch_idx];
   Double_t lo = cv.current_bounds_low[param_idx];
   Double_t hi = cv.current_bounds_high[param_idx];
@@ -986,8 +979,8 @@ Int_t InteractiveSimultaneousFitEditor::ValToSlider(Int_t ch_idx,
 }
 
 Double_t InteractiveSimultaneousFitEditor::SliderToVal(Int_t ch_idx,
-                                                        Int_t param_idx,
-                                                        Int_t pos) {
+                                                       Int_t param_idx,
+                                                       Int_t pos) {
   SimEditorChannelView &cv = channels_[ch_idx];
   Double_t lo = cv.current_bounds_low[param_idx];
   Double_t hi = cv.current_bounds_high[param_idx];
@@ -996,14 +989,14 @@ Double_t InteractiveSimultaneousFitEditor::SliderToVal(Int_t ch_idx,
 }
 
 Bool_t InteractiveSimultaneousFitEditor::IsFixed(Int_t ch_idx,
-                                                  Int_t param_idx) {
+                                                 Int_t param_idx) {
   return (channels_[ch_idx].fix_checks[param_idx]->GetState() == kButtonDown);
 }
 
 void InteractiveSimultaneousFitEditor::GetDefaultBounds(Int_t ch_idx,
-                                                         Int_t param_idx,
-                                                         Double_t &lo,
-                                                         Double_t &hi) {
+                                                        Int_t param_idx,
+                                                        Double_t &lo,
+                                                        Double_t &hi) {
   SimEditorChannelView &cv = channels_[ch_idx];
   Double_t peak_height = cv.hist->GetMaximum();
   Double_t range_width = range_high_ - range_low_;
@@ -1076,8 +1069,8 @@ Bool_t LaunchInteractiveSimultaneousFitEditor(
 
   InteractiveSimultaneousFitEditor *editor =
       new InteractiveSimultaneousFitEditor(gClient->GetRoot(), sim_pdf,
-                                            combined_data, x, channel_views,
-                                            range_low, range_high, info_label);
+                                           combined_data, x, channel_views,
+                                           range_low, range_high, info_label);
 
   while (!editor->IsDone()) {
     gSystem->ProcessEvents();

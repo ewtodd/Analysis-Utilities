@@ -79,7 +79,7 @@ def set_root_preferences(
         resolved_root_files_dir = Path("root_files").resolve()
     else:
         from analysis_utilities.io import (get_root_files_base_dir,
-                                             set_root_files_base_dir)
+                                           set_root_files_base_dir)
 
         set_root_files_base_dir(root_files_dir)
         resolved_root_files_dir = Path(get_root_files_base_dir())
