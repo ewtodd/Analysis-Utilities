@@ -32,7 +32,7 @@ public:
     file.open(fname, std::ios::binary);
 
     if (!file.is_open()) {
-      std::cerr << "Error: Cannot open file " << fname << std::endl;
+      std::cerr << "ERROR: Cannot open file " << fname << std::endl;
       file_open = kFALSE;
       return kFALSE;
     }

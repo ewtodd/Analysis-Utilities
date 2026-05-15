@@ -315,7 +315,7 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   TString output_filename = base_dir + "/" + output_name + ".root";
   output_file_ = new TFile(output_filename, "RECREATE");
   if (!output_file_ || output_file_->IsZombie()) {
-    std::cout << "Error: Could not create output file " << output_filename
+    std::cout << "ERROR: Could not create output file " << output_filename
               << std::endl;
     return kFALSE;
   }
@@ -340,13 +340,13 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
 
   TFile *file = TFile::Open(filepath, "READ");
   if (!file || file->IsZombie()) {
-    std::cout << "Error opening file: " << filepath << std::endl;
+    std::cout << "ERROR opening file: " << filepath << std::endl;
     return kFALSE;
   }
 
   TTree *tree = static_cast<TTree *>(file->Get("Data_R"));
   if (!tree) {
-    std::cout << "Error: TTree 'Data_R' not found in " << filepath << std::endl;
+    std::cout << "ERROR: TTree 'Data_R' not found in " << filepath << std::endl;
     file->Close();
     return kFALSE;
   }

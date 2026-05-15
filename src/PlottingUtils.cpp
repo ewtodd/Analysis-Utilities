@@ -196,6 +196,28 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
     canvas->Print(prefix + output_filename);
 
   if (save_options != PlotSaveOptions::kLINEAR) {
+    TList *primitives = canvas->GetListOfPrimitives();
+    Int_t size = primitives->GetSize();
+
+    for (Int_t i = 0; i < size; i++) {
+      TObject *object = primitives->At(i);
+      if (object->InheritsFrom(TH2::Class())) {
+        std::cout << std::endl;
+        std::cerr << "ERROR: Used PlotSaveOptions::kLOG for 2D histogram."
+                  << std::endl;
+        std::cout
+            << "This option is exclusive to 1D histograms/graphs because it refers to the y axis."
+            << std::endl;
+        std::cout << "Use PlotSaveOptions::kLINEAR." << std::endl;
+        std::cout
+            << "The z axis is already log by default if you used PlottingUtils::Configure2DHistogram()."
+            << std::endl;
+        std::cout << "Plot " << prefix + "log_" + output_filename
+                  << " was not saved." << std::endl;
+        std::exit(1);
+      };
+    };
+
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
@@ -206,6 +228,7 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
     canvas->Update();
   }
 }
+
 std::vector<Int_t> PlottingUtils::GetDefaultColors() {
   return {kRed + 1,   kBlue + 1,   kGreen + 2,  kOrange + 1,  kMagenta + 1,
           kCyan + 2,  kViolet + 1, kSpring - 1, kPink + 1,    kTeal + 2,

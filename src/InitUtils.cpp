@@ -46,7 +46,7 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   }
 
   if (gSystem->AccessPathName(input_filename)) {
-    std::cout << "Error: Input file does not exist: " << input_filename
+    std::cout << "ERROR: Input file does not exist: " << input_filename
               << std::endl;
     return 0;
   }
@@ -60,7 +60,7 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
           : reader.Open(input_filename.Data());
 
   if (!open_success) {
-    std::cout << "Error: Failed to open CoMPASS binary file" << std::endl;
+    std::cout << "ERROR: Failed to open CoMPASS binary file" << std::endl;
     return 0;
   }
 
@@ -73,7 +73,7 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
 
   TFile *outfile = new TFile(output_filename, "RECREATE");
   if (!outfile || outfile->IsZombie()) {
-    std::cout << "Error: Could not create output file " << output_filename
+    std::cout << "ERROR: Could not create output file " << output_filename
               << std::endl;
     reader.Close();
     return 0;
@@ -214,23 +214,23 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   }
 
   if (warning_memory_full > 0) {
-    std::cout << "Warning: " << warning_memory_full
+    std::cout << "WARNING: " << warning_memory_full
               << " events with memory full flag" << std::endl;
   }
   if (warning_trigger_lost > 0) {
-    std::cout << "Warning: " << warning_trigger_lost
+    std::cout << "WARNING: " << warning_trigger_lost
               << " events with trigger lost flag" << std::endl;
   }
   if (warning_pll_loss > 0) {
-    std::cout << "Warning: " << warning_pll_loss << " events with PLL lock loss"
+    std::cout << "WARNING: " << warning_pll_loss << " events with PLL lock loss"
               << std::endl;
   }
   if (warning_over_temp > 0) {
-    std::cout << "Warning: " << warning_over_temp
+    std::cout << "WARNING: " << warning_over_temp
               << " events with over temperature" << std::endl;
   }
   if (warning_adc_shutdown > 0) {
-    std::cout << "Warning: " << warning_adc_shutdown
+    std::cout << "WARNING: " << warning_adc_shutdown
               << " events with ADC shutdown" << std::endl;
   }
 
@@ -257,7 +257,7 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
   }
 
   if (gSystem->AccessPathName(input_filename)) {
-    std::cout << "Error: Input file does not exist: " << input_filename
+    std::cout << "ERROR: Input file does not exist: " << input_filename
               << std::endl;
     return kFALSE;
   }
@@ -267,7 +267,7 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
   WaveDump742Reader reader(corrections_enabled);
 
   if (!reader.Open(input_filename.Data())) {
-    std::cout << "Error: Failed to open WaveDump binary file" << std::endl;
+    std::cout << "ERROR: Failed to open WaveDump binary file" << std::endl;
     return kFALSE;
   }
 
@@ -276,7 +276,7 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
 
   TFile *outfile = new TFile(output_filename, "RECREATE");
   if (!outfile || outfile->IsZombie()) {
-    std::cout << "Error: Could not create output file " << output_filename
+    std::cout << "ERROR: Could not create output file " << output_filename
               << std::endl;
     reader.Close();
     return kFALSE;
