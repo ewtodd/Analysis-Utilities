@@ -2,10 +2,18 @@
 
 void InitUtils::SetROOTPreferences(PlotSaveFormat save_format,
                                    const TString &plots_dir,
-                                   const TString &root_files_dir) {
+                                   const TString &root_files_dir,
+                                   Bool_t enable_mt) {
   PlottingUtils::SetStylePreferences(save_format);
   gROOT->ForceStyle(kTRUE);
   gROOT->SetBatch(kTRUE);
+
+  if (enable_mt) {
+    IO::SetThreadSafe(kTRUE);
+    // Detach new histograms from gDirectory so concurrent TFile openings on
+    // other threads don't race on the directory's child list.
+    TH1::AddDirectory(kFALSE);
+  }
 
   TString resolved_plots_dir = plots_dir;
   if (resolved_plots_dir.Length() == 0) {
@@ -51,7 +59,8 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
     return 0;
   }
 
-  TString output_filename = base_dir + "/" + output_name + ".root";
+  TString output_subpath = output_name + ".root";
+  TString output_filename = base_dir + "/" + output_subpath;
 
   CoMPASSReader reader;
   Bool_t open_success =
@@ -71,46 +80,52 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   Bool_t has_energy_short = (global_header & 0x0004);
   Bool_t has_waveform = (global_header & 0x0008);
 
-  TFile *outfile = new TFile(output_filename, "RECREATE");
-  if (!outfile || outfile->IsZombie()) {
-    std::cout << "ERROR: Could not create output file " << output_filename
-              << std::endl;
-    reader.Close();
-    return 0;
-  }
-
-  TTree *tree = new TTree("Data_R", "CoMPASS Binary Data");
-
-  UShort_t board, channel, energy, energy_short;
-  ULong64_t timestamp;
-  Double_t energy_cal;
-  UInt_t flags, num_samples;
-  UChar_t waveform_code;
+  TFile *outfile = nullptr;
+  TTree *tree = nullptr;
+  UShort_t board = 0, channel = 0, energy = 0, energy_short = 0;
+  ULong64_t timestamp = 0;
+  Double_t energy_cal = 0.0;
+  UInt_t flags = 0, num_samples = 0;
+  UChar_t waveform_code = 0;
   TArrayS *samples = nullptr;
 
-  tree->Branch("Board", &board, "Board/s");
-  tree->Branch("Channel", &channel, "Channel/s");
-  tree->Branch("Timestamp", &timestamp, "Timestamp/l");
+  {
+    IO::ScopedRootLock setup_guard;
 
-  if (has_energy_ch) {
-    tree->Branch("Energy", &energy, "Energy/s");
-    std::cout << "Energy type: Channel (ADC counts)" << std::endl;
-  } else if (has_energy_cal) {
-    tree->Branch("Energy", &energy_cal, "Energy/D");
-    std::cout << "Energy type: Calibrated (keV/MeV)" << std::endl;
-  }
+    outfile = IO::OpenForWriting(output_subpath);
+    if (!outfile || outfile->IsZombie()) {
+      std::cout << "ERROR: Could not create output file " << output_filename
+                << std::endl;
+      reader.Close();
+      return 0;
+    }
 
-  if (has_energy_short) {
-    tree->Branch("EnergyShort", &energy_short, "EnergyShort/s");
-  }
+    tree = new TTree("Data_R", "CoMPASS Binary Data");
 
-  tree->Branch("Flags", &flags, "Flags/i");
+    tree->Branch("Board", &board, "Board/s");
+    tree->Branch("Channel", &channel, "Channel/s");
+    tree->Branch("Timestamp", &timestamp, "Timestamp/l");
 
-  if (has_waveform) {
-    samples = new TArrayS();
-    tree->Branch("WaveformCode", &waveform_code, "WaveformCode/b");
-    tree->Branch("NumSamples", &num_samples, "NumSamples/i");
-    tree->Branch("Samples", &samples);
+    if (has_energy_ch) {
+      tree->Branch("Energy", &energy, "Energy/s");
+      std::cout << "Energy type: Channel (ADC counts)" << std::endl;
+    } else if (has_energy_cal) {
+      tree->Branch("Energy", &energy_cal, "Energy/D");
+      std::cout << "Energy type: Calibrated (keV/MeV)" << std::endl;
+    }
+
+    if (has_energy_short) {
+      tree->Branch("EnergyShort", &energy_short, "EnergyShort/s");
+    }
+
+    tree->Branch("Flags", &flags, "Flags/i");
+
+    if (has_waveform) {
+      samples = new TArrayS();
+      tree->Branch("WaveformCode", &waveform_code, "WaveformCode/b");
+      tree->Branch("NumSamples", &num_samples, "NumSamples/i");
+      tree->Branch("Samples", &samples);
+    }
   }
 
   Long64_t event_count = 0;
@@ -236,12 +251,14 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
 
   std::cout << "Total bytes read: " << reader.GetBytesRead() << std::endl;
 
-  outfile->cd();
-  tree->Write("", TObject::kOverwrite);
-  outfile->Close();
-  reader.Close();
-
-  delete outfile;
+  {
+    IO::ScopedRootLock teardown_guard;
+    outfile->cd();
+    tree->Write("", TObject::kOverwrite);
+    outfile->Close();
+    reader.Close();
+    delete outfile;
+  }
 
   std::cout << "Output saved to: " << output_filename << std::endl;
 
@@ -262,7 +279,8 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
     return kFALSE;
   }
 
-  TString output_filename = base_dir + "/" + output_name + "_raw.root";
+  TString output_subpath = output_name + "_raw.root";
+  TString output_filename = base_dir + "/" + output_subpath;
 
   WaveDump742Reader reader(corrections_enabled);
 
@@ -274,24 +292,30 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
   std::cout << "Corrections: " << (corrections_enabled ? "enabled" : "disabled")
             << std::endl;
 
-  TFile *outfile = new TFile(output_filename, "RECREATE");
-  if (!outfile || outfile->IsZombie()) {
-    std::cout << "ERROR: Could not create output file " << output_filename
-              << std::endl;
-    reader.Close();
-    return kFALSE;
-  }
-
-  TTree *tree = new TTree("Data_R", "WaveDump 742 Binary Data");
-
-  UInt_t channel_br, event_counter, trigger_time_tag;
+  TFile *outfile = nullptr;
+  TTree *tree = nullptr;
+  UInt_t channel_br = 0, event_counter = 0, trigger_time_tag = 0;
   TArrayS *samples = nullptr;
 
-  tree->Branch("Channel", &channel_br, "Channel/i");
-  tree->Branch("EventCounter", &event_counter, "EventCounter/i");
-  tree->Branch("TriggerTimeTag", &trigger_time_tag, "TriggerTimeTag/i");
-  samples = new TArrayS();
-  tree->Branch("Samples", &samples);
+  {
+    IO::ScopedRootLock setup_guard;
+
+    outfile = IO::OpenForWriting(output_subpath);
+    if (!outfile || outfile->IsZombie()) {
+      std::cout << "ERROR: Could not create output file " << output_filename
+                << std::endl;
+      reader.Close();
+      return kFALSE;
+    }
+
+    tree = new TTree("Data_R", "WaveDump 742 Binary Data");
+
+    tree->Branch("Channel", &channel_br, "Channel/i");
+    tree->Branch("EventCounter", &event_counter, "EventCounter/i");
+    tree->Branch("TriggerTimeTag", &trigger_time_tag, "TriggerTimeTag/i");
+    samples = new TArrayS();
+    tree->Branch("Samples", &samples);
+  }
 
   Long64_t event_count = 0;
 
@@ -315,12 +339,14 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
             << (event_count > 0 ? samples->GetSize() : 0) << std::endl;
   std::cout << "Total bytes read: " << reader.GetBytesRead() << std::endl;
 
-  outfile->cd();
-  tree->Write("", TObject::kOverwrite);
-  outfile->Close();
-  reader.Close();
-
-  delete outfile;
+  {
+    IO::ScopedRootLock teardown_guard;
+    outfile->cd();
+    tree->Write("", TObject::kOverwrite);
+    outfile->Close();
+    reader.Close();
+    delete outfile;
+  }
 
   std::cout << "Output saved to: " << output_filename << std::endl;
 

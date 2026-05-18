@@ -312,8 +312,9 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
   TString clear_path = base_dir + "/" + output_name + ".stats";
   std::ofstream(clear_path.Data(), std::ios::trunc);
 
-  TString output_filename = base_dir + "/" + output_name + ".root";
-  output_file_ = new TFile(output_filename, "RECREATE");
+  TString output_subpath = output_name + ".root";
+  TString output_filename = base_dir + "/" + output_subpath;
+  output_file_ = IO::OpenForWriting(output_subpath);
   if (!output_file_ || output_file_->IsZombie()) {
     std::cout << "ERROR: Could not create output file " << output_filename
               << std::endl;
@@ -402,6 +403,7 @@ void WaveformProcessingUtils::ProcessFilesParallel(
     const FileProcessingConfig &config, Int_t max_workers) {
 
   ROOT::EnableThreadSafety();
+  IO::SetThreadSafe(kTRUE);
 
   Int_t n_files = Int_t(filepaths.size());
   Int_t n_workers = max_workers > 0
