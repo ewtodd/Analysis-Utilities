@@ -11,6 +11,14 @@
 #include <iostream>
 #include <vector>
 
+struct RawHit {
+  UShort_t board;
+  UShort_t channel;
+  UShort_t energy;
+  ULong64_t timestamp;
+  UInt_t flags;
+};
+
 class BinaryReader {
 protected:
   std::ifstream file;

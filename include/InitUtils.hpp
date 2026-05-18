@@ -8,6 +8,7 @@
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TTree.h>
+#include <utility>
 
 class InitUtils {
 public:
@@ -23,6 +24,10 @@ public:
                                           const TString output_name,
                                           UShort_t global_header_override,
                                           Bool_t skip_bad_events = kFALSE);
+  static std::pair<std::vector<RawHit>, UShort_t>
+  ConvertCoMPASSBinToHits(const TString input_filename,
+                          UShort_t global_header_override = 0,
+                          Bool_t skip_bad_events = kFALSE);
   static Bool_t ConvertCoMPASSCSVToROOT();
 };
 

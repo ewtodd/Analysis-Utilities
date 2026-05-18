@@ -265,6 +265,153 @@ UShort_t InitUtils::ConvertCoMPASSBinToROOT(const TString input_filename,
   return global_header;
 }
 
+std::pair<std::vector<RawHit>, UShort_t>
+InitUtils::ConvertCoMPASSBinToHits(const TString input_filename,
+                                   UShort_t global_header_override,
+                                   Bool_t skip_bad_events) {
+  std::vector<RawHit> hits;
+
+  if (gSystem->AccessPathName(input_filename)) {
+    std::cout << "ERROR: Input file does not exist: " << input_filename
+              << std::endl;
+    return std::make_pair(hits, static_cast<UShort_t>(0));
+  }
+
+  CoMPASSReader reader;
+  Bool_t open_success =
+      (global_header_override != 0)
+          ? reader.Open(input_filename.Data(), global_header_override)
+          : reader.Open(input_filename.Data());
+
+  if (!open_success) {
+    std::cout << "ERROR: Failed to open CoMPASS binary file" << std::endl;
+    return std::make_pair(hits, static_cast<UShort_t>(0));
+  }
+
+  UShort_t global_header = reader.GetGlobalHeader();
+  Bool_t has_energy_ch = (global_header & 0x0001);
+
+  if (!has_energy_ch) {
+    std::cout << "WARNING: File has no channel-energy field; RawHit.energy "
+                 "will be zero for every hit."
+              << std::endl;
+  }
+
+  Long64_t event_count = 0;
+  Long64_t warning_fake = 0;
+  Long64_t warning_saturated = 0;
+  Long64_t warning_pileup = 0;
+  Long64_t warning_memory_full = 0;
+  Long64_t warning_trigger_lost = 0;
+  Long64_t warning_pll_loss = 0;
+  Long64_t warning_over_temp = 0;
+  Long64_t warning_adc_shutdown = 0;
+
+  std::cout << "Reading events..." << std::endl;
+  if (skip_bad_events) {
+    std::cout
+        << "Filtering enabled: skipping fake, saturated, and pileup events"
+        << std::endl;
+  }
+
+  while (reader.ReadEvent()) {
+    const CoMPASSData &event = reader.GetCurrentEvent();
+    if (event_count == 0) {
+      event.PrintHeader();
+    }
+
+    if (event.isFakeEvent()) {
+      warning_fake++;
+      if (skip_bad_events)
+        continue;
+    }
+    if (event.isInputSaturating() || event.hasSaturation()) {
+      warning_saturated++;
+      if (skip_bad_events)
+        continue;
+    }
+    if (event.isPileup()) {
+      warning_pileup++;
+      if (skip_bad_events)
+        continue;
+    }
+
+    if (event.hasMemoryFull())
+      warning_memory_full++;
+    if (event.hasTriggerLost())
+      warning_trigger_lost++;
+    if (event.hasPLLLockLoss())
+      warning_pll_loss++;
+    if (event.isOverTemperature())
+      warning_over_temp++;
+    if (event.isADCShutdown())
+      warning_adc_shutdown++;
+
+    RawHit hit;
+    hit.board = event.board;
+    hit.channel = event.channel;
+    hit.energy = event.energy_ch;
+    hit.timestamp = event.timestamp;
+    hit.flags = event.flags;
+    hits.push_back(hit);
+
+    event_count++;
+  }
+
+  std::cout << "Conversion complete." << std::endl;
+  std::cout << "Total events processed: " << event_count << std::endl;
+
+  if (warning_fake > 0 || warning_saturated > 0 || warning_pileup > 0) {
+    std::cout << "Events with rejection-quality flags:" << std::endl;
+    if (warning_fake > 0) {
+      std::cout << "  Fake events: " << warning_fake;
+      if (skip_bad_events)
+        std::cout << " (rejected)";
+      std::cout << std::endl;
+    }
+    if (warning_saturated > 0) {
+      std::cout << "  Saturated: " << warning_saturated;
+      if (skip_bad_events)
+        std::cout << " (rejected)";
+      std::cout << std::endl;
+    }
+    if (warning_pileup > 0) {
+      std::cout << "  Pileup: " << warning_pileup;
+      if (skip_bad_events)
+        std::cout << " (rejected)";
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+  }
+
+  if (warning_memory_full > 0) {
+    std::cout << "WARNING: " << warning_memory_full
+              << " events with memory full flag" << std::endl;
+  }
+  if (warning_trigger_lost > 0) {
+    std::cout << "WARNING: " << warning_trigger_lost
+              << " events with trigger lost flag" << std::endl;
+  }
+  if (warning_pll_loss > 0) {
+    std::cout << "WARNING: " << warning_pll_loss << " events with PLL lock loss"
+              << std::endl;
+  }
+  if (warning_over_temp > 0) {
+    std::cout << "WARNING: " << warning_over_temp
+              << " events with over temperature" << std::endl;
+  }
+  if (warning_adc_shutdown > 0) {
+    std::cout << "WARNING: " << warning_adc_shutdown
+              << " events with ADC shutdown" << std::endl;
+  }
+
+  std::cout << "Total bytes read: " << reader.GetBytesRead() << std::endl;
+
+  reader.Close();
+
+  return std::make_pair(hits, global_header);
+}
+
 Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
                                            const TString output_name,
                                            Bool_t corrections_enabled) {
