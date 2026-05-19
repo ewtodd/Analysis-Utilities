@@ -8,6 +8,8 @@
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TTree.h>
+#include <cstdio>
+#include <cstring>
 #include <utility>
 
 class InitUtils {
