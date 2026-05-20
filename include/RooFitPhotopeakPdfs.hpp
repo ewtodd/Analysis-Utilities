@@ -3,6 +3,7 @@
 
 #include <RooAbsPdf.h>
 #include <RooAbsReal.h>
+#include <RooFit/EvalContext.h>
 #include <RooRealProxy.h>
 
 class RooStepShelf : public RooAbsPdf {
@@ -19,6 +20,13 @@ public:
                               const char *rangeName = nullptr) const override;
   Double_t analyticalIntegral(Int_t code,
                               const char *rangeName = nullptr) const override;
+
+  void doEval(RooFit::EvalContext &ctx) const override;
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  inline bool canComputeBatchWithCuda() const override { return true; }
+#else
+  inline bool canComputeBatchWithCuda() const override { return false; }
+#endif
 
 protected:
   RooRealProxy x_;
@@ -43,6 +51,13 @@ public:
                               const char *rangeName = nullptr) const override;
   Double_t analyticalIntegral(Int_t code,
                               const char *rangeName = nullptr) const override;
+
+  void doEval(RooFit::EvalContext &ctx) const override;
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  inline bool canComputeBatchWithCuda() const override { return true; }
+#else
+  inline bool canComputeBatchWithCuda() const override { return false; }
+#endif
 
 protected:
   RooRealProxy x_;
@@ -69,6 +84,13 @@ public:
   Double_t analyticalIntegral(Int_t code,
                               const char *rangeName = nullptr) const override;
 
+  void doEval(RooFit::EvalContext &ctx) const override;
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  inline bool canComputeBatchWithCuda() const override { return true; }
+#else
+  inline bool canComputeBatchWithCuda() const override { return false; }
+#endif
+
 protected:
   RooRealProxy x_;
   RooRealProxy mu_;
@@ -93,6 +115,13 @@ public:
                               const char *rangeName = nullptr) const override;
   Double_t analyticalIntegral(Int_t code,
                               const char *rangeName = nullptr) const override;
+
+  void doEval(RooFit::EvalContext &ctx) const override;
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  inline bool canComputeBatchWithCuda() const override { return true; }
+#else
+  inline bool canComputeBatchWithCuda() const override { return false; }
+#endif
 
 protected:
   RooRealProxy x_;

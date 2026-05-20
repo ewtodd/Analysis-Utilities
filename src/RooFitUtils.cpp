@@ -567,7 +567,7 @@ RooFitResult *RooFitUtils::RunFit(Bool_t quiet) {
       RooFit::Range(kFitRangeName), RooFit::SumW2Error(kFALSE),
       RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(-1),
       RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
-      RooFit::EvalBackend::Cpu());
+      BestAvailableBackend());
   return result;
 }
 
@@ -2414,7 +2414,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
         RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
         RooFit::PrintLevel(0), RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
-        RooFit::Minimizer("Minuit2", "migrad"), RooFit::EvalBackend::Cpu());
+        RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
     sim_valid = (fit_result && fit_result->status() == 0);
     if (!sim_valid) {
       std::cout << "WARNING: simultaneous fit did not converge cleanly"
