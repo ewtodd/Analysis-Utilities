@@ -12,7 +12,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Match the doEval hot-loop flags the Makefile was using
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 find_package(OpenMP REQUIRED)
 find_package(ROOT 6.38 REQUIRED COMPONENTS RooFit RooFitCore)
