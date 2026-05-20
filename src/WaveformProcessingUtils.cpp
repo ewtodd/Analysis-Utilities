@@ -29,7 +29,6 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
     delete output_file_;
     output_file_ = nullptr;
     if (store_waveforms_) {
-      // The TFile cascade freed save_waveform_ through its branch.
       save_waveform_ = nullptr;
     }
   }
@@ -91,6 +90,10 @@ Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayS &samples) {
   output_tree_->Fill();
 
   stats_.accepted++;
+  if (current_baseline_rms_valid_) {
+    stats_.sum_baseline_rms_accepted += current_baseline_rms_;
+    stats_.baseline_rms_count_accepted++;
+  }
   return kTRUE;
 }
 
@@ -136,6 +139,20 @@ void WaveformProcessingUtils::SubtractBaseline(const TArrayS &samples) {
     baseline += samples.GetAt(i);
   }
   baseline /= baseline_samples;
+
+  current_baseline_rms_valid_ = kFALSE;
+  if (baseline_samples > 1) {
+    Double_t sum_sq = 0.0;
+    for (Int_t i = 0; i < baseline_samples; ++i) {
+      Double_t d = samples.GetAt(i) - baseline;
+      sum_sq += d * d;
+    }
+    Float_t rms = TMath::Sqrt(sum_sq / (baseline_samples - 1));
+    stats_.sum_baseline_rms += rms;
+    stats_.baseline_rms_count++;
+    current_baseline_rms_ = rms;
+    current_baseline_rms_valid_ = kTRUE;
+  }
 
   save_waveform_->Set(n);
   if (polarity_ == -1) {
@@ -262,6 +279,19 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
                      Float_t(stats_.total_processed)
               << "%" << std::endl;
   }
+  if (stats_.baseline_rms_count > 0) {
+    std::cout << "Mean baseline RMS (all processed): "
+              << stats_.sum_baseline_rms / stats_.baseline_rms_count
+              << " ADC counts (over " << stats_.baseline_rms_count
+              << " waveforms)" << std::endl;
+  }
+  if (stats_.baseline_rms_count_accepted > 0) {
+    std::cout << "Mean baseline RMS (accepted only): "
+              << stats_.sum_baseline_rms_accepted /
+                     stats_.baseline_rms_count_accepted
+              << " ADC counts (over " << stats_.baseline_rms_count_accepted
+              << " waveforms)" << std::endl;
+  }
   std::cout << std::endl;
 
   TString stats_path =
@@ -290,6 +320,19 @@ void WaveformProcessingUtils::PrintAllStatistics() const {
                  << 100 * Float_t(stats_.accepted) /
                         Float_t(stats_.total_processed)
                  << "%" << std::endl;
+    }
+    if (stats_.baseline_rms_count > 0) {
+      stats_file << "Mean baseline RMS (all processed): "
+                 << stats_.sum_baseline_rms / stats_.baseline_rms_count
+                 << " ADC counts (over " << stats_.baseline_rms_count
+                 << " waveforms)" << std::endl;
+    }
+    if (stats_.baseline_rms_count_accepted > 0) {
+      stats_file << "Mean baseline RMS (accepted only): "
+                 << stats_.sum_baseline_rms_accepted /
+                        stats_.baseline_rms_count_accepted
+                 << " ADC counts (over " << stats_.baseline_rms_count_accepted
+                 << " waveforms)" << std::endl;
     }
     stats_file << std::endl;
   }
