@@ -36,6 +36,10 @@ struct ProcessingStats {
   Int_t rejected_negative_integral = 0;
   Int_t rejected_baseline = 0;
   Int_t rejected_clipped = 0;
+  Double_t sum_baseline_rms = 0.0;
+  Int_t baseline_rms_count = 0;
+  Double_t sum_baseline_rms_accepted = 0.0;
+  Int_t baseline_rms_count_accepted = 0;
 };
 
 enum class InputFormat { kCOMPASS, kWAVEDUMP };
@@ -75,6 +79,9 @@ private:
   TString current_output_name_;
 
   ProcessingStats stats_;
+
+  Float_t current_baseline_rms_ = 0.0f;
+  Bool_t current_baseline_rms_valid_ = kFALSE;
 
   TFile *output_file_;
   TTree *output_tree_;
