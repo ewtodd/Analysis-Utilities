@@ -2,6 +2,7 @@
 <!---->
 C++ utilities for analysis of nuclear measurement data, built on [ROOT](https://root.cern/), with a focus on ergonomics and performance.
 Supports CAEN digitizers via CoMPASS and WaveDump acquisition software.
+The RooFit-based photopeak fitting backend includes CUDA kernels for its custom PDFs and dispatches `doEval` to the GPU when the library is built with CUDA support — see [GPU acceleration](#fittingutils-and-roofitutils) for details and measured speedups.
 The flake also exposes a Python package, with a wrapper around the PlottingUtils as well as a method for efficiently loading TTrees into Python native data types (numpy array, pandas df) so that machine learning libraries in Python can be used.
 Warning: Currently in active development; breaking changes are all but guaranteed...
 <!---->
@@ -67,8 +68,13 @@ Outputs processed data to ROOT TTrees with optional waveform storage.
 Fit gamma-ray spectral photopeaks with a composable model.
 Two backends are provided with identical APIs and result types so call sites can swap one for the other:
 <!---->
-- **`FittingUtils`** - `TF1` + ROOT::Math::Minimizer (Minuit2), binned chi-squared. Fast, pointwise un-normalized model evaluation.
-- **`RooFitUtils`** - `RooAddPdf` of `RooGenericPdf` components + `RooFit::EvalBackend::Cpu`, **unbinned extended maximum likelihood**. Slower per Minuit step (each component PDF re-normalizes numerically over the fit range) but provides RooFit's full machinery for downstream extensions (e.g. simultaneous fits).
+- **`FittingUtils`** - `TF1` + ROOT::Math::Minimizer (Minuit2), binned chi-squared.
+Fast, pointwise un-normalized model evaluation.
+- **`RooFitUtils`** - `RooAddPdf` of custom `RooAbsPdf` components, **unbinned extended maximum likelihood**.
+The custom PDFs (`RooStepShelf`, `RooLowExpTail`, `RooLowLinTail`, `RooHighExpTail`) implement `doEval()` so every NLL pass is vectorized over events rather than dispatching scalar `evaluate()` calls per event.
+The CPU `doEval` paths are OpenMP-parallelized; when built with CUDA support (see the **GPU acceleration** subsection below), each PDF also includes a  `__global__` kernel under `gpu/` and `doEval` dispatches to the kernel when RooFit hands it device-resident buffers.
+Each component PDF still re-normalizes numerically over the fit range per Minuit step, but the per-step cost is amortized.
+Provides RooFit's full machinery for downstream extensions (e.g. simultaneous fits).
 <!---->
 Both classes take the same constructor signature, expose the same `Set*` flag setters, and return the same `FitResult` struct.
 The interactive fit editor is implemented per-backend (`InteractiveFitEditor` for TF1, `InteractiveRooFitEditor` for RooFit).
@@ -104,6 +110,7 @@ The fit itself never bins.
 This is internally consistent for constrained fits because the ratio `component_amplitude / gaus_amplitude` is the same quantity in both backends.
 - The low-energy linear tail factor `(1 + s·(x-μ))` is floored at zero to keep the PDF non-negative as required by RooFit normalization. The TF1 backend has no such constraint.
 - `RooRealVar::enableSilentClipping()` is enabled so observable values outside the current range are silently clipped rather than throwing.
+- **CPU vs CUDA backend**: by default `fitTo()` calls dispatch through `RooFit::EvalBackend::Cpu()`, and the OpenMP-parallelized `doEval` path handles batched evaluation. When compiled with `-DAU_ROOFIT_BACKEND_CUDA=1`, `BestAvailableBackend()` (in `RooFitUtils.hpp`) returns `RooFit::EvalBackend::Cuda()` instead, and all four custom PDFs report `canComputeBatchWithCuda() = true` and dispatch to CUDA kernels. See the **GPU acceleration** subsection below for the nix-flake opt-in.
 <!---->
 ![Fit example](assets/FitExample.png)
 <!---->
@@ -121,6 +128,47 @@ On subsequent runs with `SetInteractive()`, saved parameters are loaded automati
 Delete the saved file to redo the interactive fit.
 - It is recommended to re-run the fitting macro after an interactive session, as the saved parameters serve as much better starting points for the minimizer and often produce a lower chi-squared on the second pass.
 - Batch mode is temporarily disabled for the editor window and restored afterward, so plot popups are not affected.
+<!---->
+**GPU acceleration (opt-in)**:
+<!---->
+The flake exposes two library variants:
+<!---->
+- `packages.default` — CPU build. `doEval()` runs an OpenMP-parallelized loop on the host; backend dispatches through `RooFit::EvalBackend::Cpu()`.
+- `packages.cuda` — CUDA build. Each custom PDF ships a `__global__` kernel under `gpu/`; `doEval()` queries the output buffer with `cudaPointerGetAttributes` and, when RooFit hands it device memory, launches the kernel instead of running the host loop. Backend dispatches through `RooFit::EvalBackend::Cuda()`. Built against a `-Dcuda=ON` override of ROOT (re-exposed as `packages.rootCuda` so downstream consumers don't have to duplicate the override).
+<!---->
+Build details: the project is CMake-based.
+The CUDA build sets `-DAU_USE_CUDA=ON`, which enables CUDA as a CMake language, picks up `gpu/*.cu` alongside `src/*.cpp`, defines `AU_ROOFIT_BACKEND_CUDA=1` for the host code, and links `CUDA::cudart`.
+The CPU build never compiles the kernel files and never touches the CUDA toolchain.
+<!---->
+A downstream flake opts in by swapping `default` → `cuda` and `pkgs.root` → `utils.packages.${system}.rootCuda`, and exporting the matching compile-define so downstream code that calls `BestAvailableBackend()` agrees with the prebuilt library:
+<!---->
+```nix
+analysis-utils = utils.packages.${system}.cuda;
+root           = utils.packages.${system}.rootCuda;
+# ...
+shellHook = ''
+  export NIX_CFLAGS_COMPILE="-DAU_ROOFIT_BACKEND_CUDA=1''${NIX_CFLAGS_COMPILE:+ $NIX_CFLAGS_COMPILE}"
+  export LD_LIBRARY_PATH="/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+'';
+```
+<!---->
+The `LD_LIBRARY_PATH` line ensures nix-built binaries find the host's `libcuda.so` (NixOS exposes it under `/run/opengl-driver/lib`) rather than a stub from the nix store.
+<!---->
+**Performance, measured.** On a 4 M-event unbinned extended maximum-likelihood fit (73mGe calibration workload, RTX 50-series GPU):
+<!---->
+| Path | Single fit | Simultaneous fit |
+|------|-----------:|-----------------:|
+| Scalar `evaluate()` (legacy) | ~minutes | ~minutes |
+| OpenMP batched `doEval` | ~2 min | ~3 min |
+| CUDA kernels (`packages.cuda`) | ~6 s | ~36 s |
+<!---->
+The CUDA win for simultaneous fits is smaller than for single fits because once `doEval` is effectively free, the remaining time is dominated by Minuit2 itself, the analytic normalization integrals (computed on the host per-step), and RooFit's evaluator orchestration — none of which benefit from GPU work.
+<!---->
+The `cudaCapabilities` list in the flake's `pkgs = import nixpkgs { config = { ... }; }` block defaults to `[ "12.0" ]` (Blackwell / RTX 50-series). Adjust to your GPU's compute capability and update `-DCMAKE_CUDA_ARCHITECTURES` in the `rootWithCuda` overlay to match.
+<!---->
+**Do not override the `nixpkgs` input** (e.g. via `inputs.utils.inputs.nixpkgs.follows`).
+The CUDA-built ROOT is large and would otherwise be rebuilt from source against your nixpkgs revision.
+Leaving the input alone lets your machine pull the pre-built artifact from the binary cache (see [Binary Cache](#binary-cache) below) instead.
 <!---->
 **References**:
 - Boggs SE, Pike SN.
@@ -313,6 +361,15 @@ df = load_tree_data("output.root", cache_dir=None)
 **Returns** a `pandas.DataFrame` of scalar data. If `array_branch` is specified, returns a tuple of `(DataFrame, numpy.ndarray)`.
 <!---->
 Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `UShort_t`, `Long64_t`, `ULong64_t`, `UChar_t`.
+<!---->
+## Binary Cache
+<!---->
+The CUDA-overlaid ROOT and the `packages.cuda` library are large to build from source. **e-desktop** (the primary development host for this project) re-serves its nix store as a binary cache so other machines can fetch the pre-built artifacts directly instead of rebuilding.
+<!---->
+- **URL:** `https://e-desktop.tail624128.ts.net`
+- **Use on other hosts:** add the URL as a substituter (and trust its signing key) in your `nix.conf` / `nixos-rebuild` config. Once configured, `nix build` / `nix develop` will transparently pull `packages.cuda` and `packages.rootCuda` from the cache instead of compiling.
+<!---->
+This is the main reason downstream flakes should leave the `utils.inputs.nixpkgs` input alone — overriding it changes the derivation hash and forces a local rebuild that the cache can't satisfy.
 <!---->
 ## A note on AI-assisted development
 <!---->

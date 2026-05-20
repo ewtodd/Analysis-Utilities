@@ -5,6 +5,25 @@
 #include <RooRealVar.h>
 #include <cmath>
 
+#ifdef AU_ROOFIT_BACKEND_CUDA
+#include "RooFitPhotopeakKernels.hpp"
+#include <cuda_runtime.h>
+
+namespace {
+bool IsDevicePointer(const void *ptr) {
+  cudaPointerAttributes attrs;
+  cudaError_t err = cudaPointerGetAttributes(&attrs, ptr);
+  if (err != cudaSuccess) {
+    // Clear the error state — querying a host pointer is not a hard failure.
+    cudaGetLastError();
+    return false;
+  }
+  return attrs.type == cudaMemoryTypeDevice ||
+         attrs.type == cudaMemoryTypeManaged;
+}
+} // namespace
+#endif
+
 ClassImp(RooStepShelf);
 ClassImp(RooLowExpTail);
 ClassImp(RooLowLinTail);
@@ -105,6 +124,32 @@ Double_t RooStepShelf::evaluate() const {
   return s * s;
 }
 
+void RooStepShelf::doEval(RooFit::EvalContext &ctx) const {
+  std::span<const double> x_vals = ctx.at(x_);
+  std::span<double> output = ctx.output();
+  size_t n = output.size();
+  Double_t sigma = ctx.at(sigma_)[0];
+  Double_t mu = ctx.at(mu_)[0];
+  if (sigma <= 0) {
+    for (size_t i = 0; i < n; ++i)
+      output[i] = 0.0;
+    return;
+  }
+  Double_t inv_sigma = 1.0 / sigma;
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  if (IsDevicePointer(output.data())) {
+    RooStepShelf_launchKernel(output.data(), x_vals.data(), mu, inv_sigma, n);
+    return;
+  }
+#endif
+#pragma omp parallel for simd
+  for (size_t i = 0; i < n; ++i) {
+    Double_t z = (x_vals[i] - mu) * inv_sigma;
+    Double_t s = SigmoidNeg(z);
+    output[i] = s * s;
+  }
+}
+
 Int_t RooStepShelf::getAnalyticalIntegral(RooArgSet &allVars,
                                           RooArgSet &analVars,
                                           const char * /*rangeName*/) const {
@@ -149,6 +194,35 @@ Double_t RooLowExpTail::evaluate() const {
   Double_t tau = ratio * sigma;
   Double_t y = (Double_t)x_ - (Double_t)mu_;
   return ExpTailDensity(y, sigma, tau);
+}
+
+void RooLowExpTail::doEval(RooFit::EvalContext &ctx) const {
+  std::span<const double> x_vals = ctx.at(x_);
+  std::span<double> output = ctx.output();
+  size_t n = output.size();
+  Double_t sigma = ctx.at(sigma_)[0];
+  Double_t mu = ctx.at(mu_)[0];
+  Double_t ratio = ctx.at(tau_)[0];
+  if (sigma <= 0 || ratio <= 0) {
+    for (size_t i = 0; i < n; ++i)
+      output[i] = 0.0;
+    return;
+  }
+  Double_t tau = ratio * sigma;
+  Double_t inv_tau = 1.0 / tau;
+  Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  if (IsDevicePointer(output.data())) {
+    RooLowExpTail_launchKernel(output.data(), x_vals.data(), mu, inv_tau,
+                               inv_sqrt2_sigma, n);
+    return;
+  }
+#endif
+#pragma omp parallel for simd
+  for (size_t i = 0; i < n; ++i) {
+    Double_t y = x_vals[i] - mu;
+    output[i] = std::exp(y * inv_tau) * std::erfc(y * inv_sqrt2_sigma);
+  }
 }
 
 Int_t RooLowExpTail::getAnalyticalIntegral(RooArgSet &allVars,
@@ -201,6 +275,36 @@ Double_t RooLowLinTail::evaluate() const {
   return LowLinDensity(y, sigma, slope);
 }
 
+void RooLowLinTail::doEval(RooFit::EvalContext &ctx) const {
+  std::span<const double> x_vals = ctx.at(x_);
+  std::span<double> output = ctx.output();
+  size_t n = output.size();
+  Double_t sigma = ctx.at(sigma_)[0];
+  Double_t mu = ctx.at(mu_)[0];
+  Double_t slope = ctx.at(slope_)[0];
+  if (sigma <= 0) {
+    for (size_t i = 0; i < n; ++i)
+      output[i] = 0.0;
+    return;
+  }
+  Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  if (IsDevicePointer(output.data())) {
+    RooLowLinTail_launchKernel(output.data(), x_vals.data(), mu, slope,
+                               inv_sqrt2_sigma, n);
+    return;
+  }
+#endif
+#pragma omp parallel for simd
+  for (size_t i = 0; i < n; ++i) {
+    Double_t y = x_vals[i] - mu;
+    Double_t lin = 1.0 + slope * y;
+    if (lin < 0.0)
+      lin = 0.0;
+    output[i] = lin * std::erfc(y * inv_sqrt2_sigma);
+  }
+}
+
 Int_t RooLowLinTail::getAnalyticalIntegral(RooArgSet &allVars,
                                            RooArgSet &analVars,
                                            const char * /*rangeName*/) const {
@@ -244,6 +348,35 @@ Double_t RooHighExpTail::evaluate() const {
   Double_t tau = ratio * sigma;
   Double_t z = (Double_t)mu_ - (Double_t)x_;
   return ExpTailDensity(z, sigma, tau);
+}
+
+void RooHighExpTail::doEval(RooFit::EvalContext &ctx) const {
+  std::span<const double> x_vals = ctx.at(x_);
+  std::span<double> output = ctx.output();
+  size_t n = output.size();
+  Double_t sigma = ctx.at(sigma_)[0];
+  Double_t mu = ctx.at(mu_)[0];
+  Double_t ratio = ctx.at(tau_)[0];
+  if (sigma <= 0 || ratio <= 0) {
+    for (size_t i = 0; i < n; ++i)
+      output[i] = 0.0;
+    return;
+  }
+  Double_t tau = ratio * sigma;
+  Double_t inv_tau = 1.0 / tau;
+  Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
+#ifdef AU_ROOFIT_BACKEND_CUDA
+  if (IsDevicePointer(output.data())) {
+    RooHighExpTail_launchKernel(output.data(), x_vals.data(), mu, inv_tau,
+                                inv_sqrt2_sigma, n);
+    return;
+  }
+#endif
+#pragma omp parallel for simd
+  for (size_t i = 0; i < n; ++i) {
+    Double_t z = mu - x_vals[i];
+    output[i] = std::exp(z * inv_tau) * std::erfc(z * inv_sqrt2_sigma);
+  }
 }
 
 Int_t RooHighExpTail::getAnalyticalIntegral(RooArgSet &allVars,

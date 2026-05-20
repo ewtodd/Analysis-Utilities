@@ -31,9 +31,9 @@ def load_cpp_library():
     import ROOT
 
     if not _cpp_loaded:
-        if ROOT.gSystem.Load("lib-analysis-utils") < 0:
+        if ROOT.gSystem.Load("libanalysis-utils") < 0:
             raise RuntimeError(
-                "Could not load lib-analysis-utils.so. "
+                "Could not load libanalysis-utils.so. "
                 "Make sure LD_LIBRARY_PATH includes the library directory.")
         ROOT.gInterpreter.Declare('#include "PlottingUtils.hpp"')
         ROOT.gInterpreter.Declare('#include "InitUtils.hpp"')

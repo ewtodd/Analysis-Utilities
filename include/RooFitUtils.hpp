@@ -12,11 +12,13 @@
 #include <RooArgList.h>
 #include <RooArgSet.h>
 #include <RooCategory.h>
+#include <RooCmdArg.h>
 #include <RooDataSet.h>
 #include <RooFitResult.h>
 #include <RooFormulaVar.h>
 #include <RooGaussian.h>
 #include <RooGenericPdf.h>
+#include <RooGlobalFunc.h>
 #include <RooMsgService.h>
 #include <RooPolynomial.h>
 #include <RooRealVar.h>
@@ -37,6 +39,17 @@
 #include <map>
 #include <set>
 #include <vector>
+
+// Pick the best-available RooFit evaluation backend. Defaults to CPU (batched
+// via doEval). Compile with -DAU_ROOFIT_BACKEND_CUDA=1 once ROOT is built with
+// CUDA support to switch to GPU evaluation.
+inline RooCmdArg BestAvailableBackend() {
+#if defined(AU_ROOFIT_BACKEND_CUDA) && AU_ROOFIT_BACKEND_CUDA
+  return RooFit::EvalBackend::Cuda();
+#else
+  return RooFit::EvalBackend::Cpu();
+#endif
+}
 
 namespace RooFitFunctions {
 RooAbsPdf *MakeGaussian(const TString &name, RooRealVar &x, RooRealVar &mu,
