@@ -37,11 +37,6 @@ RooAbsPdf *RooFitFunctions::MakeLinearBackground(const TString &name,
   return new RooPolynomial(name.Data(), name.Data(), x, RooArgList(slope));
 }
 
-RooAbsPdf *RooFitFunctions::MakeFlatBackground(const TString &name,
-                                               RooRealVar &x) {
-  return new RooPolynomial(name.Data(), name.Data(), x, RooArgList());
-}
-
 void RooFitUtils::RegisterOwned(RooAbsArg *arg) { owned_args_.push_back(arg); }
 
 void RooFitUtils::InitState() {
@@ -403,13 +398,11 @@ void RooFitUtils::BuildBackground(Double_t bkg_estimate, Double_t peak_height,
   RegisterOwned(bkg_.bkg_yield);
   RegisterOwned(bkg_.bkg_slope);
 
+  bkg_.bkg_pdf =
+      RooFitFunctions::MakeLinearBackground("bkg_pdf", *x_, *bkg_.bkg_slope);
   if (use_flat_background_) {
-    bkg_.bkg_pdf = RooFitFunctions::MakeFlatBackground("bkg_pdf", *x_);
     bkg_.bkg_slope->setVal(0.0);
     bkg_.bkg_slope->setConstant(kTRUE);
-  } else {
-    bkg_.bkg_pdf =
-        RooFitFunctions::MakeLinearBackground("bkg_pdf", *x_, *bkg_.bkg_slope);
   }
   RegisterOwned(bkg_.bkg_pdf);
 }
@@ -2086,13 +2079,11 @@ void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
   bkg.bkg_slope = ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0,
                                   -slope_bound, slope_bound);
   TString bkg_pdf_name = "bkg_pdf_" + cfg.name;
+  bkg.bkg_pdf =
+      RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_, *bkg.bkg_slope);
   if (cfg.use_flat_background) {
-    bkg.bkg_pdf = RooFitFunctions::MakeFlatBackground(bkg_pdf_name, *x_);
     bkg.bkg_slope->setVal(0.0);
     bkg.bkg_slope->setConstant(kTRUE);
-  } else {
-    bkg.bkg_pdf = RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_,
-                                                        *bkg.bkg_slope);
   }
   RegisterOwned(bkg.bkg_pdf);
 

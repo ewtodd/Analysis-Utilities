@@ -64,7 +64,6 @@ RooAbsPdf *MakeHighExpTail(const TString &name, RooRealVar &x, RooRealVar &mu,
                            RooRealVar &sigma, RooRealVar &tau);
 RooAbsPdf *MakeLinearBackground(const TString &name, RooRealVar &x,
                                 RooRealVar &slope);
-RooAbsPdf *MakeFlatBackground(const TString &name, RooRealVar &x);
 } // namespace RooFitFunctions
 
 struct RooFitPeakModel {
