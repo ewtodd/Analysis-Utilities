@@ -106,6 +106,8 @@ struct RooFitChannelConfig {
   Int_t num_peaks;
   std::vector<Double_t> mu_inits;
   std::vector<Bool_t> mu_fixed;
+  Bool_t bkg_yield_fixed = kFALSE;
+  Bool_t bkg_slope_fixed = kFALSE;
   Bool_t use_flat_background;
   Bool_t use_step;
   Bool_t use_low_exp_tail;
@@ -174,6 +176,7 @@ private:
                          std::map<TString, RooRealVar *> &registry);
   void ApplySeedToChannel(const TString &channel);
   void ApplyChannelMuLocks();
+  void ApplyChannelBkgLocks();
   void SaveSimInteractiveParams(const TString &input_name,
                                 const TString &base_label);
   Bool_t LoadSimInteractiveParams(const TString &input_name,
@@ -309,7 +312,9 @@ public:
                   Bool_t use_low_exp_tail = kFALSE,
                   Bool_t use_low_lin_tail = kFALSE,
                   Bool_t use_high_exp_tail = kFALSE,
-                  const std::vector<Bool_t> &mu_fixed = std::vector<Bool_t>());
+                  const std::vector<Bool_t> &mu_fixed = std::vector<Bool_t>(),
+                  Bool_t bkg_yield_fixed = kFALSE,
+                  Bool_t bkg_slope_fixed = kFALSE);
   void LinkParameter(const TString &target, const TString &source);
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
                      const TString &source_channel, Int_t source_peak);
