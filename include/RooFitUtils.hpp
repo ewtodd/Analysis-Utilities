@@ -105,6 +105,7 @@ struct RooFitChannelConfig {
   Float_t display_bin_width_kev;
   Int_t num_peaks;
   std::vector<Double_t> mu_inits;
+  std::vector<Bool_t> mu_fixed;
   Bool_t use_flat_background;
   Bool_t use_step;
   Bool_t use_low_exp_tail;
@@ -172,6 +173,7 @@ private:
   void BuildChannelModel(const RooFitChannelConfig &cfg,
                          std::map<TString, RooRealVar *> &registry);
   void ApplySeedToChannel(const TString &channel);
+  void ApplyChannelMuLocks();
   void SaveSimInteractiveParams(const TString &input_name,
                                 const TString &base_label);
   Bool_t LoadSimInteractiveParams(const TString &input_name,
@@ -225,6 +227,8 @@ private:
                              const TString &peak_name);
   Bool_t LoadInteractiveParams(const TString &input_name,
                                const TString &peak_name);
+  void AdoptSavedRange(const TString &input_name, const TString &peak_name);
+  void AdoptSavedSimRange(const TString &input_name, const TString &base_label);
 
   void SortPeaksByMu(Int_t num_peaks);
   void AppendPeakGraphs(std::vector<TGraph *> &components, Int_t peak_idx,
@@ -304,7 +308,8 @@ public:
                   Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
                   Bool_t use_low_exp_tail = kFALSE,
                   Bool_t use_low_lin_tail = kFALSE,
-                  Bool_t use_high_exp_tail = kFALSE);
+                  Bool_t use_high_exp_tail = kFALSE,
+                  const std::vector<Bool_t> &mu_fixed = std::vector<Bool_t>());
   void LinkParameter(const TString &target, const TString &source);
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
                      const TString &source_channel, Int_t source_peak);

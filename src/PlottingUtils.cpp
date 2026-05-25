@@ -359,6 +359,18 @@ void PlottingUtils::PlotFitWithResiduals(
   zero_line->SetLineWidth(line_width_);
   zero_line->Draw("same");
 
+  TF1 *plus3_line = new TF1("plus3_line", "3", actual_min, actual_max);
+  plus3_line->SetLineColor(kGray + 2);
+  plus3_line->SetLineStyle(3);
+  plus3_line->SetLineWidth(line_width_);
+  plus3_line->Draw("same");
+
+  TF1 *minus3_line = new TF1("minus3_line", "-3", actual_min, actual_max);
+  minus3_line->SetLineColor(kGray + 2);
+  minus3_line->SetLineStyle(3);
+  minus3_line->SetLineWidth(line_width_);
+  minus3_line->Draw("same");
+
   pad1->cd();
   pad1->SetLogy(logy);
   if (label.Length() > 0) {
@@ -376,6 +388,8 @@ void PlottingUtils::PlotFitWithResiduals(
   delete canvas;
   delete residuals;
   delete zero_line;
+  delete plus3_line;
+  delete minus3_line;
 }
 
 void PlottingUtils::PlotPullHistogram(TGraph *residuals,
