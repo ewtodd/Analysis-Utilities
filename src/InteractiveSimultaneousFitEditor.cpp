@@ -96,6 +96,8 @@ InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
     cv.bkg_graph = nullptr;
     cv.res_graph = nullptr;
     cv.zero_line = nullptr;
+    cv.plus3_line = nullptr;
+    cv.minus3_line = nullptr;
     cv.chi2_label = nullptr;
     cv.n_res_points = 0;
     for (Int_t p = 0; p < 3; p++) {
@@ -127,8 +129,20 @@ InteractiveSimultaneousFitEditor::~InteractiveSimultaneousFitEditor() {
 
   // Drawing primitives drawn on each channel's embedded canvas — TPad does
   // not auto-delete user primitives, so they have to go by hand.
+  //
+  // Pre-clear each pad's primitives list with "nodelete" before destroying
+  // the primitives themselves. The launcher removes the embedded canvases
+  // from gROOT->GetListOfCanvases() to suppress X11 errors during teardown,
+  // which also disables RecursiveRemove's cleanup of pad lists; without
+  // this manual Clear, ~TPad later walks stale pointers and segfaults.
   for (Int_t ci = 0; ci < (Int_t)channels_.size(); ci++) {
     SimEditorChannelView &cv = channels_[ci];
+    if (cv.main_pad && cv.main_pad->GetListOfPrimitives()) {
+      cv.main_pad->GetListOfPrimitives()->Clear("nodelete");
+    }
+    if (cv.residual_pad && cv.residual_pad->GetListOfPrimitives()) {
+      cv.residual_pad->GetListOfPrimitives()->Clear("nodelete");
+    }
     for (Int_t p = 0; p < 3; p++) {
       for (Int_t c = 0; c < 4; c++) {
         delete cv.comp_graphs[p][c];
@@ -136,6 +150,8 @@ InteractiveSimultaneousFitEditor::~InteractiveSimultaneousFitEditor() {
     }
     delete cv.chi2_label;
     delete cv.zero_line;
+    delete cv.plus3_line;
+    delete cv.minus3_line;
     delete cv.res_graph;
     delete cv.bkg_graph;
     delete cv.total_graph;
@@ -472,6 +488,20 @@ void InteractiveSimultaneousFitEditor::InitChannelDrawing(
   cv.zero_line->SetLineStyle(2);
   cv.zero_line->SetLineWidth(2);
   cv.zero_line->Draw("same");
+
+  TString plus3_name = "plus3_simed_" + cv.name;
+  cv.plus3_line = new TF1(plus3_name.Data(), "3", ax_min, ax_max);
+  cv.plus3_line->SetLineColor(kGray + 2);
+  cv.plus3_line->SetLineStyle(3);
+  cv.plus3_line->SetLineWidth(2);
+  cv.plus3_line->Draw("same");
+
+  TString minus3_name = "minus3_simed_" + cv.name;
+  cv.minus3_line = new TF1(minus3_name.Data(), "-3", ax_min, ax_max);
+  cv.minus3_line->SetLineColor(kGray + 2);
+  cv.minus3_line->SetLineStyle(3);
+  cv.minus3_line->SetLineWidth(2);
+  cv.minus3_line->Draw("same");
 }
 
 void InteractiveSimultaneousFitEditor::UpdateCanvases() {
@@ -570,6 +600,8 @@ void InteractiveSimultaneousFitEditor::UpdateChannelResiduals(
   Double_t ax_max = 1.1 * range_high_;
   cv.res_graph->GetXaxis()->SetLimits(ax_min, ax_max);
   cv.zero_line->SetRange(ax_min, ax_max);
+  cv.plus3_line->SetRange(ax_min, ax_max);
+  cv.minus3_line->SetRange(ax_min, ax_max);
   cv.res_graph->GetYaxis()->SetRangeUser(-5.5, 5.5);
 
   x_->setVal(saved);
@@ -1080,6 +1112,14 @@ Bool_t LaunchInteractiveSimultaneousFitEditor(
   Bool_t result = editor->WasAccepted();
   editor->GetRedrawTimer()->TurnOff();
 
+  // Prevent TCanvas::Close() from doing X11 operations during teardown.
+  // Removing the canvases from the canvases list also suppresses X11
+  // events for them on the next ProcessEvents (otherwise the next editor's
+  // first ProcessEvents picks up stale paint events and crashes in
+  // DrawString). Batch mode disables remaining X11 drawing calls.
+  // Note: removing the canvas from this list disables RecursiveRemove's
+  // pad-primitive cleanup, so the editor destructor explicitly clears
+  // pad primitive lists before deleting drawn objects.
   std::vector<SimEditorChannelView> *cvs = editor->GetChannels();
   for (size_t ci = 0; ci < cvs->size(); ci++) {
     TCanvas *c = (*cvs)[ci].embedded_canvas->GetCanvas();

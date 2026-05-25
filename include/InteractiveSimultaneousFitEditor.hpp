@@ -61,6 +61,8 @@ struct SimEditorChannelView {
   TGraph *comp_graphs[3][4];
   TGraph *res_graph;
   TF1 *zero_line;
+  TF1 *plus3_line;
+  TF1 *minus3_line;
   TLatex *chi2_label;
   Int_t n_res_points;
 };

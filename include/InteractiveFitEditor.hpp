@@ -77,6 +77,8 @@ private:
   TF1 *bkg_draw_;
   TGraph *res_graph_;
   TF1 *zero_line_;
+  TF1 *plus3_line_;
+  TF1 *minus3_line_;
   TLatex *chi2_label_;
   Int_t n_res_points_;
 
