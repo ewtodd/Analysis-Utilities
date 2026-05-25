@@ -68,6 +68,8 @@ InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
   bkg_draw_ = nullptr;
   res_graph_ = nullptr;
   zero_line_ = nullptr;
+  plus3_line_ = nullptr;
+  minus3_line_ = nullptr;
   chi2_label_ = nullptr;
   n_res_points_ = 0;
   for (Int_t p = 0; p < 3; p++) {
@@ -111,6 +113,18 @@ InteractiveFitEditor::~InteractiveFitEditor() {
 
   // Drawing primitives drawn on the embedded canvas — TPad does not
   // auto-delete user primitives, so they have to go by hand.
+  //
+  // Pre-clear each pad's primitives list with "nodelete" before destroying
+  // the primitives themselves. The launcher removes the embedded canvas
+  // from gROOT->GetListOfCanvases() to suppress X11 errors during teardown,
+  // which also disables RecursiveRemove's cleanup of pad lists; without
+  // this manual Clear, ~TPad later walks stale pointers and segfaults.
+  if (main_pad_ && main_pad_->GetListOfPrimitives()) {
+    main_pad_->GetListOfPrimitives()->Clear("nodelete");
+  }
+  if (residual_pad_ && residual_pad_->GetListOfPrimitives()) {
+    residual_pad_->GetListOfPrimitives()->Clear("nodelete");
+  }
   for (Int_t p = 0; p < 3; p++) {
     for (Int_t c = 0; c < 4; c++) {
       delete comp_graphs_[p][c];
@@ -118,6 +132,8 @@ InteractiveFitEditor::~InteractiveFitEditor() {
   }
   delete chi2_label_;
   delete zero_line_;
+  delete plus3_line_;
+  delete minus3_line_;
   delete res_graph_;
   delete bkg_draw_;
   delete hist_draw_;
@@ -446,6 +462,18 @@ void InteractiveFitEditor::InitDrawing() {
   zero_line_->SetLineWidth(2);
   zero_line_->Draw("same");
 
+  plus3_line_ = new TF1("plus3_editor", "3", ax_min, ax_max);
+  plus3_line_->SetLineColor(kGray + 2);
+  plus3_line_->SetLineStyle(3);
+  plus3_line_->SetLineWidth(2);
+  plus3_line_->Draw("same");
+
+  minus3_line_ = new TF1("minus3_editor", "-3", ax_min, ax_max);
+  minus3_line_->SetLineColor(kGray + 2);
+  minus3_line_->SetLineStyle(3);
+  minus3_line_->SetLineWidth(2);
+  minus3_line_->Draw("same");
+
   UpdateCompPoints();
   UpdateResPoints();
 }
@@ -490,6 +518,8 @@ void InteractiveFitEditor::UpdateCanvas() {
 
   // Update zero line to match current range
   zero_line_->SetRange(0.9 * range_low_, 1.1 * range_high_);
+  plus3_line_->SetRange(0.9 * range_low_, 1.1 * range_high_);
+  minus3_line_->SetRange(0.9 * range_low_, 1.1 * range_high_);
 
   // Lock residual Y range
   res_graph_->GetYaxis()->SetRangeUser(-5.5, 5.5);
@@ -1025,9 +1055,13 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
   editor->GetRedrawTimer()->TurnOff();
 
   // Prevent TCanvas::Close() from doing X11 operations during teardown.
-  // When TGMainFrame destroys children, sibling widget X11 windows may
-  // already be gone, causing BadWindow errors from SetDrawMode().
-  // Setting batch mode on the canvas disables all X11 drawing calls.
+  // Removing the canvas from the canvases list also suppresses X11 events
+  // for it on the next ProcessEvents (otherwise the next editor's first
+  // ProcessEvents picks up stale paint events and crashes in DrawString).
+  // Batch mode disables remaining X11 drawing calls.
+  // Note: removing the canvas from this list disables RecursiveRemove's
+  // pad-primitive cleanup, so the editor destructor explicitly clears
+  // pad primitive lists before deleting drawn objects.
   TCanvas *ecanvas = editor->GetEmbeddedCanvas()->GetCanvas();
   if (ecanvas) {
     gROOT->GetListOfCanvases()->Remove(ecanvas);
