@@ -391,9 +391,13 @@ void RooFitUtils::BuildBackground(Double_t bkg_estimate, Double_t peak_height,
   bkg_.bkg_yield =
       new RooRealVar("BkgConstant", "BkgConstant", bkg_estimate * range_width,
                      0, peak_height * range_width * 10.0);
-  Double_t slope_bound = 0.9 / fit_range_high_;
+  // RooPolynomial evaluates as 1 + slope*x, so positivity over the fit range
+  // forces slope >= -1/fit_range_high_. No constraint on the positive side, so
+  // let it grow with the fit window instead of mirroring the tight neg bound.
+  Double_t slope_lo = -0.9 / fit_range_high_;
+  Double_t slope_hi = 5.0 / (fit_range_high_ - fit_range_low_);
   bkg_.bkg_slope =
-      new RooRealVar("BkgSlope", "BkgSlope", 0.0, -slope_bound, slope_bound);
+      new RooRealVar("BkgSlope", "BkgSlope", 0.0, slope_lo, slope_hi);
 
   RegisterOwned(bkg_.bkg_yield);
   RegisterOwned(bkg_.bkg_slope);
@@ -759,6 +763,55 @@ void RooFitUtils::SortPeaksByMu(Int_t num_peaks) {
       }
     }
   }
+}
+
+void RooFitUtils::AdoptSavedSimRange(const TString &input_name,
+                                     const TString &base_label) {
+  if (!interactive_)
+    return;
+  TString filename = PlottingUtils::GetPlotsBaseDir() + "/fits/" + base_label +
+                     "_" + input_name + ".simroofits";
+  std::ifstream in(filename.Data());
+  if (!in.is_open())
+    return;
+  std::string token;
+  if (!(in >> token) || token != "RANGE")
+    return;
+  Double_t rlo, rhi;
+  if (!(in >> rlo >> rhi))
+    return;
+  if (!(rlo < rhi))
+    return;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    sim_channels_[i].fit_range_low = rlo;
+    sim_channels_[i].fit_range_high = rhi;
+    delete sim_channels_[i].hist;
+    sim_channels_[i].hist =
+        BuildDisplayHistogramFrom(sim_channels_[i].events, rlo, rhi,
+                                  sim_channels_[i].display_bin_width_kev);
+  }
+}
+
+void RooFitUtils::AdoptSavedRange(const TString &input_name,
+                                  const TString &peak_name) {
+  if (!interactive_)
+    return;
+  TString filename = PlottingUtils::GetPlotsBaseDir() + "/fits/" + peak_name +
+                     "_" + input_name + ".roofits";
+  std::ifstream in(filename.Data());
+  if (!in.is_open())
+    return;
+  std::string token;
+  if (!(in >> token) || token != "RANGE")
+    return;
+  Double_t rlo, rhi;
+  if (!(in >> rlo >> rhi))
+    return;
+  if (!(rlo < rhi))
+    return;
+  fit_range_low_ = rlo;
+  fit_range_high_ = rhi;
+  BuildDisplayHistogram();
 }
 
 void RooFitUtils::SaveInteractiveParams(const TString &input_name,
@@ -1168,6 +1221,8 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
   FitResult results;
   results.peaks.emplace_back();
 
+  AdoptSavedRange(input_name, peak_name);
+
   num_peaks_ = 1;
   Double_t range_width = fit_range_high_ - fit_range_low_;
   Double_t mu_init = (fit_range_low_ + fit_range_high_) / 2;
@@ -1289,6 +1344,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   FitResult results;
   results.peaks.emplace_back();
   results.peaks.emplace_back();
+
+  AdoptSavedRange(input_name, peak_name);
 
   if (mu1_init > mu2_init) {
     std::cout << "WARNING: mu1_init > mu2_init, swapping initial values"
@@ -1497,6 +1554,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   results.peaks.emplace_back();
   results.peaks.emplace_back();
 
+  AdoptSavedRange(input_name, peak_name);
+
   num_peaks_ = 2;
   Double_t range_width = fit_range_high_ - fit_range_low_;
   Double_t sigma_init = range_width * 0.01;
@@ -1642,6 +1701,8 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
   results.peaks.emplace_back();
   results.peaks.emplace_back();
   results.peaks.emplace_back();
+
+  AdoptSavedRange(input_name, peak_name);
 
   num_peaks_ = 3;
   Double_t range_width = fit_range_high_ - fit_range_low_;
@@ -1828,7 +1889,8 @@ void RooFitUtils::AddChannel(const TString &name,
                              const std::vector<Double_t> &mu_inits,
                              Bool_t use_flat_background, Bool_t use_step,
                              Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
-                             Bool_t use_high_exp_tail) {
+                             Bool_t use_high_exp_tail,
+                             const std::vector<Bool_t> &mu_fixed) {
   if (!sim_mode_) {
     std::cerr << "ERROR: AddChannel called on a single-channel RooFitUtils "
                  "instance; construct with the default ctor for sim mode."
@@ -1837,6 +1899,11 @@ void RooFitUtils::AddChannel(const TString &name,
   }
   if ((Int_t)mu_inits.size() != num_peaks) {
     std::cerr << "ERROR: mu_inits size (" << mu_inits.size()
+              << ") must match num_peaks (" << num_peaks << ")" << std::endl;
+    return;
+  }
+  if (!mu_fixed.empty() && (Int_t)mu_fixed.size() != num_peaks) {
+    std::cerr << "ERROR: mu_fixed size (" << mu_fixed.size()
               << ") must match num_peaks (" << num_peaks << ")" << std::endl;
     return;
   }
@@ -1850,6 +1917,8 @@ void RooFitUtils::AddChannel(const TString &name,
   cfg.display_bin_width_kev = display_bin_width_kev;
   cfg.num_peaks = num_peaks;
   cfg.mu_inits = mu_inits;
+  cfg.mu_fixed =
+      mu_fixed.empty() ? std::vector<Bool_t>(num_peaks, kFALSE) : mu_fixed;
   cfg.use_flat_background = use_flat_background;
   cfg.use_step = use_step;
   cfg.use_low_exp_tail = use_low_exp_tail;
@@ -2075,9 +2144,10 @@ void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
   bkg.bkg_yield = ResolveOrCreate(cfg.name, "BkgConstant", registry,
                                   bkg_estimate * range_width, 0,
                                   peak_height * range_width * 10.0);
-  Double_t slope_bound = 0.9 / cfg.fit_range_high;
-  bkg.bkg_slope = ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0,
-                                  -slope_bound, slope_bound);
+  Double_t slope_lo = -0.9 / cfg.fit_range_high;
+  Double_t slope_hi = 5.0 / range_width;
+  bkg.bkg_slope =
+      ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0, slope_lo, slope_hi);
   TString bkg_pdf_name = "bkg_pdf_" + cfg.name;
   bkg.bkg_pdf =
       RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_, *bkg.bkg_slope);
@@ -2163,6 +2233,21 @@ void RooFitUtils::ApplySeedToChannel(const TString &channel) {
     bkg.bkg_yield->setVal(seed.bkg_constant);
   if (seed.lin_bkg_slope > -1e6)
     bkg.bkg_slope->setVal(seed.lin_bkg_slope);
+}
+
+void RooFitUtils::ApplyChannelMuLocks() {
+  for (size_t ci = 0; ci < sim_channels_.size(); ci++) {
+    const RooFitChannelConfig &cfg = sim_channels_[ci];
+    std::vector<RooFitPeakModel> &peaks = sim_channel_peaks_[cfg.name];
+    Int_t n_lock = TMath::Min((Int_t)peaks.size(), (Int_t)cfg.mu_fixed.size());
+    for (Int_t pi = 0; pi < n_lock; pi++) {
+      if (!cfg.mu_fixed[pi])
+        continue;
+      Double_t target = cfg.mu_inits[pi];
+      peaks[pi].mu->setVal(target);
+      peaks[pi].mu->setConstant(kTRUE);
+    }
+  }
 }
 
 Double_t RooFitUtils::ComputeChannelChi2(
@@ -2302,6 +2387,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     return results;
   }
 
+  AdoptSavedSimRange(input_name, base_label);
+
   std::map<TString, RooRealVar *> registry;
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     BuildChannelModel(sim_channels_[i], registry);
@@ -2321,6 +2408,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     ApplySeedToChannel(sim_channels_[i].name);
   }
+  ApplyChannelMuLocks();
 
   sim_category_ = new RooCategory("channel", "channel");
   for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2361,6 +2449,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
             sim_channels_[i].events, loaded_lo, loaded_hi,
             sim_channels_[i].display_bin_width_kev);
       }
+      ApplyChannelMuLocks();
     } else {
       std::vector<SimEditorChannelView> views;
       for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2395,6 +2484,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
               sim_channels_[i].events, edited_lo, edited_hi,
               sim_channels_[i].display_bin_width_kev);
         }
+        ApplyChannelMuLocks();
         SaveSimInteractiveParams(input_name, base_label);
       } else {
         std::cout << "Interactive sim fit cancelled" << std::endl;
