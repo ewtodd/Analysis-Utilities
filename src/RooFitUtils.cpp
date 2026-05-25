@@ -1890,7 +1890,8 @@ void RooFitUtils::AddChannel(const TString &name,
                              Bool_t use_flat_background, Bool_t use_step,
                              Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
                              Bool_t use_high_exp_tail,
-                             const std::vector<Bool_t> &mu_fixed) {
+                             const std::vector<Bool_t> &mu_fixed,
+                             Bool_t bkg_yield_fixed, Bool_t bkg_slope_fixed) {
   if (!sim_mode_) {
     std::cerr << "ERROR: AddChannel called on a single-channel RooFitUtils "
                  "instance; construct with the default ctor for sim mode."
@@ -1919,6 +1920,8 @@ void RooFitUtils::AddChannel(const TString &name,
   cfg.mu_inits = mu_inits;
   cfg.mu_fixed =
       mu_fixed.empty() ? std::vector<Bool_t>(num_peaks, kFALSE) : mu_fixed;
+  cfg.bkg_yield_fixed = bkg_yield_fixed;
+  cfg.bkg_slope_fixed = bkg_slope_fixed;
   cfg.use_flat_background = use_flat_background;
   cfg.use_step = use_step;
   cfg.use_low_exp_tail = use_low_exp_tail;
@@ -2250,6 +2253,17 @@ void RooFitUtils::ApplyChannelMuLocks() {
   }
 }
 
+void RooFitUtils::ApplyChannelBkgLocks() {
+  for (size_t ci = 0; ci < sim_channels_.size(); ci++) {
+    const RooFitChannelConfig &cfg = sim_channels_[ci];
+    RooFitBackgroundModel &bkg = sim_channel_bkg_[cfg.name];
+    if (cfg.bkg_yield_fixed && bkg.bkg_yield)
+      bkg.bkg_yield->setConstant(kTRUE);
+    if (cfg.bkg_slope_fixed && bkg.bkg_slope)
+      bkg.bkg_slope->setConstant(kTRUE);
+  }
+}
+
 Double_t RooFitUtils::ComputeChannelChi2(
     const TString &channel, const std::vector<RooFitPeakModel> & /*peaks*/,
     const RooFitBackgroundModel & /*bkg*/, Int_t &ndof) {
@@ -2409,6 +2423,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     ApplySeedToChannel(sim_channels_[i].name);
   }
   ApplyChannelMuLocks();
+  ApplyChannelBkgLocks();
 
   sim_category_ = new RooCategory("channel", "channel");
   for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2450,6 +2465,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
             sim_channels_[i].display_bin_width_kev);
       }
       ApplyChannelMuLocks();
+      ApplyChannelBkgLocks();
     } else {
       std::vector<SimEditorChannelView> views;
       for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2485,6 +2501,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
               sim_channels_[i].display_bin_width_kev);
         }
         ApplyChannelMuLocks();
+        ApplyChannelBkgLocks();
         SaveSimInteractiveParams(input_name, base_label);
       } else {
         std::cout << "Interactive sim fit cancelled" << std::endl;
