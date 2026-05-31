@@ -2,7 +2,24 @@
 
 #include <cuda_runtime.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace {
+
+// exp(a)*erfc(b) without intermediate overflow; see ExpErfc in
+// src/RooFitPhotopeakPdfs.cpp for the derivation. In the tail a and b share the
+// sign of y and b >= a/sqrt(2), so when exp(a) would overflow erfc(b)
+// underflows and the product tends to 0.
+__device__ double ExpErfc(double a, double b) {
+  if (a <= 700.0)
+    return exp(a) * erfc(b);
+  double t = 1.0 / (b * b);
+  double erfcx = (1.0 / (b * sqrt(M_PI))) *
+                 (1.0 - 0.5 * t + 0.75 * t * t - 1.875 * t * t * t);
+  return exp(a - b * b) * erfcx;
+}
 
 __global__ void RooLowExpTailKernel(double *output, const double *x_vals,
                                     double mu, double inv_tau,
@@ -10,7 +27,7 @@ __global__ void RooLowExpTailKernel(double *output, const double *x_vals,
   size_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n) {
     double y = x_vals[i] - mu;
-    output[i] = exp(y * inv_tau) * erfc(y * inv_sqrt2_sigma);
+    output[i] = ExpErfc(y * inv_tau, y * inv_sqrt2_sigma);
   }
 }
 

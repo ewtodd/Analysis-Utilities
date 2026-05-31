@@ -108,6 +108,8 @@ InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
     }
   }
 
+  ApplyBackgroundSlopeBounds();
+
   BuildGUI();
   InitDrawing();
 
@@ -811,6 +813,7 @@ void InteractiveSimultaneousFitEditor::OnRangeChanged() {
 
   x_->setRange(range_low_, range_high_);
   x_->setRange("fitrange", range_low_, range_high_);
+  ApplyBackgroundSlopeBounds();
 
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     SimEditorChannelView &cv = channels_[ci];
@@ -899,6 +902,7 @@ void InteractiveSimultaneousFitEditor::DoReset() {
   range_high_ = original_range_high_;
   x_->setRange(range_low_, range_high_);
   x_->setRange("fitrange", range_low_, range_high_);
+  ApplyBackgroundSlopeBounds();
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     channels_[ci].hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
                                                       1.1 * range_high_);
@@ -912,6 +916,34 @@ void InteractiveSimultaneousFitEditor::DoReset() {
   SyncAllWidgets();
   needs_redraw_ = kTRUE;
   UpdateCanvases();
+}
+
+void InteractiveSimultaneousFitEditor::ApplyBackgroundSlopeBounds() {
+  // The linear background 1+slope*x is only non-negative across [0, x_hi] when
+  // slope >= -1/x_hi. The build-time bound used each channel's original fit
+  // high edge; once the shared range is dragged wider, that bound lets the
+  // polynomial dip negative inside the normalization window and poison the NLL.
+  // Re-tie the lower bound to the current range high (with the same 0.9 margin
+  // BuildChannelModel uses).
+  if (range_high_ <= 0)
+    return;
+  Double_t slope_lo = -0.9 / range_high_;
+  for (size_t ci = 0; ci < channels_.size(); ci++) {
+    SimEditorChannelView &cv = channels_[ci];
+    Int_t si = BkgSlopeIdx((Int_t)ci);
+    if (si < 0 || si >= (Int_t)cv.params.size())
+      continue;
+    RooRealVar *slope = cv.params[si];
+    if (slope->isConstant())
+      continue;
+    Double_t hi = cv.current_bounds_high[si];
+    if (slope_lo >= hi)
+      continue;
+    cv.current_bounds_low[si] = slope_lo;
+    if (slope->getVal() < slope_lo)
+      slope->setVal(slope_lo);
+    slope->setRange(slope_lo, hi);
+  }
 }
 
 Bool_t InteractiveSimultaneousFitEditor::ProcessMessage(Long_t msg,
