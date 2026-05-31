@@ -77,7 +77,7 @@ Each component PDF still re-normalizes numerically over the fit range per Minuit
 Provides RooFit's full machinery for downstream extensions (e.g. simultaneous fits).
 <!---->
 Both classes take the same constructor signature, expose the same `Set*` flag setters, and return the same `FitResult` struct.
-The interactive fit editor is implemented per-backend (`InteractiveFitEditor` for TF1, `InteractiveRooFitEditor` for RooFit).
+The interactive fit editor is implemented per-backend (`InteractiveFitEditor` for TF1, `InteractiveRooFitEditor` for RooFit, and `InteractiveSimultaneousFitEditor` for multi-channel simultaneous RooFit fits).
 Saved-parameter files use the `.fits` extension for the TF1 backend and `.roofits` for the RooFit backend, so the two can coexist for the same input.
 <!---->
 **Base model**:
@@ -116,7 +116,7 @@ This is internally consistent for constrained fits because the ratio `component_
 <!---->
 **Interactive fitting**:
 - `SetInteractive()` enables a GUI editor that opens after the automated fit completes.
-The editor shows the histogram, total fit, and individual components with a residual panel, all updating in real-time as parameters are adjusted via sliders and number entries.
+The editor shows the histogram, total fit, and individual components with a residual (pull) panel marked by dashed ±3σ guide lines, all updating in real-time as parameters are adjusted via sliders and number entries.
 A fit range slider allows adjusting the fit range visually; for the RooFit backend the display histogram is rebuilt from the underlying events whenever the range changes, so binning follows the zoom in real time (the fit itself remains unbinned).
 Parameters can be fixed/freed via checkboxes, and a Refit button runs the underlying minimizer with the current values as initial guesses.
 Live chi-squared is displayed on the plot.
@@ -128,6 +128,23 @@ On subsequent runs with `SetInteractive()`, saved parameters are loaded automati
 Delete the saved file to redo the interactive fit.
 - It is recommended to re-run the fitting macro after an interactive session, as the saved parameters serve as much better starting points for the minimizer and often produce a lower chi-squared on the second pass.
 - Batch mode is temporarily disabled for the editor window and restored afterward, so plot popups are not affected.
+<!---->
+**Simultaneous multi-channel fits (`RooFitUtils`)**:
+<!---->
+Construct a `RooFitUtils` with the default constructor to put it in simultaneous mode, then register channels and run one joint extended-likelihood fit across all of them.
+A channel is one spectrum (its own events, fit range, peaks, and background) sharing a single observable with the others.
+<!---->
+- **`AddChannel(name, events, fit_range_low, fit_range_high, display_bin_width_kev, num_peaks, mu_inits, ...)`** - adds a channel.
+The component flags (`use_flat_background`, `use_step`, `use_low_exp_tail`, `use_low_lin_tail`, `use_high_exp_tail`) match the single-channel model, plus per-channel locking options described below.
+- **`LinkParameter(target, source)`** / **`LinkPeakShape(target_channel, target_peak, source_channel, source_peak)`** - tie a parameter (or a peak's whole shape) in one channel to another so they are fit as a single shared degree of freedom.
+- **`SeedChannel(channel_name, result)`** - supply a prior single-channel `FitResult` as starting values for that channel.
+- **`FitSimultaneous(input_name, base_label)`** - builds the `RooSimultaneous`, applies the locks, and returns one `FitResult` per channel. With `SetInteractive()` the simultaneous editor opens after the automated fit, and accepted parameters are saved/reloaded as for the single-channel editors.
+<!---->
+Per-channel locking options on `AddChannel` (all optional):
+- **`mu_fixed`** - per-peak `std::vector<Bool_t>`; where `kTRUE`, that peak's centroid is held at its `mu_inits` value instead of floating.
+- **`bkg_yield_fixed`** / **`bkg_slope_fixed`** - hold the channel's background yield and/or slope constant.
+- **`lock_shape_after_seed`** - after seeding, fix sigma, the gaussian yield, and every tail/step shape parameter so only peak positions and normalizations float.
+- **`use_step_per_peak`** - per-peak `std::vector<Bool_t>` overriding the channel-level `use_step` for individual peaks (e.g. a step on some peaks but not on another peak sharing the channel).
 <!---->
 **GPU acceleration (opt-in)**:
 <!---->
