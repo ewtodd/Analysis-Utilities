@@ -1,5 +1,6 @@
 #include "InteractiveRooFitEditor.hpp"
 
+#include "InteractiveEditorX11Guard.hpp"
 #include "PlottingUtils.hpp"
 
 #include <RooArgSet.h>
@@ -1021,6 +1022,10 @@ Bool_t LaunchInteractiveRooFitEditor(
     return kFALSE;
   }
 
+  // Swallow recoverable X protocol errors for the editor's lifetime so a
+  // transient bad redraw doesn't trip ROOT's crashing default handler.
+  AUXErrorHandlerSave xerr_save = AUInstallTolerantXErrorHandler();
+
   InteractiveRooFitEditor *editor = new InteractiveRooFitEditor(
       gClient->GetRoot(), hist, events, display_bin_width_kev, total_pdf, x,
       data, peaks, bkg, range_low, range_high, info_label);
@@ -1052,5 +1057,7 @@ Bool_t LaunchInteractiveRooFitEditor(
   editor->UnmapWindow();
   gSystem->ProcessEvents();
   delete editor;
+
+  AURestoreXErrorHandler(xerr_save);
   return result;
 }

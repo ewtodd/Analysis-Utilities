@@ -1,5 +1,6 @@
 #include "InteractiveSimultaneousFitEditor.hpp"
 
+#include "InteractiveEditorX11Guard.hpp"
 #include "PlottingUtils.hpp"
 
 #include <RooArgSet.h>
@@ -1099,6 +1100,10 @@ Bool_t LaunchInteractiveSimultaneousFitEditor(
     return kFALSE;
   }
 
+  // Swallow recoverable X protocol errors for the editor's lifetime so a
+  // transient bad redraw doesn't trip ROOT's crashing default handler.
+  AUXErrorHandlerSave xerr_save = AUInstallTolerantXErrorHandler();
+
   InteractiveSimultaneousFitEditor *editor =
       new InteractiveSimultaneousFitEditor(gClient->GetRoot(), sim_pdf,
                                            combined_data, x, channel_views,
@@ -1133,5 +1138,7 @@ Bool_t LaunchInteractiveSimultaneousFitEditor(
   editor->UnmapWindow();
   gSystem->ProcessEvents();
   delete editor;
+
+  AURestoreXErrorHandler(xerr_save);
   return result;
 }

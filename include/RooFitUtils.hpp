@@ -106,8 +106,10 @@ struct RooFitChannelConfig {
   Int_t num_peaks;
   std::vector<Double_t> mu_inits;
   std::vector<Bool_t> mu_fixed;
+  std::vector<Bool_t> use_step_per_peak;
   Bool_t bkg_yield_fixed = kFALSE;
   Bool_t bkg_slope_fixed = kFALSE;
+  Bool_t lock_shape_after_seed = kFALSE;
   Bool_t use_flat_background;
   Bool_t use_step;
   Bool_t use_low_exp_tail;
@@ -177,6 +179,7 @@ private:
   void ApplySeedToChannel(const TString &channel);
   void ApplyChannelMuLocks();
   void ApplyChannelBkgLocks();
+  void ApplyChannelShapeLocks();
   void SaveSimInteractiveParams(const TString &input_name,
                                 const TString &base_label);
   Bool_t LoadSimInteractiveParams(const TString &input_name,
@@ -304,17 +307,18 @@ public:
                           const FitResult &constrained_peaks,
                           Double_t mu3_init);
 
-  void AddChannel(const TString &name, const std::vector<Double_t> &events,
-                  Float_t fit_range_low, Float_t fit_range_high,
-                  Float_t display_bin_width_kev, Int_t num_peaks,
-                  const std::vector<Double_t> &mu_inits,
-                  Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
-                  Bool_t use_low_exp_tail = kFALSE,
-                  Bool_t use_low_lin_tail = kFALSE,
-                  Bool_t use_high_exp_tail = kFALSE,
-                  const std::vector<Bool_t> &mu_fixed = std::vector<Bool_t>(),
-                  Bool_t bkg_yield_fixed = kFALSE,
-                  Bool_t bkg_slope_fixed = kFALSE);
+  void AddChannel(
+      const TString &name, const std::vector<Double_t> &events,
+      Float_t fit_range_low, Float_t fit_range_high,
+      Float_t display_bin_width_kev, Int_t num_peaks,
+      const std::vector<Double_t> &mu_inits,
+      Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
+      Bool_t use_low_exp_tail = kFALSE, Bool_t use_low_lin_tail = kFALSE,
+      Bool_t use_high_exp_tail = kFALSE,
+      const std::vector<Bool_t> &mu_fixed = std::vector<Bool_t>(),
+      Bool_t bkg_yield_fixed = kFALSE, Bool_t bkg_slope_fixed = kFALSE,
+      Bool_t lock_shape_after_seed = kFALSE,
+      const std::vector<Bool_t> &use_step_per_peak = std::vector<Bool_t>());
   void LinkParameter(const TString &target, const TString &source);
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
                      const TString &source_channel, Int_t source_peak);

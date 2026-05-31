@@ -1,5 +1,7 @@
 #include "InteractiveFitEditor.hpp"
 
+#include "InteractiveEditorX11Guard.hpp"
+
 InteractiveFitEditor::InteractiveFitEditor(const TGWindow *parent, TH1 *hist,
                                            TF1 *fit_func, Double_t range_low,
                                            Double_t range_high, Int_t num_peaks,
@@ -1041,6 +1043,10 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
     return kFALSE;
   }
 
+  // Swallow recoverable X protocol errors for the editor's lifetime so a
+  // transient bad redraw doesn't trip ROOT's crashing default handler.
+  AUXErrorHandlerSave xerr_save = AUInstallTolerantXErrorHandler();
+
   InteractiveFitEditor *editor =
       new InteractiveFitEditor(gClient->GetRoot(), hist, fit_func, range_low,
                                range_high, num_peaks, info_label);
@@ -1074,5 +1080,7 @@ Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
   editor->UnmapWindow();
   gSystem->ProcessEvents();
   delete editor;
+
+  AURestoreXErrorHandler(xerr_save);
   return result;
 }
