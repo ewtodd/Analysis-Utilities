@@ -140,6 +140,10 @@ private:
   void DoCancel();
   void DoReset();
 
+  // Re-tie each channel's linear-background slope lower bound to the current
+  // shared fit range so 1+slope*x stays positive across the whole window.
+  void ApplyBackgroundSlopeBounds();
+
   Int_t ValToSlider(Int_t ch_idx, Int_t param_idx, Double_t val);
   Double_t SliderToVal(Int_t ch_idx, Int_t param_idx, Int_t pos);
   Bool_t IsFixed(Int_t ch_idx, Int_t param_idx);

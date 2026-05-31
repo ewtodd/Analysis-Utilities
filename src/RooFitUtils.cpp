@@ -2554,10 +2554,17 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       }
     }
   } else {
+    // SplitRange normalizes each channel over its own "fitrange_<name>" window
+    // (set in BuildChannelModel) instead of the union range. Without it, a
+    // channel whose peak sits below union_hi has its linear background and
+    // exponential tails evaluated far past their own fit range: the background
+    // polynomial 1+slope*x can go negative and the tails overflow, poisoning
+    // the NLL once high statistics populate the out-of-range bins.
     fit_result = sim_pdf_->fitTo(
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-        RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
-        RooFit::PrintLevel(0), RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
+        RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
+        RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(0),
+        RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
         RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
     sim_valid = (fit_result && fit_result->status() == 0);
     if (!sim_valid) {

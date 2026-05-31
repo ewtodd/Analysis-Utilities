@@ -45,16 +45,34 @@ Double_t SigmoidNeg(Double_t z) {
 
 Double_t StepAntideriv(Double_t z) { return -SoftPlusNeg(z) + SigmoidNeg(z); }
 
+// exp(a) * erfc(b) computed without intermediate overflow. In the exponential
+// tails a = y/tau and b = y/(sqrt(2)*sigma) always share the sign of y, and
+// b = a * tau/(sqrt(2)*sigma) = a * ratio/sqrt(2) with ratio >= 1, so whenever
+// exp(a) would overflow (a large positive) b is also large positive and
+// erfc(b) underflows -- the mathematical product tends to 0. Fold the two
+// exponentials together and use the large-argument expansion of the scaled
+// complementary error function erfcx(b) = exp(b*b)*erfc(b) ~
+//   1/(b*sqrt(pi)) * (1 - 1/(2 b^2) + 3/(4 b^4) - 15/(8 b^6)).
+// The direct branch (a <= 700) keeps exp(a) finite (exp(700) ~ 1e304).
+Double_t ExpErfc(Double_t a, Double_t b) {
+  if (a <= 700.0)
+    return std::exp(a) * std::erfc(b);
+  Double_t t = 1.0 / (b * b);
+  Double_t erfcx = (1.0 / (b * std::sqrt(M_PI))) *
+                   (1.0 - 0.5 * t + 0.75 * t * t - 1.875 * t * t * t);
+  return std::exp(a - b * b) * erfcx;
+}
+
 Double_t ExpTailDensity(Double_t y, Double_t sigma, Double_t tau) {
   Double_t sqrt2_sigma = std::sqrt(2.0) * sigma;
-  return std::exp(y / tau) * std::erfc(y / sqrt2_sigma);
+  return ExpErfc(y / tau, y / sqrt2_sigma);
 }
 
 Double_t ExpTailAntideriv(Double_t y, Double_t sigma, Double_t tau) {
   Double_t sqrt2_sigma = std::sqrt(2.0) * sigma;
   Double_t offset = sigma * sigma / tau;
   Double_t gauss_corr = std::exp(sigma * sigma / (2.0 * tau * tau));
-  return tau * (std::exp(y / tau) * std::erfc(y / sqrt2_sigma) +
+  return tau * (ExpErfc(y / tau, y / sqrt2_sigma) +
                 gauss_corr * std::erf((y - offset) / sqrt2_sigma));
 }
 
@@ -221,7 +239,7 @@ void RooLowExpTail::doEval(RooFit::EvalContext &ctx) const {
 #pragma omp parallel for simd
   for (size_t i = 0; i < n; ++i) {
     Double_t y = x_vals[i] - mu;
-    output[i] = std::exp(y * inv_tau) * std::erfc(y * inv_sqrt2_sigma);
+    output[i] = ExpErfc(y * inv_tau, y * inv_sqrt2_sigma);
   }
 }
 
@@ -375,7 +393,7 @@ void RooHighExpTail::doEval(RooFit::EvalContext &ctx) const {
 #pragma omp parallel for simd
   for (size_t i = 0; i < n; ++i) {
     Double_t z = mu - x_vals[i];
-    output[i] = std::exp(z * inv_tau) * std::erfc(z * inv_sqrt2_sigma);
+    output[i] = ExpErfc(z * inv_tau, z * inv_sqrt2_sigma);
   }
 }
 
