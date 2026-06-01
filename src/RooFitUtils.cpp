@@ -3,6 +3,8 @@
 #include "InteractiveRooFitEditor.hpp"
 #include "InteractiveSimultaneousFitEditor.hpp"
 
+#include <cmath>
+
 RooAbsPdf *RooFitFunctions::MakeGaussian(const TString &name, RooRealVar &x,
                                          RooRealVar &mu, RooRealVar &sigma) {
   return new RooGaussian(name.Data(), name.Data(), x, mu, sigma);
@@ -52,6 +54,7 @@ void RooFitUtils::InitState() {
   use_high_exp_tail_ = kFALSE;
   use_manual_init_ = kFALSE;
   interactive_ = kFALSE;
+  fit_debug_ = kFALSE;
 
   x_ = nullptr;
   unbinned_data_ = nullptr;
@@ -1340,7 +1343,7 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
 
 FitResult RooFitUtils::FitDoublePeak(const TString input_name,
                                      const TString peak_name, Double_t mu1_init,
-                                     Double_t mu2_init) {
+                                     Double_t mu2_init, Bool_t link_sigma) {
   FitResult results;
   results.peaks.emplace_back();
   results.peaks.emplace_back();
@@ -1370,6 +1373,33 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
 
   BuildPeak(0, mu1_init, sigma_init, peak_height, range_width);
   BuildPeak(1, mu2_init, sigma_init, peak_height, range_width);
+
+  // Share one Gaussian width across the doublet: rebuild peak 2's PDFs to use
+  // peak 1's sigma var, then freeze Sigma2 so it neither floats nor is saved as
+  // an independent width. Sigma2 stays in the peak struct (param count, save/
+  // load, and CollectAllParams contracts unchanged) but is inert.
+  if (link_sigma) {
+    RooRealVar *s = peaks_[0].sigma;
+    RooFitPeakModel &p = peaks_[1];
+    p.sigma->setVal(s->getVal());
+    p.sigma->setConstant(kTRUE);
+    p.gauss_pdf =
+        RooFitFunctions::MakeGaussian("gauss_pdf2_linked", *x_, *p.mu, *s);
+    p.step_pdf =
+        RooFitFunctions::MakeStepShelf("step_pdf2_linked", *x_, *p.mu, *s);
+    p.low_exp_pdf = RooFitFunctions::MakeLowExpTail("low_exp_pdf2_linked", *x_,
+                                                    *p.mu, *s, *p.tau_low_exp);
+    p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
+        "low_lin_pdf2_linked", *x_, *p.mu, *s, *p.slope_low_lin);
+    p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
+        "high_exp_pdf2_linked", *x_, *p.mu, *s, *p.tau_high_exp);
+    RegisterOwned(p.gauss_pdf);
+    RegisterOwned(p.step_pdf);
+    RegisterOwned(p.low_exp_pdf);
+    RegisterOwned(p.low_lin_pdf);
+    RegisterOwned(p.high_exp_pdf);
+  }
+
   BuildBackground(bkg_estimate, peak_height, range_width);
   BuildTotalModel();
 
@@ -2531,7 +2561,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       gROOT->SetBatch(kFALSE);
       TString info = base_label + " / " + input_name;
       Bool_t accepted = LaunchInteractiveSimultaneousFitEditor(
-          sim_pdf_, sim_combined_data_, x_, views, union_lo, union_hi, info);
+          sim_pdf_, sim_combined_data_, x_, views, union_lo, union_hi, info,
+          fit_debug_);
       gROOT->SetBatch(was_batch);
       sim_valid = accepted;
       if (accepted) {
@@ -2554,17 +2585,34 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       }
     }
   } else {
+    if (fit_debug_) {
+      // Un-suppress RooFit eval errors (the fit normally forces -1) so the
+      // offending pdf is named, and report the seed NLL up front.
+      RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::PrintErrors);
+      RooAbsReal *nll = sim_pdf_->createNLL(
+          *sim_combined_data_, RooFit::Extended(kTRUE),
+          RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE));
+      Double_t nll_seed = (nll != 0) ? nll->getVal() : 0.0;
+      std::cout << "=== AU_ROOFIT_FIT_DEBUG: seed NLL = " << nll_seed
+                << (std::isfinite(nll_seed) ? "" : "   <== NON-FINITE")
+                << " ===" << std::endl;
+      if (nll != 0)
+        delete nll;
+    }
+
     // SplitRange normalizes each channel over its own "fitrange_<name>" window
     // (set in BuildChannelModel) instead of the union range. Without it, a
     // channel whose peak sits below union_hi has its linear background and
     // exponential tails evaluated far past their own fit range: the background
     // polynomial 1+slope*x can go negative and the tails overflow, poisoning
     // the NLL once high statistics populate the out-of-range bins.
+    Int_t print_level = fit_debug_ ? 1 : 0;
+    Int_t eval_errors = fit_debug_ ? 10 : -1;
     fit_result = sim_pdf_->fitTo(
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
         RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
-        RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(0),
-        RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
+        RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(print_level),
+        RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(1),
         RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
     sim_valid = (fit_result && fit_result->status() == 0);
     if (!sim_valid) {

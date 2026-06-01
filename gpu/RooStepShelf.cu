@@ -17,7 +17,8 @@ __global__ void RooStepShelfKernel(double *output, const double *x_vals,
   if (i < n) {
     double z = (x_vals[i] - mu) * inv_sigma;
     double s = SigmoidNegDev(z);
-    output[i] = s * s;
+    double v = s * s;
+    output[i] = v > 1e-300 ? v : 1e-300;
   }
 }
 

@@ -140,6 +140,7 @@ private:
 
   Bool_t use_manual_init_;
   Bool_t interactive_;
+  Bool_t fit_debug_;
   std::vector<Double_t> manual_params_;
 
   RooRealVar *x_;
@@ -282,6 +283,11 @@ public:
   void SetInteractive(Bool_t interactive = kTRUE) {
     interactive_ = interactive;
   }
+  // When on, the simultaneous fit un-suppresses RooFit evaluation errors and
+  // prints the seed NLL, so an invalid-NLL failure names the offending pdf.
+  // Defaults to off; enable per-fit with sim.SetFitDebug() before
+  // FitSimultaneous.
+  void SetFitDebug(Bool_t fit_debug = kTRUE) { fit_debug_ = fit_debug; }
 
   void SetManualParameters(const std::vector<Double_t> &params);
   void SetManualParameter(Int_t index, Double_t value);
@@ -298,8 +304,13 @@ public:
                          const TString label = "");
 
   FitResult FitSinglePeak(const TString input_name, const TString peak_name);
+  // link_sigma: tie the two peaks to a single Gaussian width. Peak 2's PDFs are
+  // rebuilt to reference peak 1's sigma and Sigma2 is frozen, so the doublet
+  // shares one resolution (e.g. close, same-detector lines like the Pb K-beta
+  // group) without Sigma2 floating and trading against the background.
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,
-                          Double_t mu1_init, Double_t mu2_init);
+                          Double_t mu1_init, Double_t mu2_init,
+                          Bool_t link_sigma = kFALSE);
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,
                           const PeakFitResult &constrained_peak,
                           Double_t mu2_init);
