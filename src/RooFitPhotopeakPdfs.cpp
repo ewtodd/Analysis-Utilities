@@ -63,9 +63,17 @@ Double_t ExpErfc(Double_t a, Double_t b) {
   return std::exp(a - b * b) * erfcx;
 }
 
+// Smallest density any component pdf is allowed to return. A pdf that evaluates
+// to exactly 0 across the fit range integrates to 0, and RooFit's extended
+// Range() projection then forms a 0/0 ratio (RooRatio::rangeProj) -> NaN. A
+// tiny positive floor keeps every component's normalized integral well-defined
+// while being utterly negligible wherever the real density is non-zero.
+const Double_t kDensityFloor = 1e-300;
+
 Double_t ExpTailDensity(Double_t y, Double_t sigma, Double_t tau) {
   Double_t sqrt2_sigma = std::sqrt(2.0) * sigma;
-  return ExpErfc(y / tau, y / sqrt2_sigma);
+  Double_t v = ExpErfc(y / tau, y / sqrt2_sigma);
+  return v > kDensityFloor ? v : kDensityFloor;
 }
 
 Double_t ExpTailAntideriv(Double_t y, Double_t sigma, Double_t tau) {
@@ -81,7 +89,8 @@ Double_t LowLinDensity(Double_t y, Double_t sigma, Double_t slope) {
   if (lin < 0.0)
     lin = 0.0;
   Double_t sqrt2_sigma = std::sqrt(2.0) * sigma;
-  return lin * std::erfc(y / sqrt2_sigma);
+  Double_t v = lin * std::erfc(y / sqrt2_sigma);
+  return v > kDensityFloor ? v : kDensityFloor;
 }
 
 Double_t LowLinAntideriv(Double_t y, Double_t sigma, Double_t slope) {
@@ -117,7 +126,7 @@ Double_t LowLinIntegral(Double_t y_lo, Double_t y_hi, Double_t sigma,
   }
   Double_t val = LowLinAntideriv(eff_hi, sigma, slope) -
                  LowLinAntideriv(eff_lo, sigma, slope);
-  if (val < 1e-300)
+  if (!std::isfinite(val) || val < 1e-300)
     return 1e-300;
   return val;
 }
@@ -136,10 +145,11 @@ RooStepShelf::RooStepShelf(const RooStepShelf &other, const char *name)
 Double_t RooStepShelf::evaluate() const {
   Double_t sigma = (Double_t)sigma_;
   if (sigma <= 0)
-    return 0.0;
+    return kDensityFloor;
   Double_t z = ((Double_t)x_ - (Double_t)mu_) / sigma;
   Double_t s = SigmoidNeg(z);
-  return s * s;
+  Double_t v = s * s;
+  return v > kDensityFloor ? v : kDensityFloor;
 }
 
 void RooStepShelf::doEval(RooFit::EvalContext &ctx) const {
@@ -150,7 +160,7 @@ void RooStepShelf::doEval(RooFit::EvalContext &ctx) const {
   Double_t mu = ctx.at(mu_)[0];
   if (sigma <= 0) {
     for (size_t i = 0; i < n; ++i)
-      output[i] = 0.0;
+      output[i] = kDensityFloor;
     return;
   }
   Double_t inv_sigma = 1.0 / sigma;
@@ -164,7 +174,8 @@ void RooStepShelf::doEval(RooFit::EvalContext &ctx) const {
   for (size_t i = 0; i < n; ++i) {
     Double_t z = (x_vals[i] - mu) * inv_sigma;
     Double_t s = SigmoidNeg(z);
-    output[i] = s * s;
+    Double_t v = s * s;
+    output[i] = v > kDensityFloor ? v : kDensityFloor;
   }
 }
 
@@ -223,7 +234,7 @@ void RooLowExpTail::doEval(RooFit::EvalContext &ctx) const {
   Double_t ratio = ctx.at(tau_)[0];
   if (sigma <= 0 || ratio <= 0) {
     for (size_t i = 0; i < n; ++i)
-      output[i] = 0.0;
+      output[i] = kDensityFloor;
     return;
   }
   Double_t tau = ratio * sigma;
@@ -239,7 +250,8 @@ void RooLowExpTail::doEval(RooFit::EvalContext &ctx) const {
 #pragma omp parallel for simd
   for (size_t i = 0; i < n; ++i) {
     Double_t y = x_vals[i] - mu;
-    output[i] = ExpErfc(y * inv_tau, y * inv_sqrt2_sigma);
+    Double_t v = ExpErfc(y * inv_tau, y * inv_sqrt2_sigma);
+    output[i] = v > kDensityFloor ? v : kDensityFloor;
   }
 }
 
@@ -302,7 +314,7 @@ void RooLowLinTail::doEval(RooFit::EvalContext &ctx) const {
   Double_t slope = ctx.at(slope_)[0];
   if (sigma <= 0) {
     for (size_t i = 0; i < n; ++i)
-      output[i] = 0.0;
+      output[i] = kDensityFloor;
     return;
   }
   Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
@@ -319,7 +331,8 @@ void RooLowLinTail::doEval(RooFit::EvalContext &ctx) const {
     Double_t lin = 1.0 + slope * y;
     if (lin < 0.0)
       lin = 0.0;
-    output[i] = lin * std::erfc(y * inv_sqrt2_sigma);
+    Double_t v = lin * std::erfc(y * inv_sqrt2_sigma);
+    output[i] = v > kDensityFloor ? v : kDensityFloor;
   }
 }
 
@@ -377,7 +390,7 @@ void RooHighExpTail::doEval(RooFit::EvalContext &ctx) const {
   Double_t ratio = ctx.at(tau_)[0];
   if (sigma <= 0 || ratio <= 0) {
     for (size_t i = 0; i < n; ++i)
-      output[i] = 0.0;
+      output[i] = kDensityFloor;
     return;
   }
   Double_t tau = ratio * sigma;
@@ -393,7 +406,8 @@ void RooHighExpTail::doEval(RooFit::EvalContext &ctx) const {
 #pragma omp parallel for simd
   for (size_t i = 0; i < n; ++i) {
     Double_t z = mu - x_vals[i];
-    output[i] = ExpErfc(z * inv_tau, z * inv_sqrt2_sigma);
+    Double_t v = ExpErfc(z * inv_tau, z * inv_sqrt2_sigma);
+    output[i] = v > kDensityFloor ? v : kDensityFloor;
   }
 }
 

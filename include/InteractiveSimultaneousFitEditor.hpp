@@ -108,6 +108,7 @@ private:
   Bool_t accepted_;
   Bool_t done_;
   Bool_t syncing_;
+  Bool_t fit_debug_;
   TTimer *redraw_timer_;
 
   Int_t ChannelIndexFromWidgetId(Int_t base, Int_t parm1, Int_t &local_idx);
@@ -144,6 +145,11 @@ private:
   // shared fit range so 1+slope*x stays positive across the whole window.
   void ApplyBackgroundSlopeBounds();
 
+  // Debug aid: scan each channel's components for a non-finite normalization
+  // integral or a non-finite raw value across the range, to name the pdf
+  // behind an invalid NLL. Only called when fit_debug_ is set.
+  void DiagnoseInvalidComponents();
+
   Int_t ValToSlider(Int_t ch_idx, Int_t param_idx, Double_t val);
   Double_t SliderToVal(Int_t ch_idx, Int_t param_idx, Int_t pos);
   Bool_t IsFixed(Int_t ch_idx, Int_t param_idx);
@@ -160,7 +166,8 @@ public:
       const TGWindow *parent, RooSimultaneous *sim_pdf,
       RooAbsData *combined_data, RooRealVar *x,
       const std::vector<SimEditorChannelView> &channel_views,
-      Double_t range_low, Double_t range_high, const TString &info_label = "");
+      Double_t range_low, Double_t range_high, const TString &info_label = "",
+      Bool_t fit_debug = kFALSE);
   virtual ~InteractiveSimultaneousFitEditor();
 
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);
@@ -176,6 +183,6 @@ public:
 Bool_t LaunchInteractiveSimultaneousFitEditor(
     RooSimultaneous *sim_pdf, RooAbsData *combined_data, RooRealVar *x,
     std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
-    Double_t range_high, const TString &info_label);
+    Double_t range_high, const TString &info_label, Bool_t fit_debug = kFALSE);
 
 #endif

@@ -3,16 +3,20 @@
 #include "InteractiveEditorX11Guard.hpp"
 #include "PlottingUtils.hpp"
 
+#include <RooAbsReal.h>
 #include <RooArgSet.h>
 #include <RooFitResult.h>
+#include <RooGlobalFunc.h>
 #include <RooMsgService.h>
 #include <TROOT.h>
+#include <cmath>
 #include <iostream>
 
 InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
     const TGWindow *parent, RooSimultaneous *sim_pdf, RooAbsData *combined_data,
     RooRealVar *x, const std::vector<SimEditorChannelView> &channel_views,
-    Double_t range_low, Double_t range_high, const TString &info_label)
+    Double_t range_low, Double_t range_high, const TString &info_label,
+    Bool_t fit_debug)
     : TGMainFrame(parent, 1500, 950) {
 
   sim_pdf_ = sim_pdf;
@@ -20,6 +24,7 @@ InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
   x_ = x;
   channels_ = channel_views;
   info_label_text_ = info_label;
+  fit_debug_ = fit_debug;
   range_low_ = range_low;
   range_high_ = range_high;
   original_range_low_ = range_low;
@@ -844,11 +849,29 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
     }
   }
 
+  if (fit_debug_) {
+    // Un-suppress RooFit eval errors so the pdf producing an invalid NLL is
+    // named, and report the pre-fit NLL at the current parameter values.
+    RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::PrintErrors);
+    RooAbsReal *nll = sim_pdf_->createNLL(
+        *combined_data_, RooFit::Extended(kTRUE), RooFit::Range("fitrange"));
+    Double_t nll_seed = (nll != 0) ? nll->getVal() : 0.0;
+    std::cout << "=== AU_ROOFIT_FIT_DEBUG: pre-refit NLL = " << nll_seed
+              << (std::isfinite(nll_seed) ? "" : "   <== NON-FINITE")
+              << " ===" << std::endl;
+    if (nll != 0)
+      delete nll;
+    DiagnoseInvalidComponents();
+  }
+
+  Int_t print_level = fit_debug_ ? 1 : -1;
+  Int_t eval_errors = fit_debug_ ? 10 : -1;
   RooFitResult *res = sim_pdf_->fitTo(
       *combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
       RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
-      RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1), RooFit::Strategy(1),
-      RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
+      RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(eval_errors),
+      RooFit::Strategy(1), RooFit::Minimizer("Minuit2", "migrad"),
+      BestAvailableBackend());
   if (res)
     delete res;
 
@@ -943,6 +966,59 @@ void InteractiveSimultaneousFitEditor::ApplyBackgroundSlopeBounds() {
     if (slope->getVal() < slope_lo)
       slope->setVal(slope_lo);
     slope->setRange(slope_lo, hi);
+  }
+}
+
+void InteractiveSimultaneousFitEditor::DiagnoseInvalidComponents() {
+  RooArgSet nset(*x_);
+  for (size_t ci = 0; ci < channels_.size(); ci++) {
+    SimEditorChannelView &cv = channels_[ci];
+    std::cout << "  channel '" << cv.name << "' components:" << std::endl;
+    // Per-component normalization integral (one value per parameter set): a NaN
+    // or collapsed integral makes pdf/Int non-finite for the whole channel.
+    for (size_t pi = 0; pi < cv.peaks->size(); pi++) {
+      RooFitPeakModel &p = (*cv.peaks)[pi];
+      RooAbsPdf *comps[5] = {p.gauss_pdf, p.step_pdf, p.low_exp_pdf,
+                             p.low_lin_pdf, p.high_exp_pdf};
+      const char *names[5] = {"gauss", "step", "lowExp", "lowLin", "highExp"};
+      for (Int_t k = 0; k < 5; k++) {
+        if (comps[k] == 0)
+          continue;
+        RooAbsReal *integ = comps[k]->createIntegral(
+            nset, RooFit::NormSet(nset), RooFit::Range("fitrange"));
+        Double_t nrm = (integ != 0) ? integ->getVal() : 0.0;
+        if (integ != 0)
+          delete integ;
+        if (!std::isfinite(nrm) || nrm <= 0.0)
+          std::cout << "    [BAD NORM] peak" << (pi + 1) << "." << names[k]
+                    << " integral=" << nrm << std::endl;
+      }
+    }
+    // Scan the range for any raw component value that is non-finite (e.g. a
+    // tail overflowing to Inf*0=NaN), reporting the first few hits.
+    const Int_t n_samp = 4000;
+    Double_t step_x = (range_high_ - range_low_) / (Double_t)(n_samp - 1);
+    Int_t reported = 0;
+    for (Int_t i = 0; i < n_samp && reported < 8; i++) {
+      Double_t xv = range_low_ + i * step_x;
+      x_->setVal(xv);
+      for (size_t pi = 0; pi < cv.peaks->size() && reported < 8; pi++) {
+        RooFitPeakModel &p = (*cv.peaks)[pi];
+        RooAbsPdf *comps[5] = {p.gauss_pdf, p.step_pdf, p.low_exp_pdf,
+                               p.low_lin_pdf, p.high_exp_pdf};
+        const char *names[5] = {"gauss", "step", "lowExp", "lowLin", "highExp"};
+        for (Int_t k = 0; k < 5; k++) {
+          if (comps[k] == 0)
+            continue;
+          Double_t r = comps[k]->getVal();
+          if (!std::isfinite(r)) {
+            std::cout << "    [BAD RAW] peak" << (pi + 1) << "." << names[k]
+                      << " raw=" << r << " at x=" << xv << std::endl;
+            reported++;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1125,7 +1201,7 @@ Int_t InteractiveSimultaneousFitEditor::PeakStyle(Int_t peak_idx) {
 Bool_t LaunchInteractiveSimultaneousFitEditor(
     RooSimultaneous *sim_pdf, RooAbsData *combined_data, RooRealVar *x,
     std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
-    Double_t range_high, const TString &info_label) {
+    Double_t range_high, const TString &info_label, Bool_t fit_debug) {
   if (!gClient) {
     std::cerr << "InteractiveSimultaneousFitEditor: GUI not available"
               << std::endl;
@@ -1137,9 +1213,9 @@ Bool_t LaunchInteractiveSimultaneousFitEditor(
   AUXErrorHandlerSave xerr_save = AUInstallTolerantXErrorHandler();
 
   InteractiveSimultaneousFitEditor *editor =
-      new InteractiveSimultaneousFitEditor(gClient->GetRoot(), sim_pdf,
-                                           combined_data, x, channel_views,
-                                           range_low, range_high, info_label);
+      new InteractiveSimultaneousFitEditor(
+          gClient->GetRoot(), sim_pdf, combined_data, x, channel_views,
+          range_low, range_high, info_label, fit_debug);
 
   while (!editor->IsDone()) {
     gSystem->ProcessEvents();

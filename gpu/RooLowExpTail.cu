@@ -27,7 +27,8 @@ __global__ void RooLowExpTailKernel(double *output, const double *x_vals,
   size_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n) {
     double y = x_vals[i] - mu;
-    output[i] = ExpErfc(y * inv_tau, y * inv_sqrt2_sigma);
+    double v = ExpErfc(y * inv_tau, y * inv_sqrt2_sigma);
+    output[i] = v > 1e-300 ? v : 1e-300;
   }
 }
 

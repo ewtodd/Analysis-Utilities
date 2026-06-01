@@ -14,7 +14,8 @@ __global__ void RooLowLinTailKernel(double *output, const double *x_vals,
     if (lin < 0.0) {
       lin = 0.0;
     }
-    output[i] = lin * erfc(y * inv_sqrt2_sigma);
+    double v = lin * erfc(y * inv_sqrt2_sigma);
+    output[i] = v > 1e-300 ? v : 1e-300;
   }
 }
 
