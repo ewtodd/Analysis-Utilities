@@ -1912,18 +1912,16 @@ RooFitUtils::ResolveOrCreate(const TString &channel, const TString &param_name,
   return v;
 }
 
-void RooFitUtils::AddChannel(const TString &name,
-                             const std::vector<Double_t> &events,
-                             Float_t fit_range_low, Float_t fit_range_high,
-                             Float_t display_bin_width_kev, Int_t num_peaks,
-                             const std::vector<Double_t> &mu_inits,
-                             Bool_t use_flat_background, Bool_t use_step,
-                             Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
-                             Bool_t use_high_exp_tail,
-                             const std::vector<Bool_t> &mu_fixed,
-                             Bool_t bkg_yield_fixed, Bool_t bkg_slope_fixed,
-                             Bool_t lock_shape_after_seed,
-                             const std::vector<Bool_t> &use_step_per_peak) {
+void RooFitUtils::AddChannel(
+    const TString &name, const std::vector<Double_t> &events,
+    Float_t fit_range_low, Float_t fit_range_high,
+    Float_t display_bin_width_kev, Int_t num_peaks,
+    const std::vector<Double_t> &mu_inits, Bool_t use_flat_background,
+    Bool_t use_step, Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
+    Bool_t use_high_exp_tail, const std::vector<Bool_t> &mu_fixed,
+    Bool_t bkg_yield_fixed, Bool_t bkg_slope_fixed,
+    Bool_t lock_shape_after_seed, const std::vector<Bool_t> &use_step_per_peak,
+    const std::vector<Bool_t> &shape_lock_per_peak) {
   if (!sim_mode_) {
     std::cerr << "ERROR: AddChannel called on a single-channel RooFitUtils "
                  "instance; construct with the default ctor for sim mode."
@@ -1962,6 +1960,7 @@ void RooFitUtils::AddChannel(const TString &name,
   cfg.bkg_yield_fixed = bkg_yield_fixed;
   cfg.bkg_slope_fixed = bkg_slope_fixed;
   cfg.lock_shape_after_seed = lock_shape_after_seed;
+  cfg.shape_lock_per_peak = shape_lock_per_peak;
   cfg.use_flat_background = use_flat_background;
   cfg.use_step = use_step;
   cfg.use_low_exp_tail = use_low_exp_tail;
@@ -2314,6 +2313,17 @@ void RooFitUtils::ApplyChannelShapeLocks() {
       continue;
     std::vector<RooFitPeakModel> &peaks = sim_channel_peaks_[cfg.name];
     for (size_t pi = 0; pi < peaks.size(); pi++) {
+      // Per-peak override: if shape_lock_per_peak is non-empty, use it.
+      // Otherwise lock all peaks (backward-compatible).
+      Bool_t lock_peak = kTRUE;
+      if (!cfg.shape_lock_per_peak.empty()) {
+        if (pi < (Int_t)cfg.shape_lock_per_peak.size())
+          lock_peak = cfg.shape_lock_per_peak[pi];
+        else
+          lock_peak = kFALSE; // default: don't lock if index out of range
+      }
+      if (!lock_peak)
+        continue;
       RooFitPeakModel &p = peaks[pi];
       if (p.sigma)
         p.sigma->setConstant(kTRUE);
@@ -2417,6 +2427,129 @@ PeakFitResult RooFitUtils::ExtractPeakResultFor(const RooFitPeakModel &p) {
   return r;
 }
 
+// ---------------------------------------------------------------------------
+// Per-parameter diagnostics
+// ---------------------------------------------------------------------------
+
+std::vector<FitParameterDiagnostic>
+RooFitUtils::ExtractParameterDiagnostics(const TString &channel) {
+  std::vector<FitParameterDiagnostic> diags;
+
+  // Lookup channel config to get peak count
+  const RooFitChannelConfig *cfg = nullptr;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    if (sim_channels_[i].name == channel) {
+      cfg = &sim_channels_[i];
+      break;
+    }
+  }
+  if (!cfg)
+    return diags;
+
+  const auto &peaks = sim_channel_peaks_[channel];
+  const auto &bkg = sim_channel_bkg_[channel];
+
+  // Helper to extract one param
+  auto extract = [&](RooRealVar *rv, const std::string &name) {
+    FitParameterDiagnostic d;
+    d.name = name;
+    if (rv) {
+      d.value = rv->getVal();
+      d.error = rv->getError();
+      d.lo = rv->getMin();
+      d.hi = rv->getMax();
+      d.has_limits = kTRUE;
+      Double_t range = d.hi - d.lo;
+      if (range > 0) {
+        Double_t abs_tol = 1e-4;
+        Double_t frac_tol = 1e-3;
+        Double_t margin = TMath::Max(abs_tol, frac_tol * range);
+        if (d.value - d.lo < margin)
+          d.near_lower = kTRUE;
+        if (d.hi - d.value < margin)
+          d.near_upper = kTRUE;
+        d.near_limit = d.near_lower || d.near_upper;
+      }
+    }
+    diags.push_back(d);
+  };
+
+  // Peak parameters
+  for (size_t pi = 0; pi < peaks.size(); pi++) {
+    TString suffix = TString::Format("%d", pi + 1);
+    TString cname = channel + ":";
+    extract(peaks[pi].mu, (cname + "Mu" + suffix).Data());
+    extract(peaks[pi].sigma, (cname + "Sigma" + suffix).Data());
+    extract(peaks[pi].gaus_yield, (cname + "GausAmplitude" + suffix).Data());
+    extract(peaks[pi].ratio_step, (cname + "StepAmplitude" + suffix).Data());
+    extract(peaks[pi].ratio_low_exp,
+            (cname + "LowExpTailAmplitude" + suffix).Data());
+    extract(peaks[pi].tau_low_exp, (cname + "LowExpTailRatio" + suffix).Data());
+    extract(peaks[pi].ratio_low_lin,
+            (cname + "LowLinTailAmplitude" + suffix).Data());
+    extract(peaks[pi].slope_low_lin,
+            (cname + "LowLinTailSlope" + suffix).Data());
+    extract(peaks[pi].ratio_high_exp,
+            (cname + "HighExpTailAmplitude" + suffix).Data());
+    extract(peaks[pi].tau_high_exp,
+            (cname + "HighExpTailRatio" + suffix).Data());
+  }
+
+  // Background parameters
+  extract(bkg.bkg_yield, TString(channel + ":BkgConstant").Data());
+  extract(bkg.bkg_slope, TString(channel + ":BkgSlope").Data());
+
+  return diags;
+}
+
+std::vector<FitParameterDiagnostic>
+RooFitUtils::ExtractParameterDiagnosticsSingle() {
+  std::vector<FitParameterDiagnostic> diags;
+
+  auto extract = [&](RooRealVar *rv, const std::string &name) {
+    FitParameterDiagnostic d;
+    d.name = name;
+    if (rv) {
+      d.value = rv->getVal();
+      d.error = rv->getError();
+      d.lo = rv->getMin();
+      d.hi = rv->getMax();
+      d.has_limits = kTRUE;
+      Double_t range = d.hi - d.lo;
+      if (range > 0) {
+        Double_t abs_tol = 1e-4;
+        Double_t frac_tol = 1e-3;
+        Double_t margin = TMath::Max(abs_tol, frac_tol * range);
+        if (d.value - d.lo < margin)
+          d.near_lower = kTRUE;
+        if (d.hi - d.value < margin)
+          d.near_upper = kTRUE;
+        d.near_limit = d.near_lower || d.near_upper;
+      }
+    }
+    diags.push_back(d);
+  };
+
+  for (size_t pi = 0; pi < peaks_.size(); pi++) {
+    TString suffix = TString::Format("%d", pi + 1);
+    extract(peaks_[pi].mu, ("Mu" + suffix).Data());
+    extract(peaks_[pi].sigma, ("Sigma" + suffix).Data());
+    extract(peaks_[pi].gaus_yield, ("GausAmplitude" + suffix).Data());
+    extract(peaks_[pi].ratio_step, ("StepAmplitude" + suffix).Data());
+    extract(peaks_[pi].ratio_low_exp, ("LowExpTailAmplitude" + suffix).Data());
+    extract(peaks_[pi].tau_low_exp, ("LowExpTailRatio" + suffix).Data());
+    extract(peaks_[pi].ratio_low_lin, ("LowLinTailAmplitude" + suffix).Data());
+    extract(peaks_[pi].slope_low_lin, ("LowLinTailSlope" + suffix).Data());
+    extract(peaks_[pi].ratio_high_exp,
+            ("HighExpTailAmplitude" + suffix).Data());
+    extract(peaks_[pi].tau_high_exp, ("HighExpTailRatio" + suffix).Data());
+  }
+  extract(bkg_.bkg_yield, "BkgConstant");
+  extract(bkg_.bkg_slope, "BkgSlope");
+
+  return diags;
+}
+
 void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
                               const std::vector<RooFitPeakModel> &peaks,
                               const RooFitBackgroundModel &bkg,
@@ -2464,6 +2597,93 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
   bkg_ = saved_bkg;
   num_peaks_ = saved_np;
   total_pdf_ = saved_total;
+}
+
+void RooFitUtils::DumpChannelCSV(const TString &channel,
+                                 const TString &csv_path, Int_t npts) {
+  std::map<TString, RooAbsPdf *>::iterator pit =
+      sim_channel_pdfs_.find(channel);
+  std::map<TString, RooFitBackgroundModel>::iterator bit =
+      sim_channel_bkg_.find(channel);
+  RooFitChannelConfig const *cfg = nullptr;
+  for (size_t i = 0; i < sim_channels_.size(); i++)
+    if (sim_channels_[i].name == channel) {
+      cfg = &sim_channels_[i];
+      break;
+    }
+  if (pit == sim_channel_pdfs_.end() || bit == sim_channel_bkg_.end() || !cfg ||
+      !cfg->hist) {
+    std::cerr << "ERROR: DumpChannelCSV: channel '" << channel
+              << "' not built; call after FitSimultaneous." << std::endl;
+    return;
+  }
+  RooAddPdf *total = static_cast<RooAddPdf *>(pit->second);
+  RooFitBackgroundModel &bkg = bit->second;
+  TH1 *hist = cfg->hist;
+  Double_t bin_width = hist->GetBinWidth(1);
+  Float_t lo = cfg->fit_range_low;
+  Float_t hi = cfg->fit_range_high;
+  RooArgSet nset(*x_);
+  Double_t total_exp = total->expectedEvents(&nset);
+  Double_t bkg_yield = bkg.bkg_yield ? bkg.bkg_yield->getVal() : 0.0;
+
+  // csv_path is a BASE; write two tidy, read_csv-able files:
+  //   <base>_spectrum.csv : per-bin data + fit + residual (the data table)
+  //   <base>_fitcurve.csv : smooth fit curve (the overlay line)
+  TString base = csv_path;
+  if (base.EndsWith(".csv"))
+    base.Remove(base.Length() - 4);
+
+  // 1) Per-bin spectrum: raw data, fit, background, residual pull. All
+  // counts/bin.
+  TString spec_path = base + "_spectrum.csv";
+  std::ofstream spec(spec_path.Data());
+  if (!spec.is_open()) {
+    std::cerr << "ERROR: DumpChannelCSV: cannot open " << spec_path
+              << std::endl;
+    return;
+  }
+  spec << "energy_keV,data_counts,fit_total,fit_background,residual_pull"
+       << std::endl;
+  Int_t lbin = hist->FindBin(lo);
+  Int_t rbin = hist->FindBin(hi);
+  for (Int_t b = lbin; b <= rbin; b++) {
+    Double_t xc = hist->GetBinCenter(b);
+    if (xc < lo || xc > hi)
+      continue;
+    Double_t data = hist->GetBinContent(b);
+    x_->setVal(xc);
+    Double_t fit = total_exp * total->getVal(&nset) * bin_width;
+    Double_t fb =
+        bkg.bkg_pdf ? bkg_yield * bkg.bkg_pdf->getVal(&nset) * bin_width : 0.0;
+    Double_t pull = (fit > 0) ? (data - fit) / std::sqrt(fit) : 0.0;
+    spec << std::fixed << std::setprecision(6) << xc << "," << data << ","
+         << fit << "," << fb << "," << pull << std::endl;
+  }
+  spec.close();
+  std::cout << "Wrote CSV: " << spec_path << std::endl;
+
+  // 2) Smooth fit curve (counts/bin) for the overlaid line.
+  TString curve_path = base + "_fitcurve.csv";
+  std::ofstream curve(curve_path.Data());
+  if (!curve.is_open()) {
+    std::cerr << "ERROR: DumpChannelCSV: cannot open " << curve_path
+              << std::endl;
+    return;
+  }
+  curve << "energy_keV,fit_total,fit_background" << std::endl;
+  Double_t x_step = (hi - lo) / (npts - 1);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t xv = lo + i * x_step;
+    x_->setVal(xv);
+    Double_t yt = total_exp * total->getVal(&nset) * bin_width;
+    Double_t yb =
+        bkg.bkg_pdf ? bkg_yield * bkg.bkg_pdf->getVal(&nset) * bin_width : 0.0;
+    curve << std::fixed << std::setprecision(6) << xv << "," << yt << "," << yb
+          << std::endl;
+  }
+  curve.close();
+  std::cout << "Wrote CSV: " << curve_path << std::endl;
 }
 
 std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
@@ -2621,6 +2841,33 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     }
   }
 
+  // Capture global simultaneous-fit diagnostics from RooFitResult.
+  // These are the same for every channel since they come from the single
+  // combined minimization. Interactive path leaves them at sentinel values.
+  Bool_t has_diag = kFALSE;
+  Int_t diag_status = -999;
+  Int_t diag_cov_qual = -999;
+  Double_t diag_edm = -1;
+  Double_t diag_min_nll = -1;
+
+  if (fit_result) {
+    has_diag = kTRUE;
+    diag_status = fit_result->status();
+    diag_cov_qual = fit_result->covQual();
+    diag_edm = fit_result->edm();
+    diag_min_nll = fit_result->minNll();
+  }
+
+  if (has_diag) {
+    std::cout << "=== Simultaneous fit diagnostics ===" << std::endl;
+    std::cout << "  status  = " << diag_status << std::endl;
+    std::cout << "  covQual = " << diag_cov_qual << std::endl;
+    std::cout << "  edm     = " << diag_edm << std::endl;
+    std::cout << "  minNLL  = " << diag_min_nll
+              << (std::isfinite(diag_min_nll) ? "" : "   <== NON-FINITE")
+              << " ===" << std::endl;
+  }
+
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     const RooFitChannelConfig &cfg = sim_channels_[i];
     Int_t ndof = 0;
@@ -2640,6 +2887,13 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     cr.lin_bkg_slope_error = sim_channel_bkg_[cfg.name].bkg_slope->getError();
     cr.reduced_chi2 = chi2;
     cr.valid = sim_valid;
+    cr.has_fit_diagnostics = has_diag;
+    cr.fit_status = diag_status;
+    cr.cov_qual = diag_cov_qual;
+    cr.edm = diag_edm;
+    cr.min_nll = diag_min_nll;
+    cr.parameter_diagnostics =
+        ExtractParameterDiagnostics(sim_channels_[i].name);
     results.push_back(cr);
 
     TString chi2_label = Form("#chi^{2}/ndf = %.3f", chi2);

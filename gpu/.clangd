@@ -1,6 +1,6 @@
 CompileFlags:
   Add:
-  - --cuda-gpu-arch=sm_120
+  - --cuda-gpu-arch=sm_89
   - --no-cuda-version-check
 Diagnostics:
   Suppress:

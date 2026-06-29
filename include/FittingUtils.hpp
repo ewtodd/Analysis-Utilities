@@ -44,12 +44,40 @@ struct PeakFitResult {
   Float_t high_exp_tail_ratio = -1, high_exp_tail_ratio_error = -1;
 };
 
+// Per-parameter diagnostic for near-limit detection after a fit.
+struct FitParameterDiagnostic {
+  std::string name;
+  Double_t value = 0;
+  Double_t error = 0;
+  Double_t lo = 0;
+  Double_t hi = 0;
+  Bool_t has_limits = kFALSE;
+  Bool_t near_lower = kFALSE;
+  Bool_t near_upper = kFALSE;
+  Bool_t near_limit = kFALSE;
+};
+
 struct FitResult {
   std::vector<PeakFitResult> peaks; // 1-3 entries supported
   Float_t bkg_constant = -1, bkg_constant_error = -1;
   Float_t lin_bkg_slope = -1, lin_bkg_slope_error = -1;
   Float_t reduced_chi2 = -1;
   Bool_t valid = kFALSE;
+
+  // RooFit / Minuit diagnostics — populated by RooFitUtils fits so downstream
+  // code can distinguish a true best fit from a local / failed solution.
+  // TF1-based FittingUtils fits leave these at their sentinel defaults.
+  Int_t fit_status = -999; // Minuit migrad status (0 = success)
+  Int_t cov_qual = -999;   // covariance quality
+  //   0 = Exact, 1 = NotPositiveDefinite, 2 = Approximate, 3 = External
+  Double_t edm = -1;                   // estimated distance to minimum
+  Double_t min_nll = -1;               // minimized negative log-likelihood
+  Bool_t has_fit_diagnostics = kFALSE; // RooFitResult was available
+  Int_t n_invalid_nll = -1; // invalid NLL evaluations (-1 if unknown)
+
+  // Per-parameter diagnostics from RooRealVar — populated by RooFitUtils fits.
+  // Each entry is one RooRealVar (peak param or background param).
+  std::vector<FitParameterDiagnostic> parameter_diagnostics;
 };
 
 class FittingUtils {

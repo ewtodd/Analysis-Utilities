@@ -82,3 +82,73 @@ def test_set_root_files_base_dir_strips_trailing_slash(tmp_path) -> None:
     set_root_files_base_dir(str(target) + "/")
     assert get_root_files_base_dir() == str(target.resolve())
     assert str(ROOT.IO.GetRootFilesBaseDir()) == str(target.resolve())
+
+
+def _write_leaf_array_tree(path, n_events) -> None:
+    """Write a tree with two fixed-size leaf-list arrays and a scalar."""
+    import array as _array
+
+    fout = ROOT.TFile(str(path), "RECREATE")
+    tree = ROOT.TTree("events", "leaf-array test tree")
+    left = _array.array("H", [0] * 4)
+    right = _array.array("f", [0.0] * 4)
+    cathode = _array.array("h", [0])
+    tree.Branch("Left", left, "Left[4]/s")
+    tree.Branch("Right", right, "Right[4]/F")
+    tree.Branch("Cathode", cathode, "Cathode/S")
+    for i in range(n_events):
+        for s in range(4):
+            left[s] = 10 * i + s
+            right[s] = 0.5 * (10 * i + s)
+        cathode[0] = -i
+        tree.Fill()
+    tree.Write()
+    fout.Close()
+
+
+def test_load_leaf_array_data_round_trip(tmp_path) -> None:
+    import numpy as np
+
+    from analysis_utilities.io import load_leaf_array_data
+
+    root_path = tmp_path / "leafarr.root"
+    _write_leaf_array_tree(root_path, n_events=5)
+
+    arrays = load_leaf_array_data(str(root_path), "events",
+                                  ["Left", "Right"],
+                                  cache_dir=str(tmp_path / "cache"))
+    assert set(arrays) == {"Left", "Right"}
+    assert arrays["Left"].shape == (5, 4)
+    assert arrays["Left"].dtype == np.uint16
+    assert arrays["Right"].dtype == np.float32
+    assert arrays["Left"][3, 2] == 32
+    assert arrays["Right"][3, 2] == pytest.approx(16.0)
+
+    # Second call must hit the .npz cache and return identical contents.
+    cached = load_leaf_array_data(str(root_path), "events",
+                                  ["Left", "Right"],
+                                  cache_dir=str(tmp_path / "cache"))
+    assert np.array_equal(cached["Left"], arrays["Left"])
+    assert np.array_equal(cached["Right"], arrays["Right"])
+
+
+def test_load_leaf_array_data_rejects_scalar_branch(tmp_path) -> None:
+    from analysis_utilities.io import load_leaf_array_data
+
+    root_path = tmp_path / "leafarr_scalar.root"
+    _write_leaf_array_tree(root_path, n_events=2)
+
+    with pytest.raises(ValueError, match="not a fixed-size array"):
+        load_leaf_array_data(str(root_path), "events", ["Cathode"],
+                             cache_dir=None)
+
+
+def test_load_leaf_array_data_max_events(tmp_path) -> None:
+    from analysis_utilities.io import load_leaf_array_data
+
+    root_path = tmp_path / "leafarr_cap.root"
+    _write_leaf_array_tree(root_path, n_events=6)
+
+    arrays = load_leaf_array_data(str(root_path), "events", ["Left"],
+                                  max_events=4, cache_dir=None)
+    assert arrays["Left"].shape == (4, 4)

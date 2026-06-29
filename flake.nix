@@ -19,17 +19,17 @@
           inherit system;
           config = {
             allowUnfree = true;
-            cudaCapabilities = [ "12.0" ];
+            cudaCapabilities = [ "8.9" ];
             cudaForwardCompat = false;
           };
         };
 
-        version = "26.5.31";
+        version = "26.6.28";
 
         rootWithCuda = pkgs.root.overrideAttrs (old: {
           cmakeFlags = (old.cmakeFlags or [ ]) ++ [
             "-Dcuda=ON"
-            "-DCMAKE_CUDA_ARCHITECTURES=120"
+            "-DCMAKE_CUDA_ARCHITECTURES=89"
           ];
           buildInputs =
             (old.buildInputs or [ ])
@@ -74,7 +74,7 @@
 
             cmakeFlags = pkgs.lib.optionals cuda [
               "-DAU_USE_CUDA=ON"
-              "-DCMAKE_CUDA_ARCHITECTURES=120"
+              "-DCMAKE_CUDA_ARCHITECTURES=89"
             ];
 
             postFixup = pkgs.lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
@@ -115,7 +115,7 @@
         # against the same arch + version policy that nvcc will use.
         clangdConfigFile = (pkgs.formats.yaml { }).generate "dot-clangd" {
           CompileFlags.Add = [
-            "--cuda-gpu-arch=sm_120"
+            "--cuda-gpu-arch=sm_89"
             "--no-cuda-version-check"
           ];
           Diagnostics.Suppress = [

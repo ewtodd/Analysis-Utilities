@@ -1,3 +1,4 @@
+.clangd
 docs/
 *.h5
 *.root
