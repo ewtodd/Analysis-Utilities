@@ -286,3 +286,120 @@ def load_tree_data(
         return features_df, waveforms
     else:
         return features_df
+
+
+def load_leaf_array_data(
+    root_files,
+    tree_name,
+    array_branches,
+    max_events=None,
+    cache_dir=_DEFAULT_CACHE_DIR,
+):
+    """Load fixed-size leaf-list array branches into 2-D numpy arrays.
+
+    Companion to :func:`load_tree_data` (which reads scalar branches plus a
+    TArrayF/TArrayS object branch): this one binds C-style fixed-size array
+    leaves -- branches created as e.g. ``tree->Branch("adc", buf,
+    "adc[18]/s")`` -- directly to typed buffers. Results are cached as one
+    .npz per (file set, tree) inside cache_dir, invalidated when any source
+    ROOT file is newer.
+
+    Parameters
+    ----------
+    root_files : str or list of str
+        Path(s) to ROOT file(s).
+    tree_name : str
+        Name of the TTree to read.
+    array_branches : list of str
+        Fixed-size array leaf branches to load.
+    max_events : int or None
+        Maximum number of events to load.
+    cache_dir : str or None
+        Directory for the cached .npz. Set to None to disable caching.
+        Defaults to "df_cache" (relative to cwd).
+
+    Returns
+    -------
+    arrays : dict of str -> numpy.ndarray
+        One 2-D array (n_events, n_elements) per requested branch, in the
+        leaf's native dtype.
+    """
+    if isinstance(root_files, str):
+        root_files = [root_files]
+    if not array_branches:
+        raise ValueError("array_branches must name at least one branch")
+
+    use_cache = cache_dir is not None
+    if use_cache:
+        os.makedirs(cache_dir, exist_ok=True)
+        key = _cache_key(root_files, tree_name)
+        npz_path = os.path.join(cache_dir, f"{key}_leafarrays.npz")
+        if os.path.exists(npz_path):
+            src_mtime = _newest_mtime(root_files)
+            if src_mtime <= os.path.getmtime(npz_path):
+                cached = np.load(npz_path)
+                if all(name in cached.files for name in array_branches):
+                    print(f"Loading cached leaf arrays: {npz_path}")
+                    return {name: cached[name] for name in array_branches}
+
+    chain = ROOT.TChain(tree_name)
+    for path in root_files:
+        if chain.Add(path) == 0:
+            raise FileNotFoundError(f"Could not add {path} to TChain")
+
+    n_total = chain.GetEntries()
+    if n_total == 0:
+        raise ValueError(f"TChain is empty (files: {root_files})")
+    n_to_read = n_total if max_events is None else min(n_total, max_events)
+
+    chain.SetBranchStatus("*", 0)
+    buffers = {}
+    arrays = {}
+    for name in array_branches:
+        br = chain.GetBranch(name)
+        if br is None:
+            raise ValueError(
+                f"Branch '{name}' not found in tree '{tree_name}'")
+        if br.GetClassName() != "":
+            raise ValueError(
+                f"Branch '{name}' is an object branch "
+                f"('{br.GetClassName()}'); use load_tree_data instead")
+        leaf = br.GetLeaf(name)
+        entry = _TYPE_MAP.get(leaf.GetTypeName())
+        if entry is None:
+            raise ValueError(f"Branch '{name}' has unsupported type "
+                             f"'{leaf.GetTypeName()}'")
+        n_elems = leaf.GetLenStatic()
+        if n_elems <= 1:
+            raise ValueError(
+                f"Branch '{name}' is not a fixed-size array leaf")
+        typecode, dt = entry
+        buf = _array.array(typecode, [0] * n_elems)
+        chain.SetBranchStatus(name, 1)
+        chain.SetBranchAddress(name, buf)
+        buffers[name] = buf
+        arrays[name] = np.empty((n_to_read, n_elems), dtype=dt)
+
+    read_count = 0
+    entry_idx = 0
+    while read_count < n_to_read:
+        if entry_idx >= n_total:
+            break
+        nb = chain.GetEntry(entry_idx)
+        if nb <= 0:
+            entry_idx += 1
+            continue
+        for name, buf in buffers.items():
+            arrays[name][read_count] = np.frombuffer(buf,
+                                                     dtype=arrays[name].dtype)
+        read_count += 1
+        entry_idx += 1
+
+    if read_count < n_to_read:
+        for name in arrays:
+            arrays[name] = arrays[name][:read_count]
+
+    if use_cache:
+        np.savez(npz_path, **arrays)
+        print(f"Cached leaf arrays to {npz_path}")
+    return arrays

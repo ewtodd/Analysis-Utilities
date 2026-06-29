@@ -110,6 +110,10 @@ struct RooFitChannelConfig {
   Bool_t bkg_yield_fixed = kFALSE;
   Bool_t bkg_slope_fixed = kFALSE;
   Bool_t lock_shape_after_seed = kFALSE;
+  // Per-peak shape-lock override. When non-empty and lock_shape_after_seed is
+  // true, each entry controls whether THAT peak's shape is locked. When empty,
+  // all peaks are locked (backward-compatible with lock_shape_after_seed).
+  std::vector<Bool_t> shape_lock_per_peak;
   Bool_t use_flat_background;
   Bool_t use_step;
   Bool_t use_low_exp_tail;
@@ -230,6 +234,14 @@ private:
 
   PeakFitResult ExtractPeakResult(Int_t peak_idx);
 
+  // Extract per-parameter diagnostics (value, error, limits, near-limit flags)
+  // from all RooRealVar objects in a channel's peak and background models.
+  std::vector<FitParameterDiagnostic>
+  ExtractParameterDiagnostics(const TString &channel);
+
+  // Single-channel variant for non-simultaneous fits.
+  std::vector<FitParameterDiagnostic> ExtractParameterDiagnosticsSingle();
+
   void SaveInteractiveParams(const TString &input_name,
                              const TString &peak_name);
   Bool_t LoadInteractiveParams(const TString &input_name,
@@ -329,13 +341,28 @@ public:
       const std::vector<Bool_t> &mu_fixed = std::vector<Bool_t>(),
       Bool_t bkg_yield_fixed = kFALSE, Bool_t bkg_slope_fixed = kFALSE,
       Bool_t lock_shape_after_seed = kFALSE,
-      const std::vector<Bool_t> &use_step_per_peak = std::vector<Bool_t>());
+      const std::vector<Bool_t> &use_step_per_peak = std::vector<Bool_t>(),
+      const std::vector<Bool_t> &shape_lock_per_peak = std::vector<Bool_t>());
   void LinkParameter(const TString &target, const TString &source);
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
                      const TString &source_channel, Int_t source_peak);
   void SeedChannel(const TString &channel_name, const FitResult &result);
   std::vector<FitResult> FitSimultaneous(const TString &input_name,
                                          const TString &base_label);
+
+  // Read-only export of a converged sim-channel fit to CSV, for external
+  // plotting. csv_path is a BASE (a trailing ".csv" is stripped); writes two
+  // tidy, pandas-read_csv-able files using the same expectedEvents*getVal*
+  // bin_width convention as the plotted curve:
+  //   <base>_spectrum.csv : energy_keV, data_counts, fit_total, fit_background,
+  //                         residual_pull  -- per histogram bin (the data
+  //                         table)
+  //   <base>_fitcurve.csv : energy_keV, fit_total, fit_background  -- smooth
+  //                         (npts samples) overlay line; counts/bin
+  // Call after FitSimultaneous; evaluates the current parameter state, changes
+  // no fit state.
+  void DumpChannelCSV(const TString &channel, const TString &csv_path,
+                      Int_t npts = 1000);
 };
 
 #endif
