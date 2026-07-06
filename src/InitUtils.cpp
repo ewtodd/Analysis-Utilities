@@ -882,3 +882,276 @@ Bool_t InitUtils::ConvertWavedumpBinToROOT(const TString input_filename,
 
   return kTRUE;
 }
+
+Bool_t InitUtils::ConvertSOLBinToROOT(const TString input_filename,
+                                      const TString output_name) {
+  const TString base_dir = IO::GetRootFilesBaseDir();
+  if (gSystem->AccessPathName(base_dir)) {
+    gSystem->mkdir(base_dir, kTRUE);
+  }
+
+  if (gSystem->AccessPathName(input_filename)) {
+    std::cout << "ERROR: Input file does not exist: " << input_filename
+              << std::endl;
+    return kFALSE;
+  }
+
+  TString output_subpath = output_name + ".root";
+  TString output_filename = base_dir + "/" + output_subpath;
+
+  SOLReader reader;
+  if (!reader.Open(input_filename.Data())) {
+    std::cout << "ERROR: Failed to open SOL binary file" << std::endl;
+    return kFALSE;
+  }
+
+  TFile *outfile = nullptr;
+  TTree *tree = nullptr;
+
+  // Per-row variables
+  Short_t channel_br = 0;
+  Short_t energy_br = 0;
+  Short_t energy_short_br = 0;
+  Long64_t timestamp_br = 0;
+  Short_t fine_timestamp_br = 0;
+  Short_t flags_high_br = 0;
+  Short_t flags_low_br = 0;
+  Short_t data_type_br = 0;
+  Char_t is_psd_br = 0;
+  Char_t down_sampling_br = 0;
+  Char_t board_fail_br = 0;
+  Char_t flush_br = 0;
+  Short_t trigger_thr_br = 0;
+  Long64_t event_size_br = 0;
+  Int_t agg_counter_br = 0;
+  Long64_t block_id_br = 0;
+  Int_t trace_len_br = 0;
+  Char_t ana_probe_type0_br = 0xFF;
+  Char_t ana_probe_type1_br = 0xFF;
+  Char_t dig_probe_type0_br = 0xFF;
+  Char_t dig_probe_type1_br = 0xFF;
+  Char_t dig_probe_type2_br = 0xFF;
+  Char_t dig_probe_type3_br = 0xFF;
+
+  // Variable-length trace arrays
+  TArrayI *trace0 = new TArrayI();
+  TArrayI *trace1 = new TArrayI();
+  TArrayC *dig0 = new TArrayC();
+  TArrayC *dig1 = new TArrayC();
+  TArrayC *dig2 = new TArrayC();
+  TArrayC *dig3 = new TArrayC();
+
+  {
+    IO::ScopedRootLock setup_guard;
+
+    outfile = IO::OpenForWriting(output_subpath);
+    if (!outfile || outfile->IsZombie()) {
+      std::cout << "ERROR: Could not create output file " << output_filename
+                << std::endl;
+      reader.Close();
+      delete trace0;
+      delete trace1;
+      delete dig0;
+      delete dig1;
+      delete dig2;
+      delete dig3;
+      return kFALSE;
+    }
+
+    tree = new TTree("Data_R", "SOLARIS Binary Data");
+
+    tree->Branch("Channel", &channel_br, "Channel/s");
+    tree->Branch("Energy", &energy_br, "Energy/s");
+    tree->Branch("EnergyShort", &energy_short_br, "EnergyShort/s");
+    tree->Branch("Timestamp", &timestamp_br, "Timestamp/l");
+    tree->Branch("FineTimestamp", &fine_timestamp_br, "FineTimestamp/s");
+    tree->Branch("FlagsHigh", &flags_high_br, "FlagsHigh/s");
+    tree->Branch("FlagsLow", &flags_low_br, "FlagsLow/s");
+    tree->Branch("DataType", &data_type_br, "DataType/s");
+    tree->Branch("IsPSD", &is_psd_br, "IsPSD/C");
+    tree->Branch("DownSampling", &down_sampling_br, "DownSampling/C");
+    tree->Branch("BoardFail", &board_fail_br, "BoardFail/C");
+    tree->Branch("Flush", &flush_br, "Flush/C");
+    tree->Branch("TriggerThr", &trigger_thr_br, "TriggerThr/s");
+    tree->Branch("EventSize", &event_size_br, "EventSize/l");
+    tree->Branch("AggCounter", &agg_counter_br, "AggCounter/I");
+    tree->Branch("BlockID", &block_id_br, "BlockID/l");
+    tree->Branch("TraceLen", &trace_len_br, "TraceLen/I");
+    tree->Branch("AnaProbeType0", &ana_probe_type0_br, "AnaProbeType0/C");
+    tree->Branch("AnaProbeType1", &ana_probe_type1_br, "AnaProbeType1/C");
+    tree->Branch("DigProbeType0", &dig_probe_type0_br, "DigProbeType0/C");
+    tree->Branch("DigProbeType1", &dig_probe_type1_br, "DigProbeType1/C");
+    tree->Branch("DigProbeType2", &dig_probe_type2_br, "DigProbeType2/C");
+    tree->Branch("DigProbeType3", &dig_probe_type3_br, "DigProbeType3/C");
+    tree->Branch("Trace0", &trace0);
+    tree->Branch("Trace1", &trace1);
+    tree->Branch("Dig0", &dig0);
+    tree->Branch("Dig1", &dig1);
+    tree->Branch("Dig2", &dig2);
+    tree->Branch("Dig3", &dig3);
+  }
+
+  Long64_t block_count = 0;
+  Long64_t blocks_with_traces = 0;
+  Long64_t blocks_without_traces = 0;
+
+  std::cout << "Reading SOL blocks..." << std::endl;
+
+  while (reader.ReadEvent()) {
+    const SOLData &event = reader.GetCurrentEvent();
+
+    channel_br = static_cast<Short_t>(event.channel);
+    energy_br = static_cast<Short_t>(event.energy);
+    energy_short_br = static_cast<Short_t>(event.energy_short);
+    timestamp_br = event.timestamp;
+    fine_timestamp_br = static_cast<Short_t>(event.fine_timestamp);
+    flags_high_br = static_cast<Short_t>(event.flags_high);
+    flags_low_br = static_cast<Short_t>(event.flags_low);
+    data_type_br = static_cast<Short_t>(event.data_type);
+    is_psd_br = static_cast<Char_t>(event.is_psd);
+    down_sampling_br = static_cast<Char_t>(event.down_sampling);
+    board_fail_br = static_cast<Char_t>(event.board_fail);
+    flush_br = static_cast<Char_t>(event.flush);
+    trigger_thr_br = static_cast<Short_t>(event.trigger_thr);
+    event_size_br = event.event_size;
+    agg_counter_br = static_cast<Int_t>(event.agg_counter);
+    block_id_br = event.block_id;
+    trace_len_br = static_cast<Int_t>(event.trace_len);
+    ana_probe_type0_br = static_cast<Char_t>(event.ana_probe_type[0]);
+    ana_probe_type1_br = static_cast<Char_t>(event.ana_probe_type[1]);
+    dig_probe_type0_br = static_cast<Char_t>(event.dig_probe_type[0]);
+    dig_probe_type1_br = static_cast<Char_t>(event.dig_probe_type[1]);
+    dig_probe_type2_br = static_cast<Char_t>(event.dig_probe_type[2]);
+    dig_probe_type3_br = static_cast<Char_t>(event.dig_probe_type[3]);
+
+    if (event.hasTraces()) {
+      // Copy trace0
+      trace0->Set(static_cast<Int_t>(event.trace0.size()));
+      for (Int_t i = 0; i < trace0->GetSize(); i++) {
+        trace0->SetAt(event.trace0[i], i);
+      }
+
+      // Copy trace1 (only for ALL format)
+      if (event.data_type == SOLData::ALL) {
+        trace1->Set(static_cast<Int_t>(event.trace1.size()));
+        for (Int_t i = 0; i < trace1->GetSize(); i++) {
+          trace1->SetAt(event.trace1[i], i);
+        }
+
+        // Copy digital traces (only for ALL format)
+        dig0->Set(static_cast<Int_t>(event.dig0.size()));
+        for (Int_t i = 0; i < dig0->GetSize(); i++) {
+          dig0->SetAt(event.dig0[i], i);
+        }
+        dig1->Set(static_cast<Int_t>(event.dig1.size()));
+        for (Int_t i = 0; i < dig1->GetSize(); i++) {
+          dig1->SetAt(event.dig1[i], i);
+        }
+        dig2->Set(static_cast<Int_t>(event.dig2.size()));
+        for (Int_t i = 0; i < dig2->GetSize(); i++) {
+          dig2->SetAt(event.dig2[i], i);
+        }
+        dig3->Set(static_cast<Int_t>(event.dig3.size()));
+        for (Int_t i = 0; i < dig3->GetSize(); i++) {
+          dig3->SetAt(event.dig3[i], i);
+        }
+      } else {
+        // OneTrace format: no trace1 or digital traces
+        trace1->Set(0);
+        dig0->Set(0);
+        dig1->Set(0);
+        dig2->Set(0);
+        dig3->Set(0);
+      }
+      blocks_with_traces++;
+    } else {
+      trace0->Set(0);
+      trace1->Set(0);
+      dig0->Set(0);
+      dig1->Set(0);
+      dig2->Set(0);
+      dig3->Set(0);
+      blocks_without_traces++;
+    }
+
+    tree->Fill();
+    block_count++;
+
+    // Progress reporting every 10000 blocks
+    if (block_count % 10000 == 0) {
+      std::cout << "  Processed " << block_count << " blocks..." << std::endl;
+    }
+  }
+
+  std::cout << "Conversion complete." << std::endl;
+  std::cout << "Total blocks processed: " << block_count << std::endl;
+  std::cout << "Blocks with traces: " << blocks_with_traces << std::endl;
+  std::cout << "Blocks without traces: " << blocks_without_traces << std::endl;
+  std::cout << "Total bytes read: " << reader.GetBytesRead() << std::endl;
+
+  {
+    IO::ScopedRootLock teardown_guard;
+    outfile->cd();
+    tree->Write("", TObject::kOverwrite);
+    outfile->Close();
+    reader.Close();
+    delete outfile;
+  }
+
+  delete trace0;
+  delete trace1;
+  delete dig0;
+  delete dig1;
+  delete dig2;
+  delete dig3;
+
+  std::cout << "Output saved to: " << output_filename << std::endl;
+
+  return kTRUE;
+}
+
+std::pair<std::vector<SOLHit>, Long64_t>
+InitUtils::ConvertSOLBinToHits(const TString input_filename) {
+  std::vector<SOLHit> hits;
+
+  if (gSystem->AccessPathName(input_filename)) {
+    std::cout << "ERROR: Input file does not exist: " << input_filename
+              << std::endl;
+    return std::make_pair(hits, static_cast<Long64_t>(0));
+  }
+
+  SOLReader reader;
+  if (!reader.Open(input_filename.Data())) {
+    std::cout << "ERROR: Failed to open SOL binary file" << std::endl;
+    return std::make_pair(hits, static_cast<Long64_t>(0));
+  }
+
+  Long64_t block_count = 0;
+  Long64_t blocks_with_traces = 0;
+  Long64_t blocks_without_traces = 0;
+
+  std::cout << "Reading SOL blocks..." << std::endl;
+
+  while (reader.ReadEvent()) {
+    SOLHit hit = reader.ToHit();
+
+    if (reader.GetCurrentEvent().hasTraces()) {
+      blocks_with_traces++;
+    } else {
+      blocks_without_traces++;
+    }
+
+    hits.push_back(hit);
+    block_count++;
+  }
+
+  std::cout << "Conversion complete." << std::endl;
+  std::cout << "Total blocks processed: " << block_count << std::endl;
+  std::cout << "Blocks with traces: " << blocks_with_traces << std::endl;
+  std::cout << "Blocks without traces: " << blocks_without_traces << std::endl;
+  std::cout << "Total bytes read: " << reader.GetBytesRead() << std::endl;
+
+  reader.Close();
+
+  return std::make_pair(hits, block_count);
+}

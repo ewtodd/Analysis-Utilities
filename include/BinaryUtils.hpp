@@ -209,4 +209,114 @@ public:
   Bool_t GetCorrectionsEnabled() const { return corrections_enabled; }
 };
 
+// Lightweight per-block hit struct for SOL format (no variable-length traces)
+struct SOLHit {
+  Short_t channel;
+  Short_t energy;
+  Short_t energy_short;
+  Long64_t timestamp;
+  Short_t fine_timestamp;
+  Short_t flags_high;
+  Short_t flags_low;
+  Short_t data_type;
+  Char_t is_psd;
+  Char_t down_sampling;
+  Char_t board_fail;
+  Char_t flush;
+  Short_t trigger_thr;
+  Long64_t event_size;
+  Int_t agg_counter;
+  Long64_t block_id;
+  Int_t trace_len;
+  Char_t ana_probe_type[2];
+  Char_t dig_probe_type[4];
+};
+
+// Per-block data for SOL format with optional trace arrays
+class SOLData {
+public:
+  enum DataType : UChar_t {
+    ALL = 0,
+    OneTrace = 1,
+    NoTrace = 2,
+    Minimum = 3,
+    MiniWithFineTime = 4,
+    Raw = 10
+  };
+
+  UShort_t block_header;
+  UChar_t channel;
+  UShort_t energy;
+  UShort_t energy_short;
+  ULong64_t timestamp;
+  UShort_t fine_timestamp;
+  UShort_t flags_high;
+  UShort_t flags_low;
+  UChar_t data_type;
+  Bool_t is_psd;
+  UChar_t down_sampling;
+  UChar_t board_fail;
+  UChar_t flush;
+  UShort_t trigger_thr;
+  ULong64_t event_size;
+  UInt_t agg_counter;
+  ULong64_t trace_len;
+  ULong64_t block_id;
+  UChar_t ana_probe_type[2];
+  UChar_t dig_probe_type[4];
+
+  // Trace data (only valid when data_type is ALL or OneTrace)
+  std::vector<Int_t> trace0;
+  std::vector<Int_t> trace1;
+  std::vector<Char_t> dig0;
+  std::vector<Char_t> dig1;
+  std::vector<Char_t> dig2;
+  std::vector<Char_t> dig3;
+
+  Bool_t hasTraces() const {
+    return (data_type == ALL || data_type == OneTrace) && trace_len > 0;
+  }
+
+  TString getDataTypeName() const;
+  void Print() const;
+
+  SOLData();
+  virtual ~SOLData() {}
+};
+
+class SOLReader : public BinaryReader {
+private:
+  SOLData current_event;
+  Long64_t block_id;
+  Bool_t skip_traces;
+
+public:
+  SOLReader() : BinaryReader(), block_id(0), skip_traces(kFALSE) {}
+
+  virtual ~SOLReader() {}
+
+  void SetSkipTraces(Bool_t skip) { skip_traces = skip; }
+  Bool_t GetSkipTraces() const { return skip_traces; }
+
+  Bool_t ReadEvent() override;
+
+  const SOLData &GetCurrentEvent() const { return current_event; }
+  SOLData &GetCurrentEvent() { return current_event; }
+
+  Long64_t GetBlockID() const { return block_id; }
+
+  // Convert current SOLData event to a SOLHit struct (strips traces)
+  SOLHit ToHit() const;
+
+  // Split a SOLARIS file into time-bounded chunks. Each chunk file contains
+  // blocks whose timestamps fall within chunkSeconds of the chunk start.
+  // Output files are named <basename>_chunk<NNN>.sol. Returns the list of
+  // created files. totalBlocks and totalChunks are filled with summary stats.
+  static std::vector<TString> SplitSolFileByTime(const char *inputFile,
+                                                 const char *outputDir,
+                                                 Double_t chunkSeconds,
+                                                 Int_t &totalBlocks,
+                                                 Int_t &totalChunks);
+};
+
 #endif

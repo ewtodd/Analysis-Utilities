@@ -31,6 +31,12 @@ public:
                           UShort_t global_header_override = 0,
                           Bool_t skip_bad_events = kFALSE);
   static Bool_t ConvertCoMPASSCSVToROOT();
+
+  static Bool_t ConvertSOLBinToROOT(const TString input_filename,
+                                    const TString output_name);
+
+  static std::pair<std::vector<SOLHit>, Long64_t>
+  ConvertSOLBinToHits(const TString input_filename);
 };
 
 #endif
