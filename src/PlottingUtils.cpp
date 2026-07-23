@@ -46,6 +46,8 @@ void PlottingUtils::SetStylePreferences(PlotSaveFormat save_format) {
   gStyle->SetGridColor(kGray);
   gStyle->SetPadTickX(1);
   gStyle->SetPadTickY(1);
+
+  SetTurboPalette();
 }
 
 void PlottingUtils::ConfigureGraph(TGraph *graph, Int_t color,
@@ -426,4 +428,46 @@ void PlottingUtils::PlotPullHistogram(TGraph *residuals,
   delete hist_canvas;
   delete gauss_ref;
   delete pull_hist;
+}
+
+void PlottingUtils::SetTurboPalette() {
+  Int_t N_COLORS = 255;
+
+  std::vector<Double_t> stops(N_COLORS);
+  std::vector<Double_t> reds(N_COLORS);
+  std::vector<Double_t> greens(N_COLORS);
+  std::vector<Double_t> blues(N_COLORS);
+
+  for (Int_t i = 0; i < N_COLORS; ++i) {
+    Double_t x = Double_t(i) / Double_t(N_COLORS - 1);
+
+    Double_t r = 0.13572138 + 4.61539260 * x - 42.66032258 * x * x +
+                 132.13108234 * x * x * x - 152.94239396 * x * x * x * x +
+                 59.28637943 * x * x * x * x * x;
+
+    Double_t g = 0.09140261 + 2.19418839 * x + 4.84296658 * x * x -
+                 14.18503333 * x * x * x + 4.27729857 * x * x * x * x +
+                 2.82956604 * x * x * x * x * x;
+
+    Double_t b = 0.10667330 + 12.64194608 * x - 60.58204836 * x * x +
+                 110.36276771 * x * x * x - 89.90310912 * x * x * x * x +
+                 27.34824973 * x * x * x * x * x;
+
+    stops[i] = x;
+    reds[i] = std::max(0.0, std::min(1.0, r));
+    greens[i] = std::max(0.0, std::min(1.0, g));
+    blues[i] = std::max(0.0, std::min(1.0, b));
+  }
+
+  Int_t firstColor =
+      TColor::CreateGradientColorTable(N_COLORS, stops.data(), reds.data(),
+                                       greens.data(), blues.data(), N_COLORS);
+
+  std::vector<Int_t> palette(N_COLORS);
+  for (Int_t i = 0; i < N_COLORS; ++i) {
+    palette[i] = firstColor + i;
+  }
+
+  gStyle->SetNumberContours(N_COLORS);
+  gStyle->SetPalette(N_COLORS, palette.data());
 }
