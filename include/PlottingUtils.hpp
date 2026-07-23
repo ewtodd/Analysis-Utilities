@@ -74,6 +74,7 @@ private:
   static Bool_t preferences_set_;
   static Width_t line_width_;
   static TString plots_base_dir_;
+  static void SetTurboPalette();
   static void WarnIfNotConfigured(const TString method_name);
   static void PlotPullHistogram(TGraph *residuals, const TString &output_name,
                                 const TString &output_subdirectory);
