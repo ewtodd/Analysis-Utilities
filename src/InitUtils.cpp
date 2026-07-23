@@ -1025,38 +1025,49 @@ Bool_t InitUtils::ConvertSOLBinToROOT(const TString input_filename,
     dig_probe_type3_br = static_cast<Char_t>(event.dig_probe_type[3]);
 
     if (event.hasTraces()) {
-      // Copy trace0
-      trace0->Set(static_cast<Int_t>(event.trace0.size()));
-      for (Int_t i = 0; i < trace0->GetSize(); i++) {
-        trace0->SetAt(event.trace0[i], i);
-      }
-
-      // Copy trace1 (only for ALL format)
       if (event.data_type == SOLData::ALL) {
-        trace1->Set(static_cast<Int_t>(event.trace1.size()));
-        for (Int_t i = 0; i < trace1->GetSize(); i++) {
-          trace1->SetAt(event.trace1[i], i);
+        UInt_t n_samples = event.getSamples();
+        const Int_t *a0 = event.getAnalog0();
+        const Int_t *a1 = event.getAnalog1();
+        const UChar_t *d0 = event.getDigital(0);
+        const UChar_t *d1 = event.getDigital(1);
+        const UChar_t *d2 = event.getDigital(2);
+        const UChar_t *d3 = event.getDigital(3);
+
+        trace0->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          trace0->SetAt(a0[i], static_cast<Int_t>(i));
         }
 
-        // Copy digital traces (only for ALL format)
-        dig0->Set(static_cast<Int_t>(event.dig0.size()));
-        for (Int_t i = 0; i < dig0->GetSize(); i++) {
-          dig0->SetAt(event.dig0[i], i);
+        trace1->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          trace1->SetAt(a1[i], static_cast<Int_t>(i));
         }
-        dig1->Set(static_cast<Int_t>(event.dig1.size()));
-        for (Int_t i = 0; i < dig1->GetSize(); i++) {
-          dig1->SetAt(event.dig1[i], i);
+
+        dig0->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          dig0->SetAt(static_cast<Short_t>(d0[i]), static_cast<Int_t>(i));
         }
-        dig2->Set(static_cast<Int_t>(event.dig2.size()));
-        for (Int_t i = 0; i < dig2->GetSize(); i++) {
-          dig2->SetAt(event.dig2[i], i);
+        dig1->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          dig1->SetAt(static_cast<Short_t>(d1[i]), static_cast<Int_t>(i));
         }
-        dig3->Set(static_cast<Int_t>(event.dig3.size()));
-        for (Int_t i = 0; i < dig3->GetSize(); i++) {
-          dig3->SetAt(event.dig3[i], i);
+        dig2->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          dig2->SetAt(static_cast<Short_t>(d2[i]), static_cast<Int_t>(i));
+        }
+        dig3->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          dig3->SetAt(static_cast<Short_t>(d3[i]), static_cast<Int_t>(i));
         }
       } else {
-        // OneTrace format: no trace1 or digital traces
+        // OneTrace format
+        UInt_t n_samples = event.getSamples();
+        const Int_t *ot = event.getOneTrace();
+        trace0->Set(static_cast<Int_t>(n_samples));
+        for (UInt_t i = 0; i < n_samples; i++) {
+          trace0->SetAt(ot[i], static_cast<Int_t>(i));
+        }
         trace1->Set(0);
         dig0->Set(0);
         dig1->Set(0);

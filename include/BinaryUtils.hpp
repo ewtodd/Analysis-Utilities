@@ -211,25 +211,25 @@ public:
 
 // Lightweight per-block hit struct for SOL format (no variable-length traces)
 struct SOLHit {
-  Short_t channel;
-  Short_t energy;
-  Short_t energy_short;
-  Long64_t timestamp;
-  Short_t fine_timestamp;
-  Short_t flags_high;
-  Short_t flags_low;
-  Short_t data_type;
-  Char_t is_psd;
-  Char_t down_sampling;
-  Char_t board_fail;
-  Char_t flush;
-  Short_t trigger_thr;
-  Long64_t event_size;
-  Int_t agg_counter;
-  Long64_t block_id;
-  Int_t trace_len;
-  Char_t ana_probe_type[2];
-  Char_t dig_probe_type[4];
+  UChar_t channel;
+  UShort_t energy;
+  UShort_t energy_short;
+  ULong64_t timestamp;
+  UShort_t fine_timestamp;
+  UShort_t flags_high;
+  UShort_t flags_low;
+  UChar_t data_type;
+  Bool_t is_psd;
+  UChar_t down_sampling;
+  UChar_t board_fail;
+  UChar_t flush;
+  UShort_t trigger_thr;
+  ULong64_t event_size;
+  UInt_t agg_counter;
+  ULong64_t block_id;
+  ULong64_t trace_len;
+  UChar_t ana_probe_type[2];
+  UChar_t dig_probe_type[4];
 };
 
 // Per-block data for SOL format with optional trace arrays
@@ -265,23 +265,57 @@ public:
   UChar_t ana_probe_type[2];
   UChar_t dig_probe_type[4];
 
-  // Trace data (only valid when data_type is ALL or OneTrace)
-  std::vector<Int_t> trace0;
-  std::vector<Int_t> trace1;
-  std::vector<Char_t> dig0;
-  std::vector<Char_t> dig1;
-  std::vector<Char_t> dig2;
-  std::vector<Char_t> dig3;
+  // Interleaved trace buffer: [trace0[0], trace1[0], dig0[0], dig1[0],
+  // dig2[0], dig3[0], trace0[1], ...] = 12 bytes per sample for ALL format.
+  // For OneTrace format: [trace0[0], trace0[1], ...] = 4 bytes per sample.
+  std::vector<Char_t> trace_data;
 
   Bool_t hasTraces() const {
     return (data_type == ALL || data_type == OneTrace) && trace_len > 0;
   }
 
+  UInt_t getSamples() const { return static_cast<UInt_t>(trace_len); }
+
+  const Int_t *getAnalog0() const {
+    if (data_type == ALL &&
+        trace_data.size() >= static_cast<std::size_t>(trace_len) * 12) {
+      return reinterpret_cast<const Int_t *>(trace_data.data());
+    }
+    return nullptr;
+  }
+
+  const Int_t *getAnalog1() const {
+    if (data_type == ALL &&
+        trace_data.size() >= static_cast<std::size_t>(trace_len) * 12) {
+      return reinterpret_cast<const Int_t *>(trace_data.data() + 4);
+    }
+    return nullptr;
+  }
+
+  const UChar_t *getDigital(UInt_t ch) const {
+    if (ch > 3 || data_type != ALL ||
+        trace_data.size() < static_cast<std::size_t>(trace_len) * 12) {
+      return nullptr;
+    }
+    return reinterpret_cast<const UChar_t *>(trace_data.data() + 8 + ch);
+  }
+
+  const Int_t *getOneTrace() const {
+    if (data_type == OneTrace &&
+        trace_data.size() >=
+            static_cast<std::size_t>(trace_len) * sizeof(Int_t)) {
+      return reinterpret_cast<const Int_t *>(trace_data.data());
+    }
+    return nullptr;
+  }
+
+  void clearTraces() { trace_data.clear(); }
+
   TString getDataTypeName() const;
   void Print() const;
 
   SOLData();
-  virtual ~SOLData() {}
+  ~SOLData() {}
 };
 
 class SOLReader : public BinaryReader {

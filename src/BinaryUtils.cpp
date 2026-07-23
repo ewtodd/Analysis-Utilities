@@ -433,15 +433,33 @@ void SOLData::Print() const {
   }
 
   if (hasTraces()) {
-    std::cout << "Trace0 samples: " << trace0.size() << std::endl;
-    std::cout << "Trace1 samples: " << trace1.size() << std::endl;
-    if (!trace0.empty()) {
+    const Int_t *a0 = getAnalog0();
+    const Int_t *a1 = getAnalog1();
+    if (data_type == ALL && a0) {
+      std::cout << "Trace0 samples: " << getSamples() << std::endl;
+      std::cout << "Trace1 samples: " << getSamples() << std::endl;
+      UInt_t n = TMath::Min(5, static_cast<Int_t>(getSamples()));
       std::cout << "Trace0 first 5: ";
-      Int_t n = TMath::Min(5, static_cast<Int_t>(trace0.size()));
-      for (Int_t i = 0; i < n; i++) {
-        std::cout << trace0[i] << " ";
+      for (UInt_t i = 0; i < n; i++) {
+        std::cout << a0[i] << " ";
       }
       std::cout << std::endl;
+      std::cout << "Trace1 first 5: ";
+      for (UInt_t i = 0; i < n; i++) {
+        std::cout << a1[i] << " ";
+      }
+      std::cout << std::endl;
+    } else if (data_type == OneTrace) {
+      const Int_t *ot = getOneTrace();
+      if (ot) {
+        std::cout << "Trace0 samples: " << getSamples() << std::endl;
+        UInt_t n = TMath::Min(5, static_cast<Int_t>(getSamples()));
+        std::cout << "Trace0 first 5: ";
+        for (UInt_t i = 0; i < n; i++) {
+          std::cout << ot[i] << " ";
+        }
+        std::cout << std::endl;
+      }
     }
   }
 }
@@ -457,10 +475,8 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
   totalBlocks = 0;
   totalChunks = 0;
 
-  // Create output directory if it doesn't exist
   gSystem->mkdir(outputDir, kTRUE);
 
-  // Derive base name from input file
   TString baseName = TString(inputFile);
   Int_t lastSlash = baseName.Last('/');
   if (lastSlash >= 0) {
@@ -471,14 +487,12 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
     baseName = baseName(0, dotPos - 3);
   }
 
-  // Open input file
   std::ifstream inFile(inputFile, std::ios::binary);
   if (!inFile.is_open()) {
     std::cerr << "ERROR: Cannot open input file " << inputFile << std::endl;
     return outputFiles;
   }
 
-  // Open first output file
   TString outPath = TString(outputDir) + "/" + baseName + "_chunk%03d.sol";
   TString currentOutPath = Form(outPath.Data(), 0);
   std::ofstream outFile(currentOutPath.Data(), std::ios::binary);
@@ -490,22 +504,20 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
     return outputFiles;
   }
 
-  // Read and split by time
-  Long64_t chunkEndTs = 0; // ns
+  Long64_t chunkEndTs = 0;
   Int_t chunkIndex = 0;
   Bool_t firstBlock = kTRUE;
 
-  // Buffer for reading fixed headers (max ~100 bytes)
+  // Reusable buffers -- allocated once, reused every iteration
   std::vector<char> headerBuf(256);
+  std::vector<char> dataBuf;
 
   while (!inFile.eof()) {
-    // Read 2-byte block header into buffer
     inFile.read(headerBuf.data(), 2);
     if (inFile.fail()) {
       break;
     }
 
-    // Verify block start identifier
     UShort_t blockHeader;
     std::memcpy(&blockHeader, headerBuf.data(), 2);
     if ((blockHeader & 0xAA00) != 0xAA00) {
@@ -514,100 +526,38 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       break;
     }
 
-    // Parse data type and PSD flag from header
     UChar_t dataType = blockHeader & 0xF;
     Bool_t isPsd = ((blockHeader >> 4) & 0xF) != 0;
 
+    Long64_t headerSize = 0;
     Long64_t timestamp = 0;
-    ULong64_t traceLen = 0;
-    Long64_t headerSize = 0; // size of fixed portion after the 2-byte header
+    Bool_t hasTimestamp = kTRUE;
+    Long64_t dataBytes = 0;
 
     if (dataType == SOLData::ALL) {
       headerSize = 1 + 2 + (isPsd ? 2 : 0) + 6 + 2 + 1 + 2 + 1 + 1 + 1 + 2 + 8 +
                    4 + 8 + 2 + 4;
-      // Read remaining fixed header into buffer
       inFile.read(headerBuf.data() + 2, headerSize);
       if (inFile.fail()) {
         break;
       }
 
-      // Extract timestamp from buffer (offset from start of header)
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      timestamp = 0;
       for (Int_t i = 0; i < 6; i++) {
         timestamp |= static_cast<Long64_t>(
                          static_cast<unsigned char>(headerBuf[tsOffset + i]))
                      << (static_cast<Long64_t>(i) * 8);
       }
 
-      // Extract traceLen from buffer
       Int_t tlOffset = tsOffset + 6 + 2 + 1 + 2 + 1 + 1 + 1 + 2 + 8 + 4;
-      traceLen = 0;
+      ULong64_t traceLen = 0;
       for (Int_t i = 0; i < 8; i++) {
         traceLen |= static_cast<ULong64_t>(
                         static_cast<unsigned char>(headerBuf[tlOffset + i]))
                     << (static_cast<ULong64_t>(i) * 8);
       }
-
-      // Read and write trace data if present
       if (traceLen > 0) {
-        Long64_t traceBytes = traceLen * 12;
-        std::vector<char> traceBuf(traceBytes);
-        inFile.read(traceBuf.data(), traceBytes);
-        if (inFile.fail()) {
-          break;
-        }
-
-        // Write header + trace to current output
-        outFile.write(headerBuf.data(), 2 + headerSize);
-        outFile.write(traceBuf.data(), traceBytes);
-
-        // Check if we need to start a new chunk
-        if (firstBlock) {
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          firstBlock = kFALSE;
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        } else if (timestamp >= chunkEndTs) {
-          outFile.close();
-          chunkIndex++;
-          currentOutPath = Form(outPath.Data(), chunkIndex);
-          outFile.open(currentOutPath.Data(), std::ios::binary);
-          if (!outFile.is_open()) {
-            std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                      << std::endl;
-            break;
-          }
-          outFile.write(headerBuf.data(), 2 + headerSize);
-          outFile.write(traceBuf.data(), traceBytes);
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        }
-      } else {
-        // No trace data, just write header
-        outFile.write(headerBuf.data(), 2 + headerSize);
-
-        if (firstBlock) {
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          firstBlock = kFALSE;
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        } else if (timestamp >= chunkEndTs) {
-          outFile.close();
-          chunkIndex++;
-          currentOutPath = Form(outPath.Data(), chunkIndex);
-          outFile.open(currentOutPath.Data(), std::ios::binary);
-          if (!outFile.is_open()) {
-            std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                      << std::endl;
-            break;
-          }
-          outFile.write(headerBuf.data(), 2 + headerSize);
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        }
+        dataBytes = traceLen * 12;
       }
 
     } else if (dataType == SOLData::OneTrace) {
@@ -618,7 +568,6 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      timestamp = 0;
       for (Int_t i = 0; i < 6; i++) {
         timestamp |= static_cast<Long64_t>(
                          static_cast<unsigned char>(headerBuf[tsOffset + i]))
@@ -626,68 +575,14 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       }
 
       Int_t tlOffset = tsOffset + 6 + 2 + 1 + 2;
-      traceLen = 0;
+      ULong64_t traceLen = 0;
       for (Int_t i = 0; i < 8; i++) {
         traceLen |= static_cast<ULong64_t>(
                         static_cast<unsigned char>(headerBuf[tlOffset + i]))
                     << (static_cast<ULong64_t>(i) * 8);
       }
-
       if (traceLen > 0) {
-        Long64_t traceBytes = traceLen * sizeof(Int_t);
-        std::vector<char> traceBuf(traceBytes);
-        inFile.read(traceBuf.data(), traceBytes);
-        if (inFile.fail()) {
-          break;
-        }
-
-        outFile.write(headerBuf.data(), 2 + headerSize);
-        outFile.write(traceBuf.data(), traceBytes);
-
-        if (firstBlock) {
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          firstBlock = kFALSE;
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        } else if (timestamp >= chunkEndTs) {
-          outFile.close();
-          chunkIndex++;
-          currentOutPath = Form(outPath.Data(), chunkIndex);
-          outFile.open(currentOutPath.Data(), std::ios::binary);
-          if (!outFile.is_open()) {
-            std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                      << std::endl;
-            break;
-          }
-          outFile.write(headerBuf.data(), 2 + headerSize);
-          outFile.write(traceBuf.data(), traceBytes);
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        }
-      } else {
-        outFile.write(headerBuf.data(), 2 + headerSize);
-
-        if (firstBlock) {
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          firstBlock = kFALSE;
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        } else if (timestamp >= chunkEndTs) {
-          outFile.close();
-          chunkIndex++;
-          currentOutPath = Form(outPath.Data(), chunkIndex);
-          outFile.open(currentOutPath.Data(), std::ios::binary);
-          if (!outFile.is_open()) {
-            std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                      << std::endl;
-            break;
-          }
-          outFile.write(headerBuf.data(), 2 + headerSize);
-          chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-          outputFiles.push_back(currentOutPath);
-          totalChunks++;
-        }
+        dataBytes = traceLen * sizeof(Int_t);
       }
 
     } else if (dataType == SOLData::NoTrace) {
@@ -698,34 +593,10 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      timestamp = 0;
       for (Int_t i = 0; i < 6; i++) {
         timestamp |= static_cast<Long64_t>(
                          static_cast<unsigned char>(headerBuf[tsOffset + i]))
                      << (static_cast<Long64_t>(i) * 8);
-      }
-
-      outFile.write(headerBuf.data(), 2 + headerSize);
-
-      if (firstBlock) {
-        chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-        firstBlock = kFALSE;
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
-      } else if (timestamp >= chunkEndTs) {
-        outFile.close();
-        chunkIndex++;
-        currentOutPath = Form(outPath.Data(), chunkIndex);
-        outFile.open(currentOutPath.Data(), std::ios::binary);
-        if (!outFile.is_open()) {
-          std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                    << std::endl;
-          break;
-        }
-        outFile.write(headerBuf.data(), 2 + headerSize);
-        chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
       }
 
     } else if (dataType == SOLData::Minimum) {
@@ -736,34 +607,10 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      timestamp = 0;
       for (Int_t i = 0; i < 6; i++) {
         timestamp |= static_cast<Long64_t>(
                          static_cast<unsigned char>(headerBuf[tsOffset + i]))
                      << (static_cast<Long64_t>(i) * 8);
-      }
-
-      outFile.write(headerBuf.data(), 2 + headerSize);
-
-      if (firstBlock) {
-        chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-        firstBlock = kFALSE;
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
-      } else if (timestamp >= chunkEndTs) {
-        outFile.close();
-        chunkIndex++;
-        currentOutPath = Form(outPath.Data(), chunkIndex);
-        outFile.open(currentOutPath.Data(), std::ios::binary);
-        if (!outFile.is_open()) {
-          std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                    << std::endl;
-          break;
-        }
-        outFile.write(headerBuf.data(), 2 + headerSize);
-        chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
       }
 
     } else if (dataType == SOLData::MiniWithFineTime) {
@@ -774,34 +621,10 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      timestamp = 0;
       for (Int_t i = 0; i < 6; i++) {
         timestamp |= static_cast<Long64_t>(
                          static_cast<unsigned char>(headerBuf[tsOffset + i]))
                      << (static_cast<Long64_t>(i) * 8);
-      }
-
-      outFile.write(headerBuf.data(), 2 + headerSize);
-
-      if (firstBlock) {
-        chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-        firstBlock = kFALSE;
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
-      } else if (timestamp >= chunkEndTs) {
-        outFile.close();
-        chunkIndex++;
-        currentOutPath = Form(outPath.Data(), chunkIndex);
-        outFile.open(currentOutPath.Data(), std::ios::binary);
-        if (!outFile.is_open()) {
-          std::cerr << "ERROR: Cannot open output file " << currentOutPath
-                    << std::endl;
-          break;
-        }
-        outFile.write(headerBuf.data(), 2 + headerSize);
-        chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
       }
 
     } else if (dataType == SOLData::Raw) {
@@ -811,28 +634,11 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
         break;
       }
 
-      ULong64_t rawDataSize = 0;
+      hasTimestamp = kFALSE;
       for (Int_t i = 0; i < 8; i++) {
-        rawDataSize |=
+        dataBytes |=
             static_cast<ULong64_t>(static_cast<unsigned char>(headerBuf[2 + i]))
             << (static_cast<ULong64_t>(i) * 8);
-      }
-      outFile.write(headerBuf.data(), 2 + headerSize);
-
-      if (rawDataSize > 0) {
-        std::vector<char> rawBuf(rawDataSize);
-        inFile.read(rawBuf.data(), rawDataSize);
-        if (inFile.fail()) {
-          break;
-        }
-        outFile.write(rawBuf.data(), rawDataSize);
-      }
-
-      if (firstBlock) {
-        chunkEndTs = static_cast<Long64_t>(chunkSeconds * 1e9);
-        firstBlock = kFALSE;
-        outputFiles.push_back(currentOutPath);
-        totalChunks++;
       }
 
     } else {
@@ -842,10 +648,51 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       break;
     }
 
+    // Read trace/raw data into reusable buffer
+    if (dataBytes > 0) {
+      if (static_cast<ULong64_t>(dataBuf.size()) <
+          static_cast<ULong64_t>(dataBytes)) {
+        dataBuf.resize(dataBytes);
+      }
+      inFile.read(dataBuf.data(), dataBytes);
+      if (inFile.fail()) {
+        break;
+      }
+    }
+
+    // Rotate to new chunk if timestamp crosses boundary.
+    // Block that crosses boundary goes into the NEW chunk only.
+    if (hasTimestamp && (firstBlock || timestamp >= chunkEndTs)) {
+      if (!firstBlock) {
+        outFile.close();
+        chunkIndex++;
+        currentOutPath = Form(outPath.Data(), chunkIndex);
+        outFile.open(currentOutPath.Data(), std::ios::binary);
+        if (!outFile.is_open()) {
+          std::cerr << "ERROR: Cannot open output file " << currentOutPath
+                    << std::endl;
+          break;
+        }
+      }
+      chunkEndTs = timestamp + static_cast<Long64_t>(chunkSeconds * 1e9);
+      firstBlock = kFALSE;
+      outputFiles.push_back(currentOutPath);
+      totalChunks++;
+    } else if (!hasTimestamp && firstBlock) {
+      firstBlock = kFALSE;
+      outputFiles.push_back(currentOutPath);
+      totalChunks++;
+    }
+
+    // Write block exactly once to the correct output
+    outFile.write(headerBuf.data(), 2 + headerSize);
+    if (dataBytes > 0) {
+      outFile.write(dataBuf.data(), dataBytes);
+    }
+
     totalBlocks++;
   }
 
-  // Clean up
   outFile.close();
   inFile.close();
 
@@ -860,10 +707,8 @@ Bool_t SOLReader::ReadEvent() {
     return kFALSE;
   }
 
-  // Reset current event
   current_event = SOLData();
 
-  // Read 2-byte block header
   UShort_t block_header;
   file.read(reinterpret_cast<char *>(&block_header), sizeof(UShort_t));
   if (file.fail()) {
@@ -871,7 +716,6 @@ Bool_t SOLReader::ReadEvent() {
   }
   bytes_read += sizeof(UShort_t);
 
-  // Verify block start identifier
   if ((block_header & 0xAA00) != 0xAA00) {
     std::cerr << "WARNING: SOL block header mismatch at block " << block_id
               << " (got 0x" << std::hex << block_header << std::dec
@@ -883,218 +727,215 @@ Bool_t SOLReader::ReadEvent() {
   current_event.data_type = block_header & 0xF;
   current_event.is_psd = ((block_header >> 4) & 0xF) != 0;
 
-  // Parse fields based on data type
   if (current_event.data_type == SOLData::ALL) {
-    file.read(reinterpret_cast<char *>(&current_event.channel), 1);
-    file.read(reinterpret_cast<char *>(&current_event.energy), 2);
-    if (current_event.is_psd) {
-      file.read(reinterpret_cast<char *>(&current_event.energy_short), 2);
-    }
-    file.read(reinterpret_cast<char *>(&current_event.timestamp), 6);
-    file.read(reinterpret_cast<char *>(&current_event.fine_timestamp), 2);
-    file.read(reinterpret_cast<char *>(&current_event.flags_high), 1);
-    file.read(reinterpret_cast<char *>(&current_event.flags_low), 2);
-    file.read(reinterpret_cast<char *>(&current_event.down_sampling), 1);
-    file.read(reinterpret_cast<char *>(&current_event.board_fail), 1);
-    file.read(reinterpret_cast<char *>(&current_event.flush), 1);
-    file.read(reinterpret_cast<char *>(&current_event.trigger_thr), 2);
-    file.read(reinterpret_cast<char *>(&current_event.event_size), 8);
-    file.read(reinterpret_cast<char *>(&current_event.agg_counter), 4);
-    file.read(reinterpret_cast<char *>(&current_event.trace_len), 8);
-    file.read(reinterpret_cast<char *>(current_event.ana_probe_type), 2);
-    file.read(reinterpret_cast<char *>(current_event.dig_probe_type), 4);
-
+    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 +
+                         2 + 1 + 1 + 1 + 2 + 8 + 4 + 8 + 2 + 4;
+    std::vector<char> hdr(header_bytes);
+    file.read(hdr.data(), header_bytes);
     if (file.fail()) {
       std::cerr << "WARNING: Incomplete ALL-format block at byte " << bytes_read
                 << " (truncated file)" << std::endl;
       return kFALSE;
     }
-
-    // Advance bytes_read for the fixed header portion
-    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 +
-                         2 + 1 + 1 + 1 + 2 + 8 + 4 + 8 + 2 + 4;
     bytes_read += header_bytes;
 
-    // Read or skip trace data
+    Int_t off = 0;
+    current_event.channel = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.energy, hdr.data() + off, 2);
+    off += 2;
+    if (current_event.is_psd) {
+      std::memcpy(&current_event.energy_short, hdr.data() + off, 2);
+      off += 2;
+    }
+    std::memcpy(&current_event.timestamp, hdr.data() + off, 6);
+    off += 6;
+    std::memcpy(&current_event.fine_timestamp, hdr.data() + off, 2);
+    off += 2;
+    current_event.flags_high = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.flags_low, hdr.data() + off, 2);
+    off += 2;
+    current_event.down_sampling = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    current_event.board_fail = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    current_event.flush = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.trigger_thr, hdr.data() + off, 2);
+    off += 2;
+    std::memcpy(&current_event.event_size, hdr.data() + off, 8);
+    off += 8;
+    std::memcpy(&current_event.agg_counter, hdr.data() + off, 4);
+    off += 4;
+    std::memcpy(&current_event.trace_len, hdr.data() + off, 8);
+    off += 8;
+    std::memcpy(current_event.ana_probe_type, hdr.data() + off, 2);
+    off += 2;
+    std::memcpy(current_event.dig_probe_type, hdr.data() + off, 4);
+
     if (current_event.trace_len > 0) {
       ULong64_t n_samples = current_event.trace_len;
-
-      // Cap to reasonable limit to avoid OOM on corrupt data
       const ULong64_t kMaxTraceLen = 100000;
+      Long64_t trace_bytes = n_samples * 12;
+
       if (n_samples > kMaxTraceLen) {
         std::cerr << "WARNING: Implausible trace length " << n_samples
                   << " at block " << block_id << " (skipping trace data)"
                   << std::endl;
-        // Skip the trace data (2 analog traces * 4 bytes + 4 digital * 1 byte =
-        // 12 bytes/sample)
-        Long64_t skip_bytes = n_samples * 12;
-        file.seekg(skip_bytes, std::ios::cur);
-        bytes_read += skip_bytes;
+        file.seekg(trace_bytes, std::ios::cur);
+        bytes_read += trace_bytes;
       } else if (skip_traces) {
-        // Skip trace data without allocating (2 analog * 4B + 4 digital * 1B =
-        // 12B/sample)
-        Long64_t skip_bytes = n_samples * 12;
-        file.seekg(skip_bytes, std::ios::cur);
-        bytes_read += skip_bytes;
+        file.seekg(trace_bytes, std::ios::cur);
+        bytes_read += trace_bytes;
       } else {
-        current_event.trace0.resize(n_samples);
-        current_event.trace1.resize(n_samples);
-        current_event.dig0.resize(n_samples);
-        current_event.dig1.resize(n_samples);
-        current_event.dig2.resize(n_samples);
-        current_event.dig3.resize(n_samples);
-
-        // Read analog traces (4 bytes per sample)
-        file.read(reinterpret_cast<char *>(current_event.trace0.data()),
-                  n_samples * sizeof(Int_t));
-        if (file.fail() || file.gcount() != static_cast<std::streamsize>(
-                                                n_samples * sizeof(Int_t))) {
-          std::cerr << "WARNING: Incomplete trace0 at block " << block_id
+        current_event.trace_data.resize(trace_bytes);
+        file.read(current_event.trace_data.data(), trace_bytes);
+        if (file.fail() ||
+            file.gcount() != static_cast<std::streamsize>(trace_bytes)) {
+          std::cerr << "WARNING: Incomplete traces at block " << block_id
                     << " (truncated file)" << std::endl;
           return kFALSE;
         }
-        file.read(reinterpret_cast<char *>(current_event.trace1.data()),
-                  n_samples * sizeof(Int_t));
-        if (file.fail() || file.gcount() != static_cast<std::streamsize>(
-                                                n_samples * sizeof(Int_t))) {
-          std::cerr << "WARNING: Incomplete trace1 at block " << block_id
-                    << " (truncated file)" << std::endl;
-          return kFALSE;
-        }
-
-        // Read digital traces (1 byte per sample)
-        file.read(reinterpret_cast<char *>(current_event.dig0.data()),
-                  n_samples);
-        file.read(reinterpret_cast<char *>(current_event.dig1.data()),
-                  n_samples);
-        file.read(reinterpret_cast<char *>(current_event.dig2.data()),
-                  n_samples);
-        file.read(reinterpret_cast<char *>(current_event.dig3.data()),
-                  n_samples);
-        if (file.fail()) {
-          std::cerr << "WARNING: Incomplete digital traces at block "
-                    << block_id << " (truncated file)" << std::endl;
-          return kFALSE;
-        }
-
-        bytes_read += n_samples * (2 * sizeof(Int_t) + 4);
+        bytes_read += trace_bytes;
       }
     }
 
   } else if (current_event.data_type == SOLData::OneTrace) {
-    file.read(reinterpret_cast<char *>(&current_event.channel), 1);
-    file.read(reinterpret_cast<char *>(&current_event.energy), 2);
-    if (current_event.is_psd) {
-      file.read(reinterpret_cast<char *>(&current_event.energy_short), 2);
-    }
-    file.read(reinterpret_cast<char *>(&current_event.timestamp), 6);
-    file.read(reinterpret_cast<char *>(&current_event.fine_timestamp), 2);
-    file.read(reinterpret_cast<char *>(&current_event.flags_high), 1);
-    file.read(reinterpret_cast<char *>(&current_event.flags_low), 2);
-    file.read(reinterpret_cast<char *>(&current_event.trace_len), 8);
-    file.read(reinterpret_cast<char *>(&current_event.ana_probe_type[0]), 1);
-
+    Int_t header_bytes =
+        1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 + 2 + 8 + 1;
+    std::vector<char> hdr(header_bytes);
+    file.read(hdr.data(), header_bytes);
     if (file.fail()) {
       std::cerr << "WARNING: Incomplete OneTrace-format block at byte "
                 << bytes_read << " (truncated file)" << std::endl;
       return kFALSE;
     }
-
-    Int_t header_bytes =
-        1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 + 2 + 8 + 1;
     bytes_read += header_bytes;
 
-    // Read or skip single analog trace
+    Int_t off = 0;
+    current_event.channel = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.energy, hdr.data() + off, 2);
+    off += 2;
+    if (current_event.is_psd) {
+      std::memcpy(&current_event.energy_short, hdr.data() + off, 2);
+      off += 2;
+    }
+    std::memcpy(&current_event.timestamp, hdr.data() + off, 6);
+    off += 6;
+    std::memcpy(&current_event.fine_timestamp, hdr.data() + off, 2);
+    off += 2;
+    current_event.flags_high = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.flags_low, hdr.data() + off, 2);
+    off += 2;
+    std::memcpy(&current_event.trace_len, hdr.data() + off, 8);
+    off += 8;
+    current_event.ana_probe_type[0] = static_cast<UChar_t>(hdr[off]);
+
     if (current_event.trace_len > 0) {
       ULong64_t n_samples = current_event.trace_len;
       const ULong64_t kMaxTraceLen = 100000;
+      Long64_t trace_bytes = n_samples * sizeof(Int_t);
 
       if (n_samples > kMaxTraceLen) {
         std::cerr << "WARNING: Implausible trace length " << n_samples
                   << " at block " << block_id << " (skipping trace data)"
                   << std::endl;
-        file.seekg(n_samples * sizeof(Int_t), std::ios::cur);
-        bytes_read += n_samples * sizeof(Int_t);
+        file.seekg(trace_bytes, std::ios::cur);
+        bytes_read += trace_bytes;
       } else if (skip_traces) {
-        file.seekg(n_samples * sizeof(Int_t), std::ios::cur);
-        bytes_read += n_samples * sizeof(Int_t);
+        file.seekg(trace_bytes, std::ios::cur);
+        bytes_read += trace_bytes;
       } else {
-        current_event.trace0.resize(n_samples);
-        file.read(reinterpret_cast<char *>(current_event.trace0.data()),
-                  n_samples * sizeof(Int_t));
+        current_event.trace_data.resize(trace_bytes);
+        file.read(current_event.trace_data.data(), trace_bytes);
         if (file.fail()) {
           std::cerr << "WARNING: Incomplete trace at block " << block_id
                     << " (truncated file)" << std::endl;
           return kFALSE;
         }
-        bytes_read += n_samples * sizeof(Int_t);
+        bytes_read += trace_bytes;
       }
     }
 
   } else if (current_event.data_type == SOLData::NoTrace) {
-    file.read(reinterpret_cast<char *>(&current_event.channel), 1);
-    file.read(reinterpret_cast<char *>(&current_event.energy), 2);
-    if (current_event.is_psd) {
-      file.read(reinterpret_cast<char *>(&current_event.energy_short), 2);
-    }
-    file.read(reinterpret_cast<char *>(&current_event.timestamp), 6);
-    file.read(reinterpret_cast<char *>(&current_event.fine_timestamp), 2);
-    file.read(reinterpret_cast<char *>(&current_event.flags_high), 1);
-    file.read(reinterpret_cast<char *>(&current_event.flags_low), 2);
-
+    Int_t header_bytes =
+        1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 + 2 +
+        (current_event.is_psd ? 20 : 18) -
+        (1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 + 2);
+    std::vector<char> hdr(header_bytes);
+    file.read(hdr.data(), header_bytes);
     if (file.fail()) {
       std::cerr << "WARNING: Incomplete NoTrace-format block at byte "
                 << bytes_read << " (truncated file)" << std::endl;
       return kFALSE;
     }
-
-    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 + 2;
     bytes_read += header_bytes;
 
-    // Skip remaining bytes (down_sampling, board_fail, flush, trigger_thr,
-    // event_size, agg_counter, etc.)
-    Long64_t remaining =
-        (current_event.is_psd ? 20 : 18) -
-        (1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2 + 1 + 2);
-    if (remaining > 0) {
-      file.seekg(remaining, std::ios::cur);
-      bytes_read += remaining;
+    Int_t off = 0;
+    current_event.channel = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.energy, hdr.data() + off, 2);
+    off += 2;
+    if (current_event.is_psd) {
+      std::memcpy(&current_event.energy_short, hdr.data() + off, 2);
+      off += 2;
     }
+    std::memcpy(&current_event.timestamp, hdr.data() + off, 6);
+    off += 6;
+    std::memcpy(&current_event.fine_timestamp, hdr.data() + off, 2);
+    off += 2;
+    current_event.flags_high = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.flags_low, hdr.data() + off, 2);
 
   } else if (current_event.data_type == SOLData::MiniWithFineTime) {
-    file.read(reinterpret_cast<char *>(&current_event.channel), 1);
-    file.read(reinterpret_cast<char *>(&current_event.energy), 2);
-    if (current_event.is_psd) {
-      file.read(reinterpret_cast<char *>(&current_event.energy_short), 2);
-    }
-    file.read(reinterpret_cast<char *>(&current_event.timestamp), 6);
-    file.read(reinterpret_cast<char *>(&current_event.fine_timestamp), 2);
-
+    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2;
+    std::vector<char> hdr(header_bytes);
+    file.read(hdr.data(), header_bytes);
     if (file.fail()) {
       std::cerr << "WARNING: Incomplete MiniWithFineTime block at byte "
                 << bytes_read << " (truncated file)" << std::endl;
       return kFALSE;
     }
-
-    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6 + 2;
     bytes_read += header_bytes;
 
-  } else if (current_event.data_type == SOLData::Minimum) {
-    file.read(reinterpret_cast<char *>(&current_event.channel), 1);
-    file.read(reinterpret_cast<char *>(&current_event.energy), 2);
+    Int_t off = 0;
+    current_event.channel = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.energy, hdr.data() + off, 2);
+    off += 2;
     if (current_event.is_psd) {
-      file.read(reinterpret_cast<char *>(&current_event.energy_short), 2);
+      std::memcpy(&current_event.energy_short, hdr.data() + off, 2);
+      off += 2;
     }
-    file.read(reinterpret_cast<char *>(&current_event.timestamp), 6);
+    std::memcpy(&current_event.timestamp, hdr.data() + off, 6);
+    off += 6;
+    std::memcpy(&current_event.fine_timestamp, hdr.data() + off, 2);
 
+  } else if (current_event.data_type == SOLData::Minimum) {
+    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6;
+    std::vector<char> hdr(header_bytes);
+    file.read(hdr.data(), header_bytes);
     if (file.fail()) {
       std::cerr << "WARNING: Incomplete Minimum-format block at byte "
                 << bytes_read << " (truncated file)" << std::endl;
       return kFALSE;
     }
-
-    Int_t header_bytes = 1 + 2 + (current_event.is_psd ? 2 : 0) + 6;
     bytes_read += header_bytes;
+
+    Int_t off = 0;
+    current_event.channel = static_cast<UChar_t>(hdr[off]);
+    off += 1;
+    std::memcpy(&current_event.energy, hdr.data() + off, 2);
+    off += 2;
+    if (current_event.is_psd) {
+      std::memcpy(&current_event.energy_short, hdr.data() + off, 2);
+      off += 2;
+    }
+    std::memcpy(&current_event.timestamp, hdr.data() + off, 6);
 
   } else if (current_event.data_type == SOLData::Raw) {
     ULong64_t data_size;
@@ -1106,7 +947,6 @@ Bool_t SOLReader::ReadEvent() {
     }
     bytes_read += 8;
 
-    // Skip raw FPGA data
     if (data_size > 0) {
       file.seekg(data_size, std::ios::cur);
       bytes_read += data_size;
@@ -1127,28 +967,28 @@ Bool_t SOLReader::ReadEvent() {
 
 SOLHit SOLReader::ToHit() const {
   SOLHit hit;
-  hit.channel = static_cast<Short_t>(current_event.channel);
-  hit.energy = static_cast<Short_t>(current_event.energy);
-  hit.energy_short = static_cast<Short_t>(current_event.energy_short);
+  hit.channel = current_event.channel;
+  hit.energy = current_event.energy;
+  hit.energy_short = current_event.energy_short;
   hit.timestamp = current_event.timestamp;
-  hit.fine_timestamp = static_cast<Short_t>(current_event.fine_timestamp);
-  hit.flags_high = static_cast<Short_t>(current_event.flags_high);
-  hit.flags_low = static_cast<Short_t>(current_event.flags_low);
-  hit.data_type = static_cast<Short_t>(current_event.data_type);
-  hit.is_psd = static_cast<Char_t>(current_event.is_psd);
-  hit.down_sampling = static_cast<Char_t>(current_event.down_sampling);
-  hit.board_fail = static_cast<Char_t>(current_event.board_fail);
-  hit.flush = static_cast<Char_t>(current_event.flush);
-  hit.trigger_thr = static_cast<Short_t>(current_event.trigger_thr);
+  hit.fine_timestamp = current_event.fine_timestamp;
+  hit.flags_high = current_event.flags_high;
+  hit.flags_low = current_event.flags_low;
+  hit.data_type = current_event.data_type;
+  hit.is_psd = current_event.is_psd;
+  hit.down_sampling = current_event.down_sampling;
+  hit.board_fail = current_event.board_fail;
+  hit.flush = current_event.flush;
+  hit.trigger_thr = current_event.trigger_thr;
   hit.event_size = current_event.event_size;
-  hit.agg_counter = static_cast<Int_t>(current_event.agg_counter);
+  hit.agg_counter = current_event.agg_counter;
   hit.block_id = current_event.block_id;
-  hit.trace_len = static_cast<Int_t>(current_event.trace_len);
-  hit.ana_probe_type[0] = static_cast<Char_t>(current_event.ana_probe_type[0]);
-  hit.ana_probe_type[1] = static_cast<Char_t>(current_event.ana_probe_type[1]);
-  hit.dig_probe_type[0] = static_cast<Char_t>(current_event.dig_probe_type[0]);
-  hit.dig_probe_type[1] = static_cast<Char_t>(current_event.dig_probe_type[1]);
-  hit.dig_probe_type[2] = static_cast<Char_t>(current_event.dig_probe_type[2]);
-  hit.dig_probe_type[3] = static_cast<Char_t>(current_event.dig_probe_type[3]);
+  hit.trace_len = current_event.trace_len;
+  hit.ana_probe_type[0] = current_event.ana_probe_type[0];
+  hit.ana_probe_type[1] = current_event.ana_probe_type[1];
+  hit.dig_probe_type[0] = current_event.dig_probe_type[0];
+  hit.dig_probe_type[1] = current_event.dig_probe_type[1];
+  hit.dig_probe_type[2] = current_event.dig_probe_type[2];
+  hit.dig_probe_type[3] = current_event.dig_probe_type[3];
   return hit;
 }
