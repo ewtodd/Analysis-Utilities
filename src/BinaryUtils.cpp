@@ -1,4 +1,5 @@
 #include "BinaryUtils.hpp"
+#include <cstring>
 
 CoMPASSData::CoMPASSData()
     : header(0), board(0), channel(0), timestamp(0), energy_ch(0),
@@ -466,6 +467,48 @@ void SOLData::Print() const {
 
 // --- SOLReader ---
 
+// Little-endian reads from a block buffer, mirroring the memcpy+shift
+// pattern used elsewhere in this file.
+static Long64_t ReadLe6(const char *p) {
+  Long64_t v = 0;
+  for (Int_t i = 0; i < 6; i++)
+    v |= static_cast<Long64_t>(static_cast<unsigned char>(p[i]))
+         << (static_cast<Long64_t>(i) * 8);
+  return v;
+}
+
+static ULong64_t ReadLe8(const char *p) {
+  ULong64_t v = 0;
+  for (Int_t i = 0; i < 8; i++)
+    v |= static_cast<ULong64_t>(static_cast<unsigned char>(p[i]))
+         << (static_cast<ULong64_t>(i) * 8);
+  return v;
+}
+
+// Keep at least needBytes valid bytes at the front of buf, compacting the
+// unconsumed tail and reading from inFile as required. Returns kFALSE when
+// the file is exhausted before the request can be satisfied.
+static Bool_t RefillInput(std::ifstream &inFile, std::vector<char> &buf,
+                          Int_t &pos, Int_t &len, Long64_t needBytes) {
+  if (Long64_t(len - pos) >= needBytes)
+    return kTRUE;
+  if (pos > 0) {
+    std::memmove(buf.data(), buf.data() + pos, size_t(len - pos));
+    len -= pos;
+    pos = 0;
+  }
+  if (Long64_t(buf.size()) < needBytes)
+    buf.resize(size_t(needBytes));
+  while (Long64_t(len) < needBytes) {
+    inFile.read(buf.data() + len, Long64_t(buf.size()) - len);
+    Long64_t got = inFile.gcount();
+    len += Int_t(got);
+    if (got <= 0)
+      return kFALSE;
+  }
+  return kTRUE;
+}
+
 std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
                                                    const char *outputDir,
                                                    Double_t chunkSeconds,
@@ -508,21 +551,26 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
   Int_t chunkIndex = 0;
   Bool_t firstBlock = kTRUE;
 
-  // Reusable buffers -- allocated once, reused every iteration
-  std::vector<char> headerBuf(256);
-  std::vector<char> dataBuf;
+  // Application-level I/O batching: blocks are parsed straight out of a
+  // large input buffer and staged in a large output buffer, so per-block
+  // parsing never costs individual stream calls. Minimum-format files are
+  // ~11 bytes per block; without batching the per-block stream overhead
+  // caps throughput around 15 MB/s instead of the disk's ~2 GB/s.
+  const Int_t kBulkRead = 4 * 1024 * 1024;
+  const Int_t kBulkWrite = 4 * 1024 * 1024;
+  std::vector<char> ibuf(kBulkRead);
+  std::vector<char> obuf;
+  obuf.reserve(kBulkWrite);
+  Int_t iPos = 0;       // next unconsumed byte in ibuf
+  Int_t iLen = 0;       // valid bytes in ibuf
+  Long64_t filePos = 0; // absolute file offset of ibuf[iPos]
 
-  while (!inFile.eof()) {
-    inFile.read(headerBuf.data(), 2);
-    if (inFile.fail()) {
-      break;
-    }
-
+  while (RefillInput(inFile, ibuf, iPos, iLen, 2)) {
     UShort_t blockHeader;
-    std::memcpy(&blockHeader, headerBuf.data(), 2);
+    std::memcpy(&blockHeader, ibuf.data() + iPos, 2);
     if ((blockHeader & 0xAA00) != 0xAA00) {
       std::cerr << "WARNING: Invalid block header 0x" << std::hex << blockHeader
-                << std::dec << " at position " << inFile.tellg() << std::endl;
+                << std::dec << " at position " << filePos + 2 << std::endl;
       break;
     }
 
@@ -537,133 +585,82 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
     if (dataType == SOLData::ALL) {
       headerSize = 1 + 2 + (isPsd ? 2 : 0) + 6 + 2 + 1 + 2 + 1 + 1 + 1 + 2 + 8 +
                    4 + 8 + 2 + 4;
-      inFile.read(headerBuf.data() + 2, headerSize);
-      if (inFile.fail()) {
+      if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize))
         break;
-      }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      for (Int_t i = 0; i < 6; i++) {
-        timestamp |= static_cast<Long64_t>(
-                         static_cast<unsigned char>(headerBuf[tsOffset + i]))
-                     << (static_cast<Long64_t>(i) * 8);
-      }
+      timestamp = ReadLe6(ibuf.data() + iPos + tsOffset);
 
       Int_t tlOffset = tsOffset + 6 + 2 + 1 + 2 + 1 + 1 + 1 + 2 + 8 + 4;
-      ULong64_t traceLen = 0;
-      for (Int_t i = 0; i < 8; i++) {
-        traceLen |= static_cast<ULong64_t>(
-                        static_cast<unsigned char>(headerBuf[tlOffset + i]))
-                    << (static_cast<ULong64_t>(i) * 8);
-      }
+      ULong64_t traceLen = ReadLe8(ibuf.data() + iPos + tlOffset);
       if (traceLen > 0) {
         dataBytes = traceLen * 12;
       }
 
     } else if (dataType == SOLData::OneTrace) {
       headerSize = 1 + 2 + (isPsd ? 2 : 0) + 6 + 2 + 1 + 2 + 8 + 1;
-      inFile.read(headerBuf.data() + 2, headerSize);
-      if (inFile.fail()) {
+      if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize))
         break;
-      }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      for (Int_t i = 0; i < 6; i++) {
-        timestamp |= static_cast<Long64_t>(
-                         static_cast<unsigned char>(headerBuf[tsOffset + i]))
-                     << (static_cast<Long64_t>(i) * 8);
-      }
+      timestamp = ReadLe6(ibuf.data() + iPos + tsOffset);
 
       Int_t tlOffset = tsOffset + 6 + 2 + 1 + 2;
-      ULong64_t traceLen = 0;
-      for (Int_t i = 0; i < 8; i++) {
-        traceLen |= static_cast<ULong64_t>(
-                        static_cast<unsigned char>(headerBuf[tlOffset + i]))
-                    << (static_cast<ULong64_t>(i) * 8);
-      }
+      ULong64_t traceLen = ReadLe8(ibuf.data() + iPos + tlOffset);
       if (traceLen > 0) {
         dataBytes = traceLen * sizeof(Int_t);
       }
 
     } else if (dataType == SOLData::NoTrace) {
       headerSize = 1 + 2 + (isPsd ? 2 : 0) + 6 + 2 + 1 + 2;
-      inFile.read(headerBuf.data() + 2, headerSize);
-      if (inFile.fail()) {
+      if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize))
         break;
-      }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      for (Int_t i = 0; i < 6; i++) {
-        timestamp |= static_cast<Long64_t>(
-                         static_cast<unsigned char>(headerBuf[tsOffset + i]))
-                     << (static_cast<Long64_t>(i) * 8);
-      }
+      timestamp = ReadLe6(ibuf.data() + iPos + tsOffset);
 
     } else if (dataType == SOLData::Minimum) {
       headerSize = 1 + 2 + (isPsd ? 2 : 0) + 6;
-      inFile.read(headerBuf.data() + 2, headerSize);
-      if (inFile.fail()) {
+      if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize))
         break;
-      }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      for (Int_t i = 0; i < 6; i++) {
-        timestamp |= static_cast<Long64_t>(
-                         static_cast<unsigned char>(headerBuf[tsOffset + i]))
-                     << (static_cast<Long64_t>(i) * 8);
-      }
+      timestamp = ReadLe6(ibuf.data() + iPos + tsOffset);
 
     } else if (dataType == SOLData::MiniWithFineTime) {
       headerSize = 1 + 2 + (isPsd ? 2 : 0) + 6 + 2;
-      inFile.read(headerBuf.data() + 2, headerSize);
-      if (inFile.fail()) {
+      if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize))
         break;
-      }
 
       Int_t tsOffset = 2 + 1 + 2 + (isPsd ? 2 : 0);
-      for (Int_t i = 0; i < 6; i++) {
-        timestamp |= static_cast<Long64_t>(
-                         static_cast<unsigned char>(headerBuf[tsOffset + i]))
-                     << (static_cast<Long64_t>(i) * 8);
-      }
+      timestamp = ReadLe6(ibuf.data() + iPos + tsOffset);
 
     } else if (dataType == SOLData::Raw) {
       headerSize = 8;
-      inFile.read(headerBuf.data() + 2, headerSize);
-      if (inFile.fail()) {
+      if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize))
         break;
-      }
 
       hasTimestamp = kFALSE;
-      for (Int_t i = 0; i < 8; i++) {
-        dataBytes |=
-            static_cast<ULong64_t>(static_cast<unsigned char>(headerBuf[2 + i]))
-            << (static_cast<ULong64_t>(i) * 8);
-      }
+      dataBytes = ReadLe8(ibuf.data() + iPos + 2);
 
     } else {
       std::cerr << "ERROR: Unknown SOL data type 0x" << std::hex << dataType
-                << std::dec << " at position " << inFile.tellg() - 2
-                << std::endl;
+                << std::dec << " at position " << filePos << std::endl;
       break;
     }
 
-    // Read trace/raw data into reusable buffer
-    if (dataBytes > 0) {
-      if (static_cast<ULong64_t>(dataBuf.size()) <
-          static_cast<ULong64_t>(dataBytes)) {
-        dataBuf.resize(dataBytes);
-      }
-      inFile.read(dataBuf.data(), dataBytes);
-      if (inFile.fail()) {
-        break;
-      }
-    }
+    // Ensure the full block (header + payload) is available before writing.
+    if (!RefillInput(inFile, ibuf, iPos, iLen, 2 + headerSize + dataBytes))
+      break;
 
     // Rotate to new chunk if timestamp crosses boundary.
     // Block that crosses boundary goes into the NEW chunk only.
     if (hasTimestamp && (firstBlock || timestamp >= chunkEndTs)) {
       if (!firstBlock) {
+        if (!obuf.empty()) {
+          outFile.write(obuf.data(), obuf.size());
+          obuf.clear();
+        }
         outFile.close();
         chunkIndex++;
         currentOutPath = Form(outPath.Data(), chunkIndex);
@@ -684,15 +681,25 @@ std::vector<TString> SOLReader::SplitSolFileByTime(const char *inputFile,
       totalChunks++;
     }
 
-    // Write block exactly once to the correct output
-    outFile.write(headerBuf.data(), 2 + headerSize);
-    if (dataBytes > 0) {
-      outFile.write(dataBuf.data(), dataBytes);
+    // Stage the block in the write buffer, flushing when it grows large.
+    const Int_t blockBytes = Int_t(2 + headerSize + dataBytes);
+    obuf.insert(obuf.end(), ibuf.begin() + iPos,
+                ibuf.begin() + iPos + blockBytes);
+    iPos += blockBytes;
+    filePos += blockBytes;
+    if (Long64_t(obuf.size()) >= kBulkWrite) {
+      outFile.write(obuf.data(), obuf.size());
+      obuf.clear();
     }
 
     totalBlocks++;
   }
 
+  // Flush any staged output before closing.
+  if (!obuf.empty()) {
+    outFile.write(obuf.data(), obuf.size());
+    obuf.clear();
+  }
   outFile.close();
   inFile.close();
 
