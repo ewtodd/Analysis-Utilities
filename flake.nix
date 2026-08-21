@@ -24,7 +24,7 @@
           };
         };
 
-        version = "26.8.20";
+        version = "26.8.21";
 
         rootWithCuda = pkgs.root.overrideAttrs (old: {
           cmakeFlags = (old.cmakeFlags or [ ]) ++ [
@@ -36,7 +36,7 @@
             ++ (with pkgs.cudaPackages; [
               cuda_nvcc
               cuda_cudart
-              cuda_cccl
+              cccl
             ]);
         });
 
@@ -49,10 +49,9 @@
               [
                 cuda_nvcc
                 cuda_cudart
-                cuda_cccl
+                cccl
               ]
             );
-            cudaCFlag = pkgs.lib.optionalString cuda "-DAU_ROOFIT_BACKEND_CUDA=1";
           in
           pkgs.stdenv.mkDerivation {
             pname = "analysis-utilities" + pkgs.lib.optionalString cuda "-cuda";
@@ -183,7 +182,7 @@
             ++ (with pkgs.cudaPackages; [
               cuda_nvcc
               cuda_cudart
-              cuda_cccl
+              cccl
             ]);
 
           shellHook = ''
