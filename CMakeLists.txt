@@ -1,5 +1,20 @@
 cmake_minimum_required(VERSION 3.18)
-project(analysis-utilities VERSION 26.5.18 LANGUAGES CXX)
+
+# flake.nix is the canonical version source (bumped there only), so parse the
+# version line out of it rather than keeping a second copy that drifts.
+# Expected line format:  version = "<YY.M.DD>";
+file(STRINGS "${CMAKE_SOURCE_DIR}/flake.nix" _au_version_lines
+     REGEX "^ *version = \"")
+if(NOT _au_version_lines)
+    message(FATAL_ERROR "Could not find a version line (version = \"...\") in flake.nix")
+endif()
+list(GET _au_version_lines 0 _au_version_line)
+string(REGEX REPLACE "^ *version = \"([^\"]*)\"; *$" "\\1" AU_VERSION "${_au_version_line}")
+if(AU_VERSION STREQUAL _au_version_line)
+    message(FATAL_ERROR "Could not parse version from flake.nix: ${_au_version_line}")
+endif()
+
+project(analysis-utilities VERSION ${AU_VERSION} LANGUAGES CXX)
 
 option(AU_USE_CUDA "Build with CUDA acceleration for RooFit PDFs" OFF)
 
@@ -22,7 +37,7 @@ if(AU_USE_CUDA)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 120)
+        set(CMAKE_CUDA_ARCHITECTURES 89)
     endif()
     find_package(CUDAToolkit REQUIRED)
     add_compile_definitions(AU_ROOFIT_BACKEND_CUDA=1)

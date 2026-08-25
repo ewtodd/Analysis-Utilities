@@ -1,7 +1,7 @@
 # Analysis-Utilities
 <!---->
 C++ utilities for analysis of nuclear measurement data, built on [ROOT](https://root.cern/), with a focus on ergonomics and performance.
-Supports CAEN digitizers via CoMPASS and WaveDump acquisition software.
+Supports CAEN digitizers via CoMPASS and WaveDump acquisition software, plus SOL-format data from the [SOLARIS DAQ](https://github.com/goluckyryan/SOLARIS_DAQ).
 The RooFit-based photopeak fitting backend includes CUDA kernels for its custom PDFs and dispatches `doEval` to the GPU when the library is built with CUDA support — see [GPU acceleration](#fittingutils-and-roofitutils) for details and measured speedups.
 The flake also exposes a Python package, with a wrapper around the PlottingUtils as well as a method for efficiently loading TTrees into Python native data types (numpy array, pandas df) so that machine learning libraries in Python can be used.
 Warning: Currently in active development; breaking changes are all but guaranteed...
@@ -37,7 +37,7 @@ nix develop
 <!---->
 ### BinaryUtils
 <!---->
-Read binary data files from CAEN acquisition software.
+Read binary data files from CAEN acquisition software and the SOLARIS DAQ.
 <!---->
 **CoMPASSReader** - Reads CoMPASS binary files (`.bin`):
 - Parses event headers, timestamps, energy values, and waveforms
@@ -48,6 +48,13 @@ Read binary data files from CAEN acquisition software.
 - Parses event structure including DC offset and start index cell
 - Optional timing corrections support
 <!---->
+**SOLReader** - Reads SOL binary files produced by the [SOLARIS DAQ](https://github.com/goluckyryan/SOLARIS_DAQ):
+- Parses all SOL data types (ALL, OneTrace, NoTrace, Minimum, MiniWithFineTime, Raw)
+- Per-block access to energy, fine timestamp, flags, and probe types, plus `getAnalog0`/`getAnalog1`, `getDigital`, and `getOneTrace` accessors for trace-carrying formats
+- `SetSkipTraces()` skips the trace payload (blocks are still parsed); blocks with an implausible trace length (> 100k samples) are skipped as a memory-safety measure
+- `ToHit()` reduces the current block to a lightweight `SOLHit` (header fields only, no trace)
+- Static `SplitSolFileByTime(input, output_dir, chunk_seconds)` splits a run file into time-bounded chunks named `<basename>_chunk<NNN>.sol`; reads and writes are bulk-buffered (4 MiB) so splitting runs close to disk speed
+<!---->
 ### WaveformProcessingUtils
 <!---->
 Process raw waveforms and extract physical parameters.
@@ -57,6 +64,7 @@ Process raw waveforms and extract physical parameters.
 - **Waveform cropping** - Extract region of interest around trigger
 - **Feature extraction** - Pulse height, peak position, short/long integrals, PSD ratio
 - **Quality cuts** - Reject clipped signals, baseline issues, negative integrals
+- **Baseline RMS** - Per-waveform baseline RMS is tracked, and the means (all processed, and accepted only) are reported to the console and the `.stats` file alongside the rejection counters
 - **Parallel file processing** - Process multiple files concurrently using `std::async` with configurable worker count (defaults to 4).
 Files are dispatched in batches, with each worker getting its own `WaveformProcessingUtils` instance.
 Requires ROOT thread safety (`ROOT::EnableThreadSafety()`), which is handled automatically.
@@ -99,6 +107,12 @@ A component is kept only if it improves the reduced chi-squared.
 <!---->
 All fits produce structured results (`FitResult` containing `PeakFitResult` entries) with parameter values, errors, and reduced chi-squared.
 Failed fits return -1 for all parameters.
+<!---->
+**Fit diagnostics**: `FitSimultaneous` additionally populates Minuit2 / `RooFitResult` diagnostics on each returned `FitResult` so downstream code can distinguish a true minimum from a local or failed solution:
+- `fit_status` (Minuit migrad status, 0 = success) and `cov_qual` (0 = Exact, 1 = NotPositiveDefinite, 2 = Approximate, 3 = External)
+- `edm` (estimated distance to minimum) and `min_nll` (minimized negative log-likelihood), with `has_fit_diagnostics` flagging whether they are meaningful
+- `parameter_diagnostics` - one `FitParameterDiagnostic` per fitted `RooRealVar` carrying the value, error, limits, and near-limit flags (set when a parameter sits within a small margin of its bound)
+Single-channel fits (both backends) leave these fields at their sentinel defaults.
 Reduced chi-squared is displayed on fit plots by default.
 Individual peak components are plotted summed with the background for readability, and multi-peak fits use distinct line styles per peak.
 <!---->
@@ -139,11 +153,14 @@ The component flags (`use_flat_background`, `use_step`, `use_low_exp_tail`, `use
 - **`LinkParameter(target, source)`** / **`LinkPeakShape(target_channel, target_peak, source_channel, source_peak)`** - tie a parameter (or a peak's whole shape) in one channel to another so they are fit as a single shared degree of freedom.
 - **`SeedChannel(channel_name, result)`** - supply a prior single-channel `FitResult` as starting values for that channel.
 - **`FitSimultaneous(input_name, base_label)`** - builds the `RooSimultaneous`, applies the locks, and returns one `FitResult` per channel. With `SetInteractive()` the simultaneous editor opens after the automated fit, and accepted parameters are saved/reloaded as for the single-channel editors.
+- **`DumpChannelCSV(channel, base_path, npts = 1000)`** - read-only export of a converged channel for external plotting: writes `<base>_spectrum.csv` (per-bin energy, data counts, fit total/background, residual pull) and `<base>_fitcurve.csv` (smooth `npts`-sample fit overlay). Evaluates the current parameter state and changes no fit state.
+- **`SetFitDebug(kTRUE)`** - for simultaneous fits, un-suppresses RooFit evaluation errors and prints the seed NLL so an invalid-NLL failure names the offending PDF. Off by default.
 <!---->
 Per-channel locking options on `AddChannel` (all optional):
 - **`mu_fixed`** - per-peak `std::vector<Bool_t>`; where `kTRUE`, that peak's centroid is held at its `mu_inits` value instead of floating.
 - **`bkg_yield_fixed`** / **`bkg_slope_fixed`** - hold the channel's background yield and/or slope constant.
 - **`lock_shape_after_seed`** - after seeding, fix sigma, the gaussian yield, and every tail/step shape parameter so only peak positions and normalizations float.
+- **`shape_lock_per_peak`** - per-peak `std::vector<Bool_t>` refining `lock_shape_after_seed`: when non-empty, entry `i` controls whether peak `i`'s shape is locked (when empty, all peaks lock, as before).
 - **`use_step_per_peak`** - per-peak `std::vector<Bool_t>` overriding the channel-level `use_step` for individual peaks (e.g. a step on some peaks but not on another peak sharing the channel).
 <!---->
 **GPU acceleration (opt-in)**:
@@ -181,7 +198,7 @@ The `LD_LIBRARY_PATH` line ensures nix-built binaries find the host's `libcuda.s
 <!---->
 The CUDA win for simultaneous fits is smaller than for single fits because once `doEval` is effectively free, the remaining time is dominated by Minuit2 itself, the analytic normalization integrals (computed on the host per-step), and RooFit's evaluator orchestration — none of which benefit from GPU work.
 <!---->
-The `cudaCapabilities` list in the flake's `pkgs = import nixpkgs { config = { ... }; }` block defaults to `[ "12.0" ]` (Blackwell / RTX 50-series). Adjust to your GPU's compute capability and update `-DCMAKE_CUDA_ARCHITECTURES` in the `rootWithCuda` overlay to match.
+The `cudaCapabilities` list in the flake's `pkgs = import nixpkgs { config = { ... }; }` block defaults to `[ "8.9" ]` (Ada / RTX 40-series, e.g. RTX 4090) — note the table above was measured on a 50-series (Blackwell) GPU. Adjust to your GPU's compute capability and update `-DCMAKE_CUDA_ARCHITECTURES` in the `rootWithCuda` overlay to match.
 <!---->
 **Do not override the `nixpkgs` input** (e.g. via `inputs.utils.inputs.nixpkgs.follows`).
 The CUDA-built ROOT is large and would otherwise be rebuilt from source against your nixpkgs revision.
@@ -208,6 +225,7 @@ No object instantiation required.
 **Initialization**:
 - `SetStylePreferences(PlotSaveFormat)` - Must be called before using other methods (warns if not).
 Sets global ROOT style and chooses output format (`PlotSaveFormat::kPNG` or `PlotSaveFormat::kPDF`, defaults to PNG).
+Also installs a 255-color turbo palette (as in matplotlib) for 2-D color scales.
 Calling `InitUtils::SetROOTPreferences()` takes care of this and is recommended.
 <!---->
 **Canvas**:
@@ -242,10 +260,14 @@ Pass an absolute path so output is anchored to a project root regardless of CWD.
 <!---->
 Initialization and file conversion utilities.
 <!---->
-- `SetROOTPreferences(save_format, plots_dir, root_files_dir)` - Configure ROOT environment, set the plot output base via `PlottingUtils::SetPlotsBaseDir`, and set the ROOT-files I/O base via `IO::SetRootFilesBaseDir`.
+- `SetROOTPreferences(save_format, plots_dir, root_files_dir, enable_mt = kTRUE)` - Configure ROOT environment, set the plot output base via `PlottingUtils::SetPlotsBaseDir`, and set the ROOT-files I/O base via `IO::SetRootFilesBaseDir`.
+With `enable_mt` (the default) it also calls `IO::SetThreadSafe()` and detaches new histograms from `gDirectory` (`TH1::AddDirectory(kFALSE)`), so parallel file processing is safe.
 Pass absolute paths so output is anchored to a project root regardless of CWD.
 If `plots_dir` or `root_files_dir` is omitted, a warning is printed and the CWD-relative defaults `"plots"` / `"root_files"` are used.
 - `ConvertCoMPASSBinToROOT()` - Convert CoMPASS binary files to ROOT format
+- `ConvertCoMPASSBinToHits()` - Read a CoMPASS binary file into an in-memory `std::vector<RawHit>` with no ROOT I/O
+- `ConvertSOLBinToROOT()` - Convert SOLARIS DAQ (SOL) binary files to ROOT; writes a `Data_R` tree with all per-block header fields plus `TArrayI`/`TArrayC` trace branches for trace-carrying blocks
+- `ConvertSOLBinToHits()` - Read a SOL file into an in-memory `std::vector<SOLHit>` (header fields only; traces are skipped)
 <!---->
 ### IOUtils
 <!---->
@@ -258,6 +280,11 @@ Trailing slashes are stripped.
 - `IO::GetRootFilesBaseDir()` - Return the current base directory.
 - `IO::OpenForReading(subpath)` - Returns a `TFile*` opened in `"READ"` at `<base>/<subpath>` (or just `subpath` if absolute).
 - `IO::OpenForWriting(subpath, mode = "RECREATE")` - Same join semantics, plus creates parent directories via `gSystem->mkdir(..., kTRUE)` before opening.
+<!---->
+**Thread safety**:
+- `IO::SetThreadSafe(enabled = kTRUE)` / `IO::IsThreadSafe()` - Enable ROOT thread safety (`ROOT::EnableThreadSafety()`) and route all file opens through a shared recursive mutex.
+Enabled by `InitUtils::SetROOTPreferences` (via `enable_mt`) and by the parallel file processing in `WaveformProcessingUtils`.
+- `IO::ScopedRootLock` - RAII guard for code that opens `TFile`s directly instead of through `IO::OpenForReading` / `IO::OpenForWriting`; engages the same lock when thread-safe mode is on.
 <!---->
 ## Python Package
 <!---->
@@ -379,6 +406,31 @@ df = load_tree_data("output.root", cache_dir=None)
 <!---->
 Supported branch types: `Float_t`, `Double_t`, `Int_t`, `UInt_t`, `Short_t`, `UShort_t`, `Long64_t`, `ULong64_t`, `UChar_t`.
 <!---->
+### Fixed-size array loader
+<!---->
+`load_leaf_array_data()` reads C-style fixed-size array leaves (branches created as e.g. `tree->Branch("adc", buf, "adc[18]/s")`) directly into 2-D numpy arrays, in the leaf's native dtype.
+It is the companion to `load_tree_data`, which handles scalar branches plus `TArrayF`/`TArrayS` object branches; object branches are rejected here.
+Results are cached as one `.npz` per (file set, tree) inside `cache_dir`, invalidated when any source ROOT file is newer.
+<!---->
+```python
+from analysis_utilities.io import load_leaf_array_data
+#
+arrays = load_leaf_array_data(
+    "output.root",
+    tree_name="Data_R",
+    array_branches=["Trace0", "Dig0"],
+    max_events=50000,
+)
+# arrays is a dict: {"Trace0": (n_events, trace_len), "Dig0": (n_events, trace_len)}
+```
+<!---->
+**Parameters**:
+- `root_files` - Path or list of paths to ROOT files (combined via TChain)
+- `tree_name` - TTree name
+- `array_branches` - Names of fixed-size array leaf branches to load
+- `max_events` - Cap on number of events to read
+- `cache_dir` - Directory for the cached `.npz` (default: `"df_cache"`). Set to `None` to disable caching.
+<!---->
 ## Binary Cache
 <!---->
 The CUDA-overlaid ROOT and the `packages.cuda` library are large to build from source. **e-desktop** (the primary development host for this project) re-serves its nix store as a binary cache so other machines can fetch the pre-built artifacts directly instead of rebuilding.
@@ -397,4 +449,5 @@ All changes to the core analysis logic (fitting models, signal processing, resul
 <!---->
 - [x] Implement support for converting CoMPASS binary files to ROOT
 - [x] Implement support for converting WaveDump binary files to ROOT (742 family digitizers only) - implemented.
+- [x] Implement support for converting SOLARIS DAQ (SOL) binary files to ROOT
 - [ ] Implement support for converting CoMPASS CSV files to ROOT
