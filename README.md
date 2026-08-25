@@ -435,7 +435,7 @@ arrays = load_leaf_array_data(
 <!---->
 The CUDA-overlaid ROOT and the `packages.cuda` library are large to build from source. **e-desktop** (the primary development host for this project) re-serves its nix store as a binary cache so other machines can fetch the pre-built artifacts directly instead of rebuilding.
 <!---->
-- **URL:** `https://e-desktop.tail624128.ts.net`
+- **URL:** `https://cache.ethanwtodd.com`
 - **Use on other hosts:** add the URL as a substituter (and trust its signing key) in your `nix.conf` / `nixos-rebuild` config. Once configured, `nix build` / `nix develop` will transparently pull `packages.cuda` and `packages.rootCuda` from the cache instead of compiling.
 <!---->
 This is the main reason downstream flakes should leave the `utils.inputs.nixpkgs` input alone — overriding it changes the derivation hash and forces a local rebuild that the cache can't satisfy.
