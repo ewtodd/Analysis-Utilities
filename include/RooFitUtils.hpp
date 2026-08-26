@@ -145,6 +145,8 @@ private:
   Bool_t use_manual_init_;
   Bool_t interactive_;
   Bool_t fit_debug_;
+  // See SetRefitAfterLoad(). Default kFALSE preserves the historic behaviour.
+  Bool_t refit_after_load_ = kFALSE;
   std::vector<Double_t> manual_params_;
 
   RooRealVar *x_;
@@ -300,6 +302,23 @@ public:
   // Defaults to off; enable per-fit with sim.SetFitDebug() before
   // FitSimultaneous.
   void SetFitDebug(Bool_t fit_debug = kTRUE) { fit_debug_ = fit_debug; }
+
+  // Interactive simultaneous fits historically had two modes: with a saved
+  // .simroofits present the parameters were LOADED AND ADOPTED AS THE RESULT,
+  // with no minimisation at all; without one, the GUI editor opened. The first
+  // mode makes a re-run silently replay a previous session's answer -- it still
+  // prints a chi2, redraws every plot and writes fresh output, while the fitted
+  // values cannot respond to anything upstream that has changed.
+  //
+  // With this enabled the saved parameters instead SEED a real minimisation.
+  // That keeps what the hand-tuned state is genuinely good for (a starting
+  // point close to the optimum, which the automated cold start does not reach:
+  // on the 73mGe precal it converges to chi2/ndf ~ 1.4 from a saved seed versus
+  // ~8 cold, with edm 24000x tolerance) while making the result reproducible
+  // and responsive to upstream changes.
+  //
+  // Default kFALSE: existing callers keep the historic replay behaviour.
+  void SetRefitAfterLoad(Bool_t refit = kTRUE) { refit_after_load_ = refit; }
 
   void SetManualParameters(const std::vector<Double_t> &params);
   void SetManualParameter(Int_t index, Double_t value);
