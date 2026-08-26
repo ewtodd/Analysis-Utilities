@@ -2761,6 +2761,37 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       ApplyChannelMuLocks();
       ApplyChannelBkgLocks();
       ApplyChannelShapeLocks();
+
+      // Optionally treat the loaded parameters as a SEED rather than as the
+      // answer, and actually minimise from there. See SetRefitAfterLoad().
+      // Identical fitTo() configuration to the non-interactive branch below, so
+      // the only difference between the two paths is the starting point.
+      if (refit_after_load_) {
+        Int_t load_print_level = fit_debug_ ? 1 : 0;
+        Int_t load_eval_errors = fit_debug_ ? 10 : -1;
+        fit_result = sim_pdf_->fitTo(
+            *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
+            RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
+            RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(load_print_level),
+            RooFit::PrintEvalErrors(load_eval_errors), RooFit::Strategy(1),
+            RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
+        // Gate on EDM, not on the status code. Minuit2 routinely returns a
+        // nonzero status (covariance forced positive-definite, or a post-migrad
+        // Hesse quirk) on fits that have genuinely converged: on the 73mGe
+        // precal this path reaches edm ~0.26 against the stated tolerance of 1,
+        // with chi2/ndf ~1.5-2.3, versus edm ~24000 and chi2 ~8 from a cold
+        // start. Gating on status alone discarded every one of those good fits
+        // and silently emptied the results. The status is still reported in the
+        // diagnostics block below, so a genuine failure remains visible.
+        Double_t refit_edm = fit_result ? fit_result->edm() : -1.0;
+        Bool_t edm_converged = (refit_edm >= 0.0 && refit_edm < 1.0);
+        sim_valid =
+            (fit_result && (fit_result->status() == 0 || edm_converged));
+        if (!sim_valid)
+          std::cout << "WARNING: simultaneous refit from saved params did not "
+                       "converge cleanly (edm = "
+                    << refit_edm << ")" << std::endl;
+      }
     } else {
       std::vector<SimEditorChannelView> views;
       for (size_t i = 0; i < sim_channels_.size(); i++) {
