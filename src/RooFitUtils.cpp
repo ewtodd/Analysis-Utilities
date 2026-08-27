@@ -2939,7 +2939,17 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(print_level),
         RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(1),
         RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
-    sim_valid = (fit_result && fit_result->status() == 0);
+    // Same EDM-based criterion as the refit-after-load path above, for the same
+    // reason: Minuit2 returns a nonzero status on covariance grounds for fits
+    // that have genuinely reached the minimum, and gating on status alone
+    // silently discards them. Freeing the post-cal peak shape adds parameters
+    // and makes that outcome routine -- it produced status 3 with edm 0.02-0.25
+    // on fits whose per-channel chi2/ndf were fine, and emptied the results.
+    Double_t cold_edm = fit_result ? fit_result->edm() : -1.0;
+    Int_t cold_covq = fit_result ? fit_result->covQual() : -1;
+    sim_valid = (fit_result &&
+                 (fit_result->status() == 0 ||
+                  (cold_edm >= 0.0 && cold_edm < 10.0 && cold_covq >= 2)));
     if (!sim_valid) {
       std::cout << "WARNING: simultaneous fit did not converge cleanly"
                 << std::endl;
