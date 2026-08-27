@@ -147,6 +147,9 @@ private:
   Bool_t fit_debug_;
   // See SetRefitAfterLoad(). Default kFALSE preserves the historic behaviour.
   Bool_t refit_after_load_ = kFALSE;
+  // Upper bound on the exponential tail DECAY LENGTHS, in keV. See
+  // SetTailRatioMax(). 100.0 preserves the historic behaviour.
+  Double_t tail_ratio_max_ = 100.0;
   std::vector<Double_t> manual_params_;
 
   RooRealVar *x_;
@@ -319,6 +322,20 @@ public:
   //
   // Default kFALSE: existing callers keep the historic replay behaviour.
   void SetRefitAfterLoad(Bool_t refit = kTRUE) { refit_after_load_ = refit; }
+
+  // Upper bound on the exponential tail decay lengths (LowExpTailRatio,
+  // HighExpTailRatio), in keV. The historic default is 100, which on a typical
+  // fit window is longer than the window itself -- over such a range the
+  // exponential is flat, so the "tail" becomes a constant pedestal and is
+  // degenerate with the background yield. A fit will then happily park the
+  // parameter at the bound, and on the 73mGe data it does exactly that:
+  // HighExpTailRatio pinned at 100 with its amplitude simultaneously pinned at
+  // 0.5, in fit after fit, hand-tuned ones included.
+  //
+  // Set this to a physically motivated value (a charge-collection or pileup
+  // shoulder decays over a few keV, not tens) so the component either describes
+  // a real tail or fits to nothing, rather than absorbing background.
+  void SetTailRatioMax(Double_t tau_max) { tail_ratio_max_ = tau_max; }
 
   void SetManualParameters(const std::vector<Double_t> &params);
   void SetManualParameter(Int_t index, Double_t value);
