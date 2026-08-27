@@ -981,11 +981,29 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
 
   Double_t value, error;
   Int_t fixed;
+  Int_t n_skipped_fixed = 0;
   while (in >> token >> value >> error >> fixed) {
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
     if (it == by_name.end()) {
       std::cerr << "WARNING: param " << token
                 << " from .simroofits not found in model" << std::endl;
+      continue;
+    }
+    // Never let saved state override MODEL CONFIGURATION.
+    //
+    // BuildChannelModel expresses a disabled component (use_high_exp_tail,
+    // use_low_lin_tail, use_step ...) as value 0 with constant = true. If a
+    // .simroofits written when that component was ENABLED is then loaded, the
+    // lines below would restore its old value and clear the constant flag,
+    // silently switching the component back on. The result is that toggling a
+    // component off in the caller has NO EFFECT whenever saved state exists --
+    // the fit comes back byte-identical, with unchanged degrees of freedom, and
+    // nothing warns.
+    //
+    // A parameter the model has already fixed is therefore left alone
+    // entirely: not its value, not its constant flag.
+    if (it->second->isConstant()) {
+      ++n_skipped_fixed;
       continue;
     }
     it->second->setVal(value);
@@ -994,6 +1012,10 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
   }
   in.close();
   std::cout << "Loaded sim interactive params from " << filename << std::endl;
+  if (n_skipped_fixed > 0)
+    std::cout << "  (" << n_skipped_fixed
+              << " saved params ignored: fixed by model configuration)"
+              << std::endl;
   return kTRUE;
 }
 
