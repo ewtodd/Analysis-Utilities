@@ -1908,6 +1908,84 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
   return results;
 }
 
+void RooFitUtils::ConstrainPeakSeparation(const TString &channel, Int_t peak_hi,
+                                          Int_t peak_lo, Double_t delta,
+                                          Double_t sigma) {
+  if (!(sigma > 0)) {
+    std::cerr << "ERROR: ConstrainPeakSeparation needs sigma > 0 (got " << sigma
+              << "); a hard equality would have to fix a centroid instead."
+              << std::endl;
+    return;
+  }
+  RooFitSeparationConstraint c;
+  c.channel = channel;
+  c.peak_hi = peak_hi;
+  c.peak_lo = peak_lo;
+  c.delta = delta;
+  c.sigma = sigma;
+  sim_sep_constraints_.push_back(c);
+}
+
+// Realise the requested separation constraints against the built channels. Must
+// run after BuildChannelModel has populated sim_channel_peaks_, since the mu
+// RooRealVars do not exist before that.
+void RooFitUtils::BuildSeparationConstraints() {
+  sim_constraint_set_.removeAll();
+  for (size_t i = 0; i < sim_sep_constraints_.size(); i++) {
+    const RooFitSeparationConstraint &c = sim_sep_constraints_[i];
+    std::map<TString, std::vector<RooFitPeakModel>>::iterator it =
+        sim_channel_peaks_.find(c.channel);
+    if (it == sim_channel_peaks_.end()) {
+      std::cerr << "WARNING: separation constraint names unknown channel '"
+                << c.channel << "'; ignored." << std::endl;
+      continue;
+    }
+    const std::vector<RooFitPeakModel> &pk = it->second;
+    if (c.peak_hi < 0 || c.peak_lo < 0 || c.peak_hi >= (Int_t)pk.size() ||
+        c.peak_lo >= (Int_t)pk.size()) {
+      std::cerr << "WARNING: separation constraint on '" << c.channel
+                << "' names peaks " << c.peak_lo << "," << c.peak_hi
+                << " but the channel has " << pk.size() << "; ignored."
+                << std::endl;
+      continue;
+    }
+    RooRealVar *mu_hi = pk[c.peak_hi].mu;
+    RooRealVar *mu_lo = pk[c.peak_lo].mu;
+    if (!mu_hi || !mu_lo)
+      continue;
+    // A linked doublet can resolve both mus to the SAME RooRealVar, in which
+    // case the separation is identically zero and no constraint is meaningful.
+    if (mu_hi == mu_lo) {
+      std::cerr << "WARNING: separation constraint on '" << c.channel
+                << "' targets two peaks sharing one mu; ignored." << std::endl;
+      continue;
+    }
+    TString base =
+        c.channel + TString::Format("_sep%d%d", c.peak_hi, c.peak_lo);
+    // Constrain mu_hi to (mu_lo + delta) rather than building a pdf in the
+    // DIFFERENCE. RooFit normalises an external constraint over its observable,
+    // and a RooFormulaVar is not something it can integrate: a Gaussian in
+    // (mu_hi - mu_lo) leaves the normalisation ill-defined and the minimiser
+    // returns covQual 0 with edm exactly 0, so every fit is then discarded by
+    // the validity gate. Putting the formula in the MEAN keeps the observable a
+    // genuine RooRealVar while stating identical physics.
+    RooFormulaVar *target = new RooFormulaVar(
+        base + "_target", TString::Format("@0 + %.10g", c.delta),
+        RooArgList(*mu_lo));
+    RooRealVar *width = new RooRealVar(base + "_sigma", "", c.sigma);
+    width->setConstant(kTRUE);
+    RooGaussian *pen =
+        new RooGaussian(base + "_pdf", "", *mu_hi, *target, *width);
+    RegisterOwned(target);
+    RegisterOwned(width);
+    RegisterOwned(pen);
+    sim_constraint_set_.add(*pen);
+    std::cout << "Separation constraint on " << c.channel << ": mu" << c.peak_hi
+              << " - mu" << c.peak_lo << " = " << c.delta << " +/- " << c.sigma
+              << std::endl;
+  }
+}
+
 TString RooFitUtils::ParamFullName(const TString &channel,
                                    const TString &param) {
   return channel + ":" + param;
@@ -2813,6 +2891,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   ApplyChannelMuLocks();
   ApplyChannelBkgLocks();
   ApplyChannelShapeLocks();
+  BuildSeparationConstraints();
 
   sim_category_ = new RooCategory("channel", "channel");
   for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2869,7 +2948,9 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
             RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
             RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(load_print_level),
             RooFit::PrintEvalErrors(load_eval_errors), RooFit::Strategy(1),
-            RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
+            RooFit::Minimizer("Minuit2", "migrad"),
+            RooFit::ExternalConstraints(sim_constraint_set_),
+            BestAvailableBackend());
         // Gate on EDM, not on the status code. Minuit2 routinely returns a
         // nonzero status (covariance forced positive-definite, or a post-migrad
         // Hesse quirk) on fits that have genuinely converged: on the 73mGe
@@ -2973,7 +3054,9 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
         RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(print_level),
         RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(1),
-        RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
+        RooFit::Minimizer("Minuit2", "migrad"),
+        RooFit::ExternalConstraints(sim_constraint_set_),
+        BestAvailableBackend());
     // Same EDM-based criterion as the refit-after-load path above, for the same
     // reason: Minuit2 returns a nonzero status on covariance grounds for fits
     // that have genuinely reached the minimum, and gating on status alone

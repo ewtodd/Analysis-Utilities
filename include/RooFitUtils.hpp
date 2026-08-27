@@ -128,6 +128,25 @@ struct RooFitParamLink {
   TString source_param;
 };
 
+// Externally-known spacing between two peaks in one channel, imposed as a
+// Gaussian penalty on (mu_hi - mu_lo) rather than by fixing either centroid.
+// Locking the two mu values and constraining their separation are different
+// statements: locking pins the pair to an absolute scale as well, while this
+// leaves the pair free to slide together and forbids only the STRETCH. Use it
+// where the spacing is known far better than the placement -- an atomic
+// doublet whose separation is tabulated to <1 eV, measured by a detector whose
+// absolute gain is known to parts in 1e3.
+//
+// sigma is the uncertainty on delta, so the constraint stays a measurement and
+// not a hard equality; set it to the literature error on the spacing.
+struct RooFitSeparationConstraint {
+  TString channel;
+  Int_t peak_hi = 1;
+  Int_t peak_lo = 0;
+  Double_t delta = 0;
+  Double_t sigma = 0;
+};
+
 class RooFitUtils {
 private:
   TH1 *working_hist_;
@@ -163,6 +182,8 @@ private:
 
   std::vector<RooFitChannelConfig> sim_channels_;
   std::vector<RooFitParamLink> sim_links_;
+  std::vector<RooFitSeparationConstraint> sim_sep_constraints_;
+  RooArgSet sim_constraint_set_;
   std::map<TString, FitResult> sim_seeds_;
   std::map<TString, std::vector<RooFitPeakModel>> sim_channel_peaks_;
   std::map<TString, RooFitBackgroundModel> sim_channel_bkg_;
@@ -196,6 +217,7 @@ private:
                                   const TString &base_label);
   TString ParamFullName(const TString &channel, const TString &param);
   TString SourceForTarget(const TString &target);
+  void BuildSeparationConstraints();
   Double_t ComputeChannelChi2(const TString &channel,
                               const std::vector<RooFitPeakModel> &peaks,
                               const RooFitBackgroundModel &bkg, Int_t &ndof);
@@ -380,6 +402,12 @@ public:
       const std::vector<Bool_t> &use_step_per_peak = std::vector<Bool_t>(),
       const std::vector<Bool_t> &shape_lock_per_peak = std::vector<Bool_t>());
   void LinkParameter(const TString &target, const TString &source);
+  // Constrain (mu[peak_hi] - mu[peak_lo]) in one channel to an externally known
+  // delta +/- sigma. Applies to the simultaneous fit; call before
+  // FitSimultaneous. See RooFitSeparationConstraint on why this is not the same
+  // as locking mus.
+  void ConstrainPeakSeparation(const TString &channel, Int_t peak_hi,
+                               Int_t peak_lo, Double_t delta, Double_t sigma);
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
                      const TString &source_channel, Int_t source_peak);
   void SeedChannel(const TString &channel_name, const FitResult &result);
