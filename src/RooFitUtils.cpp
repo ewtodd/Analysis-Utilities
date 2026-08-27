@@ -328,8 +328,9 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   p.ratio_low_exp =
       new RooRealVar("LowExpTailAmplitude" + suffix,
                      "LowExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
-  p.tau_low_exp = new RooRealVar("LowExpTailRatio" + suffix,
-                                 "LowExpTailRatio" + suffix, 1.5, 1.0, 100.0);
+  p.tau_low_exp =
+      new RooRealVar("LowExpTailRatio" + suffix, "LowExpTailRatio" + suffix,
+                     1.5, 1.0, tail_ratio_max_);
   p.ratio_low_lin =
       new RooRealVar("LowLinTailAmplitude" + suffix,
                      "LowLinTailAmplitude" + suffix, 0.0, 0.0, 0.5);
@@ -338,8 +339,9 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   p.ratio_high_exp =
       new RooRealVar("HighExpTailAmplitude" + suffix,
                      "HighExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
-  p.tau_high_exp = new RooRealVar("HighExpTailRatio" + suffix,
-                                  "HighExpTailRatio" + suffix, 1.5, 1.0, 100.0);
+  p.tau_high_exp =
+      new RooRealVar("HighExpTailRatio" + suffix, "HighExpTailRatio" + suffix,
+                     1.5, 1.0, tail_ratio_max_);
 
   RegisterOwned(p.mu);
   RegisterOwned(p.sigma);
@@ -1006,9 +1008,20 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
       ++n_skipped_fixed;
       continue;
     }
+    // Take the VALUE only. Constness is model configuration, not saved state.
+    //
+    // Honouring the file's fixed flag breaks the component toggles in the other
+    // direction from the bug above: a .simroofits written while a component was
+    // DISABLED records its parameters as fixed, and loading that into a model
+    // where the component is ENABLED would pin them constant and silently
+    // switch it back off. Two variants meant to differ by exactly that
+    // component then come back identical.
+    //
+    // The file supplies a starting point; use_* flags, mu/bkg/shape locks and
+    // lock_shape_after_seed decide what is free. Those all run after this load.
+    (void)fixed;
     it->second->setVal(value);
     it->second->setError(error);
-    it->second->setConstant(fixed ? kTRUE : kFALSE);
   }
   in.close();
   std::cout << "Loaded sim interactive params from " << filename << std::endl;
@@ -2105,7 +2118,7 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     p.ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailAmplitude" + suffix,
                                       registry, 0.0, 0.0, 0.5);
     p.tau_low_exp = ResolveOrCreate(cfg.name, "LowExpTailRatio" + suffix,
-                                    registry, 1.5, 1.0, 100.0);
+                                    registry, 1.5, 1.0, tail_ratio_max_);
     p.ratio_low_lin = ResolveOrCreate(cfg.name, "LowLinTailAmplitude" + suffix,
                                       registry, 0.0, 0.0, 0.5);
     p.slope_low_lin = ResolveOrCreate(cfg.name, "LowLinTailSlope" + suffix,
@@ -2113,7 +2126,7 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     p.ratio_high_exp = ResolveOrCreate(
         cfg.name, "HighExpTailAmplitude" + suffix, registry, 0.0, 0.0, 0.5);
     p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix,
-                                     registry, 1.5, 1.0, 100.0);
+                                     registry, 1.5, 1.0, tail_ratio_max_);
 
     // ResolveOrCreate returns nullptr when a LinkParameter target names a
     // source that has not been built yet. Links are resolved in construction
