@@ -181,8 +181,8 @@ private:
   RooRealVar *ResolveOrCreate(const TString &channel, const TString &param_name,
                               std::map<TString, RooRealVar *> &registry,
                               Double_t init_val, Double_t lo, Double_t hi);
-  void BuildChannelModel(const RooFitChannelConfig &cfg,
-                         std::map<TString, RooRealVar *> &registry);
+  Bool_t BuildChannelModel(const RooFitChannelConfig &cfg,
+                           std::map<TString, RooRealVar *> &registry);
   void ApplySeedToChannel(const TString &channel);
   void ApplyChannelMuLocks();
   void ApplyChannelBkgLocks();

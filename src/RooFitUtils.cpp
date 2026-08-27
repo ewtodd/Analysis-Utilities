@@ -2011,8 +2011,9 @@ void RooFitUtils::SeedChannel(const TString &channel_name,
   sim_seeds_[channel_name] = result;
 }
 
-void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
-                                    std::map<TString, RooRealVar *> &registry) {
+Bool_t
+RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
+                               std::map<TString, RooRealVar *> &registry) {
   Double_t range_width = cfg.fit_range_high - cfg.fit_range_low;
   Double_t sigma_lo = cfg.hist->GetBinWidth(1);
   Double_t sigma_hi = range_width * 0.1;
@@ -2091,6 +2092,47 @@ void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
         cfg.name, "HighExpTailAmplitude" + suffix, registry, 0.0, 0.0, 0.5);
     p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix,
                                      registry, 1.5, 1.0, 100.0);
+
+    // ResolveOrCreate returns nullptr when a LinkParameter target names a
+    // source that has not been built yet. Links are resolved in construction
+    // order, so "peak 2 follows peak 1" is legal and "peak 1 follows peak 2" is
+    // not -- an easy mistake, since the physically natural phrasing ("tie the
+    // weak line to the strong one") is often the illegal direction.
+    //
+    // ResolveOrCreate already prints a precise diagnostic naming both
+    // parameters. Without this guard that nullptr is dereferenced by the PDF
+    // constructors immediately below, and the process dies in a Cling stack
+    // trace that scrolls the actual message off screen.
+    RooRealVar *required[] = {p.mu,
+                              p.sigma,
+                              p.gaus_yield,
+                              p.ratio_step,
+                              p.ratio_low_exp,
+                              p.tau_low_exp,
+                              p.ratio_low_lin,
+                              p.slope_low_lin,
+                              p.ratio_high_exp,
+                              p.tau_high_exp};
+    const char *required_names[] = {"Mu",
+                                    "Sigma",
+                                    "GausAmplitude",
+                                    "StepAmplitude",
+                                    "LowExpTailAmplitude",
+                                    "LowExpTailRatio",
+                                    "LowLinTailAmplitude",
+                                    "LowLinTailSlope",
+                                    "HighExpTailAmplitude",
+                                    "HighExpTailRatio"};
+    for (size_t ri = 0; ri < sizeof(required) / sizeof(required[0]); ri++) {
+      if (!required[ri]) {
+        std::cerr << "ERROR: channel '" << cfg.name << "' peak " << suffix
+                  << ": could not resolve " << required_names[ri] << suffix
+                  << " (see the link error above). Aborting the channel build "
+                     "rather than dereferencing null."
+                  << std::endl;
+        return kFALSE;
+      }
+    }
 
     TString pdf_suffix = "_" + cfg.name + "_" + suffix;
     p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + pdf_suffix, *x_,
@@ -2193,6 +2235,14 @@ void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
   Double_t slope_hi = 5.0 / range_width;
   bkg.bkg_slope =
       ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0, slope_lo, slope_hi);
+  if (!bkg.bkg_yield || !bkg.bkg_slope) {
+    std::cerr << "ERROR: channel '" << cfg.name
+              << "': could not resolve background parameters (see the link "
+                 "error above). Aborting the channel build rather than "
+                 "dereferencing null."
+              << std::endl;
+    return kFALSE;
+  }
   TString bkg_pdf_name = "bkg_pdf_" + cfg.name;
   bkg.bkg_pdf =
       RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_, *bkg.bkg_slope);
@@ -2240,6 +2290,7 @@ void RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     ds->add(vars);
   }
   sim_channel_data_[cfg.name] = ds;
+  return kTRUE;
 }
 
 void RooFitUtils::ApplySeedToChannel(const TString &channel) {
@@ -2698,7 +2749,16 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
 
   std::map<TString, RooRealVar *> registry;
   for (size_t i = 0; i < sim_channels_.size(); i++) {
-    BuildChannelModel(sim_channels_[i], registry);
+    // A failed channel build leaves half-constructed PDFs behind; continuing
+    // dereferences them and crashes several frames from the actual cause. Bail
+    // with an empty result so the caller sees a clean failure and the
+    // diagnostics printed above stay on screen.
+    if (!BuildChannelModel(sim_channels_[i], registry)) {
+      std::cerr << "ERROR: aborting simultaneous fit '" << base_label
+                << "': channel '" << sim_channels_[i].name
+                << "' could not be built." << std::endl;
+      return std::vector<FitResult>();
+    }
   }
 
   Float_t union_lo = sim_channels_[0].fit_range_low;
@@ -2783,8 +2843,22 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         // start. Gating on status alone discarded every one of those good fits
         // and silently emptied the results. The status is still reported in the
         // diagnostics block below, so a genuine failure remains visible.
+        // Threshold note: edm is an ABSOLUTE distance-to-minimum in function
+        // units, and Minuit's printed "edm < 1" criterion is scaled for
+        // chi2-like functions. For an extended NLL of magnitude ~1e7, edm ~2 is
+        // a relative precision of ~1e-7 -- converged by any practical measure.
+        // edm < 1 demonstrably mis-ranked these fits: it rejected a run with
+        // chi2/ndf 1.45/2.23 (edm 1.80) while accepting one with 1.98/2.61
+        // (edm 0.32). Requiring covQual >= 2 additionally means Minuit built at
+        // least an approximate covariance, which a genuinely diverged fit does
+        // not -- the cold start reached edm 24000 with chi2/ndf ~8.
+        //
+        // chi2/ndf per channel is the measure to actually judge quality on, and
+        // it is printed for every channel below.
         Double_t refit_edm = fit_result ? fit_result->edm() : -1.0;
-        Bool_t edm_converged = (refit_edm >= 0.0 && refit_edm < 1.0);
+        Int_t refit_covq = fit_result ? fit_result->covQual() : -1;
+        Bool_t edm_converged =
+            (refit_edm >= 0.0 && refit_edm < 10.0 && refit_covq >= 2);
         sim_valid =
             (fit_result && (fit_result->status() == 0 || edm_converged));
         if (!sim_valid)
