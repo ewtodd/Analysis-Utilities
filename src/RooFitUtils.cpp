@@ -864,24 +864,61 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
     BuildDisplayHistogram();
   }
 
+  // Match by NAME, and never let saved state override MODEL CONFIGURATION --
+  // the same rule LoadSimInteractiveParams follows, which this path never got.
+  //
+  // Honouring the file's fixed flag silently defeats the component toggles: a
+  // .roofits written while a component was DISABLED records its parameters as
+  // fixed, and loading that into a model where the caller has just ENABLED the
+  // component pins them constant again and switches it back off. On the 73mGe
+  // Am-241 line that made a step-on/step-off pair come back byte-identical --
+  // same chi2 to five decimals, StepAmplitude 0 in both -- because the saved
+  // state carried "StepAmplitude1 0 0 1" while the log said ENABLED.
+  //
+  // Index-based matching was the second half of the problem: the name token was
+  // read and discarded, so any change to the parameter list silently shifted
+  // every later value onto the wrong variable.
+  std::map<std::string, RooRealVar *> by_name;
+  for (size_t i = 0; i < all.size(); i++)
+    by_name[std::string(all[i]->GetName())] = all[i];
+
   Double_t value, error;
   Int_t fixed;
-  while (in >> token >> value >> error >> fixed && idx < (Int_t)all.size()) {
-    all[idx]->setVal(value);
-    all[idx]->setError(error);
-    all[idx]->setConstant(fixed ? kTRUE : kFALSE);
-    idx++;
+  Int_t n_set = 0, n_skipped_fixed = 0, n_unknown = 0;
+  while (in >> token >> value >> error >> fixed) {
+    std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
+    if (it == by_name.end()) {
+      std::cerr << "WARNING: param " << token << " from " << filename
+                << " not found in model" << std::endl;
+      ++n_unknown;
+      continue;
+    }
+    // A parameter the model has already fixed is left alone entirely.
+    if (it->second->isConstant()) {
+      ++n_skipped_fixed;
+      continue;
+    }
+    // Value only. Constness is model configuration, not saved state.
+    (void)fixed;
+    it->second->setVal(value);
+    it->second->setError(error);
+    ++n_set;
   }
   in.close();
 
-  if (idx != (Int_t)all.size()) {
-    std::cerr << "WARNING: Parameter count mismatch in " << filename
-              << " (expected " << all.size() << ", got " << idx << ")"
-              << std::endl;
+  if (n_set == 0) {
+    std::cerr << "WARNING: no usable parameters in " << filename << std::endl;
     return kFALSE;
   }
 
   std::cout << "Loaded interactive params from " << filename << std::endl;
+  if (n_skipped_fixed > 0)
+    std::cout << "  (" << n_skipped_fixed
+              << " saved params ignored: fixed by model configuration)"
+              << std::endl;
+  if (n_unknown > 0)
+    std::cout << "  (" << n_unknown << " saved params not in model)"
+              << std::endl;
   return kTRUE;
 }
 
