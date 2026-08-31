@@ -6,7 +6,7 @@ The RooFit-based photopeak fitting backend includes CUDA kernels for its custom 
 The flake also exposes a Python package, with a wrapper around the PlottingUtils as well as a method for efficiently loading TTrees into Python native data types (numpy array, pandas df) so that machine learning libraries in Python can be used.
 Warning: Currently in active development; breaking changes are all but guaranteed...
 <!---->
-## AI-assisted Development Disclosure
+## AI Assisted Development Disclosure
 <!---->
 Parts of this codebase — primarily the interactive GUI editor and routine boilerplate — were written with the help of [Claude Code](https://claude.ai/claude-code) and/or [son-of-anton](https://github.com/ewtodd/son-of-anton).
 All changes to the core analysis logic (fitting models, signal processing, result extraction) are human-reviewed and approved before being committed.
