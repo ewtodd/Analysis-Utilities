@@ -9,7 +9,7 @@ Warning: Currently in active development; breaking changes are all but guarantee
 ## AI Assisted Development Disclosure
 <!---->
 Parts of this codebase — primarily the interactive GUI editor and routine boilerplate — were written with the help of [Claude Code](https://claude.ai/claude-code) and/or [son-of-anton](https://github.com/ewtodd/son-of-anton).
-All changes to the core analysis logic (fitting models, signal processing, result extraction) are human-reviewed and approved before being committed.
+All changes to the core analysis logic (fitting models, signal processing, result extraction) are human-reviewed and approved before being committed. Unlike [son-of-anton](https://github.com/ewtodd/son-of-anton), this project actually is for my day job, so a large part of the code base was directly written by me.
 <!---->
 ## Installation
 <!---->
