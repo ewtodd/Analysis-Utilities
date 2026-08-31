@@ -6,6 +6,11 @@ The RooFit-based photopeak fitting backend includes CUDA kernels for its custom 
 The flake also exposes a Python package, with a wrapper around the PlottingUtils as well as a method for efficiently loading TTrees into Python native data types (numpy array, pandas df) so that machine learning libraries in Python can be used.
 Warning: Currently in active development; breaking changes are all but guaranteed...
 <!---->
+## AI-assisted Development Disclosure
+<!---->
+Parts of this codebase — primarily the interactive GUI editor and routine boilerplate — were written with the help of [Claude Code](https://claude.ai/claude-code) and/or [son-of-anton](https://github.com/ewtodd/son-of-anton).
+All changes to the core analysis logic (fitting models, signal processing, result extraction) are human-reviewed and approved before being committed.
+<!---->
 ## Installation
 <!---->
 ### Prerequisites
@@ -439,11 +444,6 @@ The CUDA-overlaid ROOT and the `packages.cuda` library are large to build from s
 - **Use on other hosts:** add the URL as a substituter (and trust its signing key) in your `nix.conf` / `nixos-rebuild` config. Once configured, `nix build` / `nix develop` will transparently pull `packages.cuda` and `packages.rootCuda` from the cache instead of compiling.
 <!---->
 This is the main reason downstream flakes should leave the `utils.inputs.nixpkgs` input alone — overriding it changes the derivation hash and forces a local rebuild that the cache can't satisfy.
-<!---->
-## A note on AI-assisted development
-<!---->
-Parts of this codebase — primarily the interactive GUI editor and routine boilerplate — were written with the help of [Claude Code](https://claude.ai/claude-code).
-All changes to the core analysis logic (fitting models, signal processing, result extraction) are human-reviewed and approved before being committed.
 <!---->
 ## Roadmap
 <!---->
