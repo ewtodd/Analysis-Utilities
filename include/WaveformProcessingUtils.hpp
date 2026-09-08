@@ -3,7 +3,7 @@
 
 #include "PlottingUtils.hpp"
 #include <TArrayF.h>
-#include <TArrayS.h>
+#include <TArrayI.h>
 #include <TFile.h>
 #include <TMath.h>
 #include <TROOT.h>
@@ -17,7 +17,7 @@
 #include <vector>
 
 struct WaveformFeatures {
-  Short_t raw_pulse_height;
+  Int_t raw_pulse_height;
   Float_t pulse_height;
   Int_t peak_position;
   Int_t trigger_position;
@@ -42,7 +42,7 @@ struct ProcessingStats {
   Int_t baseline_rms_count_accepted = 0;
 };
 
-enum class InputFormat { kCOMPASS, kWAVEDUMP };
+enum class InputFormat { kCOMPASS, kWAVEDUMP, kSOLARIS };
 
 struct FileProcessingConfig {
   Int_t polarity = -1;
@@ -58,6 +58,7 @@ struct FileProcessingConfig {
   Bool_t verbose = kTRUE;
   Bool_t store_waveforms = kTRUE;
   InputFormat input_format = InputFormat::kCOMPASS;
+  Int_t adc_saturation_code = 16384;
 };
 
 class WaveformProcessingUtils {
@@ -72,6 +73,7 @@ private:
   Int_t long_gate_;
   Int_t max_events_;
   Bool_t verbose_;
+  Int_t adc_saturation_code_;
 
   static std::mutex canvas_mutex_;
   Int_t sample_waveforms_to_save_;
@@ -118,10 +120,13 @@ public:
   void SetSaveSampleWaveforms(Int_t count) {
     sample_waveforms_to_save_ = count;
   }
+  void SetAdcSaturationCode(Int_t adc_saturation_code) {
+    adc_saturation_code_ = adc_saturation_code;
+  }
 
-  Bool_t ProcessWaveform(const TArrayS &samples);
+  Bool_t ProcessWaveform(const TArrayI &samples);
 
-  void SubtractBaseline(const TArrayS &samples);
+  void SubtractBaseline(const TArrayI &samples);
   Float_t FindTrigger(const TArrayF &waveform);
   void CropWaveform(const TArrayF &waveform, Int_t trigger_pos);
   WaveformFeatures ExtractFeatures(const TArrayF &cropped_wf);

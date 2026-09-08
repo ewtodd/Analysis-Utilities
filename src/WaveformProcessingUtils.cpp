@@ -1,12 +1,9 @@
 #include "WaveformProcessingUtils.hpp"
 #include "IOUtils.hpp"
+#include <TArrayS.h>
 
 WaveformProcessingUtils::WaveformProcessingUtils()
-    : polarity_(1), trigger_threshold_(0.15), num_samples_baseline_(10),
-      pre_samples_(10), post_samples_(100), max_events_(-1), verbose_(kFALSE),
-      sample_waveforms_to_save_(0), sample_waveforms_saved_(0),
-      output_file_(nullptr), output_tree_(nullptr), store_waveforms_(kTRUE),
-      save_waveform_(new TArrayF()), input_format_(InputFormat::kCOMPASS) {}
+    : WaveformProcessingUtils(FileProcessingConfig()) {}
 
 WaveformProcessingUtils::WaveformProcessingUtils(
     const FileProcessingConfig &config)
@@ -16,6 +13,7 @@ WaveformProcessingUtils::WaveformProcessingUtils(
       pre_gate_(config.pre_gate), short_gate_(config.short_gate),
       long_gate_(config.long_gate), max_events_(config.max_events),
       verbose_(config.verbose),
+      adc_saturation_code_(config.adc_saturation_code),
       sample_waveforms_to_save_(config.sample_waveforms_to_save),
       sample_waveforms_saved_(0), output_file_(nullptr), output_tree_(nullptr),
       store_waveforms_(config.store_waveforms), save_waveform_(new TArrayF()),
@@ -36,13 +34,13 @@ WaveformProcessingUtils::~WaveformProcessingUtils() {
   save_waveform_ = nullptr;
 }
 
-Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayS &samples) {
+Bool_t WaveformProcessingUtils::ProcessWaveform(const TArrayI &samples) {
   Int_t n = samples.GetSize();
 
   if (n == 0)
     return kFALSE;
 
-  Short_t raw_max = samples.At(0);
+  Int_t raw_max = samples.At(0);
 
   if (polarity_ == 1) {
     for (Int_t i = 1; i < n; ++i) {
@@ -130,7 +128,7 @@ void WaveformProcessingUtils::SaveSampleWaveform(const TArrayF &waveform) {
   sample_waveforms_saved_++;
 }
 
-void WaveformProcessingUtils::SubtractBaseline(const TArrayS &samples) {
+void WaveformProcessingUtils::SubtractBaseline(const TArrayI &samples) {
   Int_t n = samples.GetSize();
 
   Float_t baseline = 0;
@@ -237,7 +235,8 @@ WaveformProcessingUtils::ExtractFeatures(const TArrayF &cropped_wf) {
 Bool_t
 WaveformProcessingUtils::ApplyQualityCuts(const WaveformFeatures &features) {
 
-  if (((features.raw_pulse_height == 16384) && (polarity_ == 1)) ||
+  if (((features.raw_pulse_height == adc_saturation_code_) &&
+       (polarity_ == 1)) ||
       ((features.raw_pulse_height == 0) && (polarity_ == -1))) {
     stats_.rejected_clipped++;
     return kFALSE;
@@ -395,14 +394,23 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
     return kFALSE;
   }
 
-  TArrayS *samples = new TArrayS();
-  tree->SetBranchAddress("Samples", &samples);
-
+  TArrayS *samples = nullptr;
+  TArrayI *solaris_trace0 = nullptr;
   UInt_t trigger_time_tag = 0;
+  TArrayI converted_samples;
+
   if (input_format_ == InputFormat::kCOMPASS) {
+    samples = new TArrayS();
+    tree->SetBranchAddress("Samples", &samples);
     tree->SetBranchAddress("Timestamp", &current_timestamp_);
   } else if (input_format_ == InputFormat::kWAVEDUMP) {
+    samples = new TArrayS();
+    tree->SetBranchAddress("Samples", &samples);
     tree->SetBranchAddress("TriggerTimeTag", &trigger_time_tag);
+  } else if (input_format_ == InputFormat::kSOLARIS) {
+    solaris_trace0 = new TArrayI();
+    tree->SetBranchAddress("Trace0", &solaris_trace0);
+    tree->SetBranchAddress("Timestamp", &current_timestamp_);
   }
 
   Long64_t n_entries = tree->GetEntries();
@@ -412,14 +420,30 @@ Bool_t WaveformProcessingUtils::ProcessFile(const TString filepath,
       break;
     }
     tree->GetEntry(entry);
-    if (input_format_ == InputFormat::kWAVEDUMP) {
-      current_timestamp_ = static_cast<ULong64_t>(trigger_time_tag);
-    }
     stats_.total_processed++;
-    ProcessWaveform(*samples);
+
+    if (input_format_ == InputFormat::kCOMPASS) {
+      Int_t n = samples->GetSize();
+      converted_samples.Set(n);
+      for (Int_t i = 0; i < n; ++i) {
+        converted_samples.SetAt(samples->At(i), i);
+      }
+      ProcessWaveform(converted_samples);
+    } else if (input_format_ == InputFormat::kWAVEDUMP) {
+      current_timestamp_ = static_cast<ULong64_t>(trigger_time_tag);
+      Int_t n = samples->GetSize();
+      converted_samples.Set(n);
+      for (Int_t i = 0; i < n; ++i) {
+        converted_samples.SetAt(samples->At(i), i);
+      }
+      ProcessWaveform(converted_samples);
+    } else if (input_format_ == InputFormat::kSOLARIS) {
+      ProcessWaveform(*solaris_trace0);
+    }
   }
 
   delete samples;
+  delete solaris_trace0;
   file->Close();
   delete file;
 
