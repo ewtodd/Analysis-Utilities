@@ -265,9 +265,13 @@ public:
   UChar_t ana_probe_type[2];
   UChar_t dig_probe_type[4];
 
-  // Interleaved trace buffer: [trace0[0], trace1[0], dig0[0], dig1[0],
-  // dig2[0], dig3[0], trace0[1], ...] = 12 bytes per sample for ALL format.
-  // For OneTrace format: [trace0[0], trace0[1], ...] = 4 bytes per sample.
+  // Trace buffer, stored exactly as the SOLARIS DAQ writes it (SolReader.h in
+  // SOLARIS_DAQ): contiguous blocks, NOT interleaved samples. ALL format:
+  //   [trace0[0..len-1] as Int32][trace1[0..len-1] as Int32]
+  //   [dig0[0..len-1]][dig1[0..len-1]][dig2[0..len-1]][dig3[0..len-1]]
+  // i.e. 12 bytes per sample in total. OneTrace format: [trace0[0..len-1]] as
+  // Int32, 4 bytes per sample. Each accessor returns a pointer to its block,
+  // indexed by sample.
   std::vector<Char_t> trace_data;
 
   Bool_t hasTraces() const {
@@ -277,27 +281,29 @@ public:
   UInt_t getSamples() const { return static_cast<UInt_t>(trace_len); }
 
   const Int_t *getAnalog0() const {
-    if (data_type == ALL &&
-        trace_data.size() >= static_cast<std::size_t>(trace_len) * 12) {
+    const std::size_t len = static_cast<std::size_t>(trace_len);
+    if ((data_type == ALL && trace_data.size() >= len * 12) ||
+        (data_type == OneTrace && trace_data.size() >= len * 4)) {
       return reinterpret_cast<const Int_t *>(trace_data.data());
     }
     return nullptr;
   }
 
   const Int_t *getAnalog1() const {
-    if (data_type == ALL &&
-        trace_data.size() >= static_cast<std::size_t>(trace_len) * 12) {
-      return reinterpret_cast<const Int_t *>(trace_data.data() + 4);
+    const std::size_t len = static_cast<std::size_t>(trace_len);
+    if (data_type == ALL && trace_data.size() >= len * 12) {
+      return reinterpret_cast<const Int_t *>(trace_data.data() + len * 4);
     }
     return nullptr;
   }
 
   const UChar_t *getDigital(UInt_t ch) const {
-    if (ch > 3 || data_type != ALL ||
-        trace_data.size() < static_cast<std::size_t>(trace_len) * 12) {
+    const std::size_t len = static_cast<std::size_t>(trace_len);
+    if (ch > 3 || data_type != ALL || trace_data.size() < len * 12) {
       return nullptr;
     }
-    return reinterpret_cast<const UChar_t *>(trace_data.data() + 8 + ch);
+    return reinterpret_cast<const UChar_t *>(trace_data.data() + len * 8 +
+                                             len * ch);
   }
 
   const Int_t *getOneTrace() const {
