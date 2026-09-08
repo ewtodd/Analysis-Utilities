@@ -297,7 +297,7 @@ Enabled by `InitUtils::SetROOTPreferences` (via `enable_mt`) and by the parallel
 <!---->
 ## Python Package
 <!---->
-The `analysis-utilities` Python package provides two things: a bridge to use PlottingUtils from Python scripts, and a loader for efficiently reading ROOT TTrees into numpy arrays and pandas DataFrames for use with machine learning libraries.
+The `analysis-utilities` Python package provides two things: a bridge that makes the whole C++ API usable from Python scripts, and a loader for efficiently reading ROOT TTrees into numpy arrays and pandas DataFrames for use with machine learning libraries.
 <!---->
 ### Setup
 <!---->
@@ -330,9 +330,9 @@ in
 }
 ```
 <!---->
-### PlottingUtils bridge
+### C++ bridge
 <!---->
-`load_cpp_library()` loads the C++ shared library into ROOT and declares the PlottingUtils header, making the full PlottingUtils API available through PyROOT:
+`load_cpp_library()` loads the C++ shared library into ROOT and declares every public header, making the whole C++ API available through PyROOT:
 <!---->
 ```python
 from analysis_utilities import load_cpp_library
@@ -341,8 +341,19 @@ ROOT = load_cpp_library()
 #
 ROOT.PlottingUtils.SetStylePreferences(ROOT.PlotSaveFormat.kPNG)
 c = ROOT.PlottingUtils.GetConfiguredCanvas(False)
-# Use ROOT.PlottingUtils.ConfigureGraph, ConfigureHistogram, etc.
+#
+cfg = ROOT.FileProcessingConfig()
+cfg.polarity = -1
+processor = ROOT.WaveformProcessingUtils(cfg)
+processor.ProcessFile("run.root", "run_features")
 ```
+<!---->
+Two headers do not export a symbol matching their filename:
+<!---->
+- `IOUtils.hpp` declares `namespace IO`, so it is `ROOT.IO.OpenForReading`, not `ROOT.IOUtils`.
+- `BinaryUtils.hpp` declares the reader classes directly - `ROOT.CoMPASSReader`, `ROOT.WaveDump742Reader`, `ROOT.SOLReader` and their data/hit companions - with no `BinaryUtils` of its own.
+<!---->
+A class is visible to PyROOT only when Cling has parsed a declaration for it, so a header added to `include/` must also be added to `_CPP_HEADERS` in `python/analysis_utilities/__init__.py` or its classes are silently absent. The test suite enforces that the two lists match.
 <!---->
 ### Project-rooted output paths
 <!---->
