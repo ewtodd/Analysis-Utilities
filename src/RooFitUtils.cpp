@@ -17,8 +17,8 @@ RooAbsPdf *RooFitFunctions::MakeStepShelf(const TString &name, RooRealVar &x,
 
 RooAbsPdf *RooFitFunctions::MakeLowExpTail(const TString &name, RooRealVar &x,
                                            RooRealVar &mu, RooRealVar &sigma,
-                                           RooRealVar &tau) {
-  return new RooLowExpTail(name.Data(), name.Data(), x, mu, sigma, tau);
+                                           RooRealVar &tau_ratio) {
+  return new RooLowExpTail(name.Data(), name.Data(), x, mu, sigma, tau_ratio);
 }
 
 RooAbsPdf *RooFitFunctions::MakeLowLinTail(const TString &name, RooRealVar &x,
@@ -29,8 +29,8 @@ RooAbsPdf *RooFitFunctions::MakeLowLinTail(const TString &name, RooRealVar &x,
 
 RooAbsPdf *RooFitFunctions::MakeHighExpTail(const TString &name, RooRealVar &x,
                                             RooRealVar &mu, RooRealVar &sigma,
-                                            RooRealVar &tau) {
-  return new RooHighExpTail(name.Data(), name.Data(), x, mu, sigma, tau);
+                                            RooRealVar &tau_ratio) {
+  return new RooHighExpTail(name.Data(), name.Data(), x, mu, sigma, tau_ratio);
 }
 
 RooAbsPdf *RooFitFunctions::MakeLinearBackground(const TString &name,
@@ -328,7 +328,7 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   p.ratio_low_exp =
       new RooRealVar("LowExpTailAmplitude" + suffix,
                      "LowExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
-  p.tau_low_exp =
+  p.tau_ratio_low_exp =
       new RooRealVar("LowExpTailRatio" + suffix, "LowExpTailRatio" + suffix,
                      1.5, 1.0, tail_ratio_max_);
   p.ratio_low_lin =
@@ -339,7 +339,7 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   p.ratio_high_exp =
       new RooRealVar("HighExpTailAmplitude" + suffix,
                      "HighExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
-  p.tau_high_exp =
+  p.tau_ratio_high_exp =
       new RooRealVar("HighExpTailRatio" + suffix, "HighExpTailRatio" + suffix,
                      1.5, 1.0, tail_ratio_max_);
 
@@ -348,22 +348,22 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
   RegisterOwned(p.gaus_yield);
   RegisterOwned(p.ratio_step);
   RegisterOwned(p.ratio_low_exp);
-  RegisterOwned(p.tau_low_exp);
+  RegisterOwned(p.tau_ratio_low_exp);
   RegisterOwned(p.ratio_low_lin);
   RegisterOwned(p.slope_low_lin);
   RegisterOwned(p.ratio_high_exp);
-  RegisterOwned(p.tau_high_exp);
+  RegisterOwned(p.tau_ratio_high_exp);
 
   p.gauss_pdf =
       RooFitFunctions::MakeGaussian("gauss_pdf" + suffix, *x_, *p.mu, *p.sigma);
   p.step_pdf =
       RooFitFunctions::MakeStepShelf("step_pdf" + suffix, *x_, *p.mu, *p.sigma);
   p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
-      "low_exp_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.tau_low_exp);
+      "low_exp_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.tau_ratio_low_exp);
   p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
       "low_lin_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.slope_low_lin);
   p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
-      "high_exp_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.tau_high_exp);
+      "high_exp_pdf" + suffix, *x_, *p.mu, *p.sigma, *p.tau_ratio_high_exp);
 
   RegisterOwned(p.gauss_pdf);
   RegisterOwned(p.step_pdf);
@@ -452,13 +452,13 @@ void RooFitUtils::ConfigureComponentFlagsForPeak(Int_t peak_idx) {
   if (use_low_exp_tail_) {
     p.ratio_low_exp->setVal(0.1);
     p.ratio_low_exp->setConstant(kFALSE);
-    p.tau_low_exp->setVal(1.5);
-    p.tau_low_exp->setConstant(kFALSE);
+    p.tau_ratio_low_exp->setVal(1.5);
+    p.tau_ratio_low_exp->setConstant(kFALSE);
   } else {
     p.ratio_low_exp->setVal(0.0);
     p.ratio_low_exp->setConstant(kTRUE);
-    p.tau_low_exp->setVal(1.0);
-    p.tau_low_exp->setConstant(kTRUE);
+    p.tau_ratio_low_exp->setVal(1.0);
+    p.tau_ratio_low_exp->setConstant(kTRUE);
   }
 
   if (use_low_lin_tail_) {
@@ -476,13 +476,13 @@ void RooFitUtils::ConfigureComponentFlagsForPeak(Int_t peak_idx) {
   if (use_high_exp_tail_) {
     p.ratio_high_exp->setVal(0.1);
     p.ratio_high_exp->setConstant(kFALSE);
-    p.tau_high_exp->setVal(1.5);
-    p.tau_high_exp->setConstant(kFALSE);
+    p.tau_ratio_high_exp->setVal(1.5);
+    p.tau_ratio_high_exp->setConstant(kFALSE);
   } else {
     p.ratio_high_exp->setVal(0.0);
     p.ratio_high_exp->setConstant(kTRUE);
-    p.tau_high_exp->setVal(1.0);
-    p.tau_high_exp->setConstant(kTRUE);
+    p.tau_ratio_high_exp->setVal(1.0);
+    p.tau_ratio_high_exp->setConstant(kTRUE);
   }
 }
 
@@ -494,8 +494,8 @@ void RooFitUtils::FixComponent(Int_t peak_idx, const TString &component) {
   } else if (component == "low_exp") {
     p.ratio_low_exp->setVal(0.0);
     p.ratio_low_exp->setConstant(kTRUE);
-    p.tau_low_exp->setVal(1.0);
-    p.tau_low_exp->setConstant(kTRUE);
+    p.tau_ratio_low_exp->setVal(1.0);
+    p.tau_ratio_low_exp->setConstant(kTRUE);
   } else if (component == "low_lin") {
     p.ratio_low_lin->setVal(0.0);
     p.ratio_low_lin->setConstant(kTRUE);
@@ -504,8 +504,8 @@ void RooFitUtils::FixComponent(Int_t peak_idx, const TString &component) {
   } else if (component == "high_exp") {
     p.ratio_high_exp->setVal(0.0);
     p.ratio_high_exp->setConstant(kTRUE);
-    p.tau_high_exp->setVal(1.0);
-    p.tau_high_exp->setConstant(kTRUE);
+    p.tau_ratio_high_exp->setVal(1.0);
+    p.tau_ratio_high_exp->setConstant(kTRUE);
   }
 }
 
@@ -516,9 +516,9 @@ void RooFitUtils::ReleaseComponent(Int_t peak_idx, const TString &component) {
     p.ratio_step->setVal(0.15);
   } else if (component == "low_exp") {
     p.ratio_low_exp->setConstant(kFALSE);
-    p.tau_low_exp->setConstant(kFALSE);
+    p.tau_ratio_low_exp->setConstant(kFALSE);
     p.ratio_low_exp->setVal(0.15);
-    p.tau_low_exp->setVal(1.5);
+    p.tau_ratio_low_exp->setVal(1.5);
   } else if (component == "low_lin") {
     p.ratio_low_lin->setConstant(kFALSE);
     p.slope_low_lin->setConstant(kFALSE);
@@ -526,9 +526,9 @@ void RooFitUtils::ReleaseComponent(Int_t peak_idx, const TString &component) {
     p.slope_low_lin->setVal(0.0);
   } else if (component == "high_exp") {
     p.ratio_high_exp->setConstant(kFALSE);
-    p.tau_high_exp->setConstant(kFALSE);
+    p.tau_ratio_high_exp->setConstant(kFALSE);
     p.ratio_high_exp->setVal(0.15);
-    p.tau_high_exp->setVal(1.5);
+    p.tau_ratio_high_exp->setVal(1.5);
   }
 }
 
@@ -540,11 +540,11 @@ std::vector<RooRealVar *> RooFitUtils::CollectAllParams() {
     out.push_back(peaks_[pi].gaus_yield);
     out.push_back(peaks_[pi].ratio_step);
     out.push_back(peaks_[pi].ratio_low_exp);
-    out.push_back(peaks_[pi].tau_low_exp);
+    out.push_back(peaks_[pi].tau_ratio_low_exp);
     out.push_back(peaks_[pi].ratio_low_lin);
     out.push_back(peaks_[pi].slope_low_lin);
     out.push_back(peaks_[pi].ratio_high_exp);
-    out.push_back(peaks_[pi].tau_high_exp);
+    out.push_back(peaks_[pi].tau_ratio_high_exp);
   }
   out.push_back(bkg_.bkg_yield);
   out.push_back(bkg_.bkg_slope);
@@ -740,16 +740,16 @@ PeakFitResult RooFitUtils::ExtractPeakResult(Int_t peak_idx) {
   result.step_amplitude_error = p.ratio_step->getError() * ga;
   result.low_exp_tail_amplitude = p.ratio_low_exp->getVal() * ga;
   result.low_exp_tail_amplitude_error = p.ratio_low_exp->getError() * ga;
-  result.low_exp_tail_ratio = p.tau_low_exp->getVal();
-  result.low_exp_tail_ratio_error = p.tau_low_exp->getError();
+  result.low_exp_tail_ratio = p.tau_ratio_low_exp->getVal();
+  result.low_exp_tail_ratio_error = p.tau_ratio_low_exp->getError();
   result.low_lin_tail_amplitude = p.ratio_low_lin->getVal() * ga;
   result.low_lin_tail_amplitude_error = p.ratio_low_lin->getError() * ga;
   result.low_lin_tail_slope = p.slope_low_lin->getVal();
   result.low_lin_tail_slope_error = p.slope_low_lin->getError();
   result.high_exp_tail_amplitude = p.ratio_high_exp->getVal() * ga;
   result.high_exp_tail_amplitude_error = p.ratio_high_exp->getError() * ga;
-  result.high_exp_tail_ratio = p.tau_high_exp->getVal();
-  result.high_exp_tail_ratio_error = p.tau_high_exp->getError();
+  result.high_exp_tail_ratio = p.tau_ratio_high_exp->getVal();
+  result.high_exp_tail_ratio_error = p.tau_ratio_high_exp->getError();
   return result;
 }
 
@@ -831,11 +831,13 @@ void RooFitUtils::SaveInteractiveParams(const TString &input_name,
     return;
   }
   out << std::setprecision(17);
-  out << "RANGE " << fit_range_low_ << " " << fit_range_high_ << "\n";
+  out << "RANGE " << fit_range_low_ << " " << fit_range_high_;
+  out << std::endl;
   std::vector<RooRealVar *> all = CollectAllParams();
   for (size_t i = 0; i < all.size(); i++) {
     out << all[i]->GetName() << " " << all[i]->getVal() << " "
-        << all[i]->getError() << " " << (all[i]->isConstant() ? 1 : 0) << "\n";
+        << all[i]->getError() << " " << (all[i]->isConstant() ? 1 : 0);
+    out << std::endl;
   }
   out.close();
   std::cout << "Saved interactive params to " << filename << std::endl;
@@ -851,7 +853,6 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
 
   std::vector<RooRealVar *> all = CollectAllParams();
   std::string token;
-  Int_t idx = 0;
 
   in >> token;
   if (token == "RANGE") {
@@ -864,20 +865,7 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
     BuildDisplayHistogram();
   }
 
-  // Match by NAME, and never let saved state override MODEL CONFIGURATION --
-  // the same rule LoadSimInteractiveParams follows, which this path never got.
-  //
-  // Honouring the file's fixed flag silently defeats the component toggles: a
-  // .roofits written while a component was DISABLED records its parameters as
-  // fixed, and loading that into a model where the caller has just ENABLED the
-  // component pins them constant again and switches it back off. On the 73mGe
-  // Am-241 line that made a step-on/step-off pair come back byte-identical --
-  // same chi2 to five decimals, StepAmplitude 0 in both -- because the saved
-  // state carried "StepAmplitude1 0 0 1" while the log said ENABLED.
-  //
-  // Index-based matching was the second half of the problem: the name token was
-  // read and discarded, so any change to the parameter list silently shifted
-  // every later value onto the wrong variable.
+  // Match by NAME, and never let saved state override MODEL CONFIGURATION
   std::map<std::string, RooRealVar *> by_name;
   for (size_t i = 0; i < all.size(); i++)
     by_name[std::string(all[i]->GetName())] = all[i];
@@ -935,8 +923,9 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
     return;
   }
   out << std::setprecision(17);
-  out << "RANGE " << x_->getMin("fitrange") << " " << x_->getMax("fitrange")
-      << "\n";
+  out << "RANGE " << x_->getMin(kFitRangeName) << " "
+      << x_->getMax(kFitRangeName);
+  out << std::endl;
 
   std::set<RooRealVar *> seen;
   std::vector<RooRealVar *> ordered;
@@ -950,11 +939,11 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
                               p.gaus_yield,
                               p.ratio_step,
                               p.ratio_low_exp,
-                              p.tau_low_exp,
+                              p.tau_ratio_low_exp,
                               p.ratio_low_lin,
                               p.slope_low_lin,
                               p.ratio_high_exp,
-                              p.tau_high_exp};
+                              p.tau_ratio_high_exp};
       for (Int_t k = 0; k < 10; k++) {
         if (seen.insert(vars[k]).second)
           ordered.push_back(vars[k]);
@@ -969,8 +958,8 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
 
   for (size_t i = 0; i < ordered.size(); i++) {
     out << ordered[i]->GetName() << " " << ordered[i]->getVal() << " "
-        << ordered[i]->getError() << " " << (ordered[i]->isConstant() ? 1 : 0)
-        << "\n";
+        << ordered[i]->getError() << " " << (ordered[i]->isConstant() ? 1 : 0);
+    out << std::endl;
   }
   out.close();
   std::cout << "Saved sim interactive params to " << filename << std::endl;
@@ -995,11 +984,11 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
                               p.gaus_yield,
                               p.ratio_step,
                               p.ratio_low_exp,
-                              p.tau_low_exp,
+                              p.tau_ratio_low_exp,
                               p.ratio_low_lin,
                               p.slope_low_lin,
                               p.ratio_high_exp,
-                              p.tau_high_exp};
+                              p.tau_ratio_high_exp};
       for (Int_t k = 0; k < 10; k++) {
         by_name[vars[k]->GetName()] = vars[k];
       }
@@ -1015,12 +1004,12 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     Double_t rlo, rhi;
     in >> rlo >> rhi;
     x_->setRange(rlo, rhi);
-    x_->setRange("fitrange", rlo, rhi);
+    x_->setRange(kFitRangeName, rlo, rhi);
   }
 
   Double_t value, error;
   Int_t fixed;
-  Int_t n_skipped_fixed = 0;
+  Int_t n_set = 0, n_skipped_fixed = 0;
   while (in >> token >> value >> error >> fixed) {
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
     if (it == by_name.end()) {
@@ -1029,38 +1018,23 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
       continue;
     }
     // Never let saved state override MODEL CONFIGURATION.
-    //
-    // BuildChannelModel expresses a disabled component (use_high_exp_tail,
-    // use_low_lin_tail, use_step ...) as value 0 with constant = true. If a
-    // .simroofits written when that component was ENABLED is then loaded, the
-    // lines below would restore its old value and clear the constant flag,
-    // silently switching the component back on. The result is that toggling a
-    // component off in the caller has NO EFFECT whenever saved state exists --
-    // the fit comes back byte-identical, with unchanged degrees of freedom, and
-    // nothing warns.
-    //
-    // A parameter the model has already fixed is therefore left alone
-    // entirely: not its value, not its constant flag.
     if (it->second->isConstant()) {
       ++n_skipped_fixed;
       continue;
     }
     // Take the VALUE only. Constness is model configuration, not saved state.
-    //
-    // Honouring the file's fixed flag breaks the component toggles in the other
-    // direction from the bug above: a .simroofits written while a component was
-    // DISABLED records its parameters as fixed, and loading that into a model
-    // where the component is ENABLED would pin them constant and silently
-    // switch it back off. Two variants meant to differ by exactly that
-    // component then come back identical.
-    //
-    // The file supplies a starting point; use_* flags, mu/bkg/shape locks and
-    // lock_shape_after_seed decide what is free. Those all run after this load.
     (void)fixed;
     it->second->setVal(value);
     it->second->setError(error);
+    ++n_set;
   }
   in.close();
+
+  if (n_set == 0) {
+    std::cerr << "WARNING: no usable parameters in " << filename << std::endl;
+    return kFALSE;
+  }
+
   std::cout << "Loaded sim interactive params from " << filename << std::endl;
   if (n_skipped_fixed > 0)
     std::cout << "  (" << n_skipped_fixed
@@ -1340,8 +1314,8 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
               working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
               unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
               peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin("fitrange");
-        fit_range_high_ = x_->getMax("fitrange");
+        fit_range_low_ = x_->getMin(kFitRangeName);
+        fit_range_high_ = x_->getMax(kFitRangeName);
         BuildDisplayHistogram();
         final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
         std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
@@ -1459,12 +1433,12 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
         RooFitFunctions::MakeGaussian("gauss_pdf2_linked", *x_, *p.mu, *s);
     p.step_pdf =
         RooFitFunctions::MakeStepShelf("step_pdf2_linked", *x_, *p.mu, *s);
-    p.low_exp_pdf = RooFitFunctions::MakeLowExpTail("low_exp_pdf2_linked", *x_,
-                                                    *p.mu, *s, *p.tau_low_exp);
+    p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
+        "low_exp_pdf2_linked", *x_, *p.mu, *s, *p.tau_ratio_low_exp);
     p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
         "low_lin_pdf2_linked", *x_, *p.mu, *s, *p.slope_low_lin);
     p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
-        "high_exp_pdf2_linked", *x_, *p.mu, *s, *p.tau_high_exp);
+        "high_exp_pdf2_linked", *x_, *p.mu, *s, *p.tau_ratio_high_exp);
     RegisterOwned(p.gauss_pdf);
     RegisterOwned(p.step_pdf);
     RegisterOwned(p.low_exp_pdf);
@@ -1504,8 +1478,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
               working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
               unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
               peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin("fitrange");
-        fit_range_high_ = x_->getMax("fitrange");
+        fit_range_low_ = x_->getMin(kFitRangeName);
+        fit_range_high_ = x_->getMax(kFitRangeName);
         BuildDisplayHistogram();
         final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
         std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
@@ -1694,20 +1668,20 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     p.ratio_step->setConstant(kTRUE);
     p.ratio_low_exp->setVal(constrained_peak.low_exp_tail_amplitude / cga);
     p.ratio_low_exp->setConstant(kTRUE);
-    p.tau_low_exp->setVal(constrained_peak.low_exp_tail_ratio > 0
-                              ? constrained_peak.low_exp_tail_ratio
-                              : 1.0);
-    p.tau_low_exp->setConstant(kTRUE);
+    p.tau_ratio_low_exp->setVal(constrained_peak.low_exp_tail_ratio > 0
+                                    ? constrained_peak.low_exp_tail_ratio
+                                    : 1.0);
+    p.tau_ratio_low_exp->setConstant(kTRUE);
     p.ratio_low_lin->setVal(constrained_peak.low_lin_tail_amplitude / cga);
     p.ratio_low_lin->setConstant(kTRUE);
     p.slope_low_lin->setVal(constrained_peak.low_lin_tail_slope);
     p.slope_low_lin->setConstant(kTRUE);
     p.ratio_high_exp->setVal(constrained_peak.high_exp_tail_amplitude / cga);
     p.ratio_high_exp->setConstant(kTRUE);
-    p.tau_high_exp->setVal(constrained_peak.high_exp_tail_ratio > 0
-                               ? constrained_peak.high_exp_tail_ratio
-                               : 1.0);
-    p.tau_high_exp->setConstant(kTRUE);
+    p.tau_ratio_high_exp->setVal(constrained_peak.high_exp_tail_ratio > 0
+                                     ? constrained_peak.high_exp_tail_ratio
+                                     : 1.0);
+    p.tau_ratio_high_exp->setConstant(kTRUE);
   }
   ConfigureComponentFlagsForPeak(1);
 
@@ -1728,8 +1702,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
               working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
               unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
               peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin("fitrange");
-        fit_range_high_ = x_->getMax("fitrange");
+        fit_range_low_ = x_->getMin(kFitRangeName);
+        fit_range_high_ = x_->getMax(kFitRangeName);
         BuildDisplayHistogram();
         final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
         SaveInteractiveParams(input_name, peak_name);
@@ -1845,18 +1819,18 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     p.ratio_step->setConstant(kTRUE);
     p.ratio_low_exp->setVal(cp.low_exp_tail_amplitude / cga);
     p.ratio_low_exp->setConstant(kTRUE);
-    p.tau_low_exp->setVal(cp.low_exp_tail_ratio > 0 ? cp.low_exp_tail_ratio
-                                                    : 1.0);
-    p.tau_low_exp->setConstant(kTRUE);
+    p.tau_ratio_low_exp->setVal(
+        cp.low_exp_tail_ratio > 0 ? cp.low_exp_tail_ratio : 1.0);
+    p.tau_ratio_low_exp->setConstant(kTRUE);
     p.ratio_low_lin->setVal(cp.low_lin_tail_amplitude / cga);
     p.ratio_low_lin->setConstant(kTRUE);
     p.slope_low_lin->setVal(cp.low_lin_tail_slope);
     p.slope_low_lin->setConstant(kTRUE);
     p.ratio_high_exp->setVal(cp.high_exp_tail_amplitude / cga);
     p.ratio_high_exp->setConstant(kTRUE);
-    p.tau_high_exp->setVal(cp.high_exp_tail_ratio > 0 ? cp.high_exp_tail_ratio
-                                                      : 1.0);
-    p.tau_high_exp->setConstant(kTRUE);
+    p.tau_ratio_high_exp->setVal(
+        cp.high_exp_tail_ratio > 0 ? cp.high_exp_tail_ratio : 1.0);
+    p.tau_ratio_high_exp->setConstant(kTRUE);
   }
   ConfigureComponentFlagsForPeak(2);
 
@@ -1877,8 +1851,8 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
               working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
               unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
               peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin("fitrange");
-        fit_range_high_ = x_->getMax("fitrange");
+        fit_range_low_ = x_->getMin(kFitRangeName);
+        fit_range_high_ = x_->getMax(kFitRangeName);
         BuildDisplayHistogram();
         final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
         SaveInteractiveParams(input_name, peak_name);
@@ -2232,16 +2206,17 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
                                    0.0, 0.0, 0.5);
     p.ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailAmplitude" + suffix,
                                       registry, 0.0, 0.0, 0.5);
-    p.tau_low_exp = ResolveOrCreate(cfg.name, "LowExpTailRatio" + suffix,
-                                    registry, 1.5, 1.0, tail_ratio_max_);
+    p.tau_ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailRatio" + suffix,
+                                          registry, 1.5, 1.0, tail_ratio_max_);
     p.ratio_low_lin = ResolveOrCreate(cfg.name, "LowLinTailAmplitude" + suffix,
                                       registry, 0.0, 0.0, 0.5);
     p.slope_low_lin = ResolveOrCreate(cfg.name, "LowLinTailSlope" + suffix,
                                       registry, 0.0, -0.1, 0.1);
     p.ratio_high_exp = ResolveOrCreate(
         cfg.name, "HighExpTailAmplitude" + suffix, registry, 0.0, 0.0, 0.5);
-    p.tau_high_exp = ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix,
-                                     registry, 1.5, 1.0, tail_ratio_max_);
+    p.tau_ratio_high_exp =
+        ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix, registry, 1.5,
+                        1.0, tail_ratio_max_);
 
     // ResolveOrCreate returns nullptr when a LinkParameter target names a
     // source that has not been built yet. Links are resolved in construction
@@ -2258,11 +2233,11 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
                               p.gaus_yield,
                               p.ratio_step,
                               p.ratio_low_exp,
-                              p.tau_low_exp,
+                              p.tau_ratio_low_exp,
                               p.ratio_low_lin,
                               p.slope_low_lin,
                               p.ratio_high_exp,
-                              p.tau_high_exp};
+                              p.tau_ratio_high_exp};
     const char *required_names[] = {"Mu",
                                     "Sigma",
                                     "GausAmplitude",
@@ -2290,11 +2265,12 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     p.step_pdf = RooFitFunctions::MakeStepShelf("step_pdf" + pdf_suffix, *x_,
                                                 *p.mu, *p.sigma);
     p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
-        "low_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_low_exp);
+        "low_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_ratio_low_exp);
     p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
         "low_lin_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.slope_low_lin);
     p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
-        "high_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_high_exp);
+        "high_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma,
+        *p.tau_ratio_high_exp);
     RegisterOwned(p.gauss_pdf);
     RegisterOwned(p.step_pdf);
     RegisterOwned(p.low_exp_pdf);
@@ -2328,8 +2304,8 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     if (!cfg.use_low_exp_tail) {
       p.ratio_low_exp->setVal(0.0);
       p.ratio_low_exp->setConstant(kTRUE);
-      p.tau_low_exp->setVal(1.0);
-      p.tau_low_exp->setConstant(kTRUE);
+      p.tau_ratio_low_exp->setVal(1.0);
+      p.tau_ratio_low_exp->setConstant(kTRUE);
     }
     if (!cfg.use_low_lin_tail) {
       p.ratio_low_lin->setVal(0.0);
@@ -2340,8 +2316,8 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     if (!cfg.use_high_exp_tail) {
       p.ratio_high_exp->setVal(0.0);
       p.ratio_high_exp->setConstant(kTRUE);
-      p.tau_high_exp->setVal(1.0);
-      p.tau_high_exp->setConstant(kTRUE);
+      p.tau_ratio_high_exp->setVal(1.0);
+      p.tau_ratio_high_exp->setConstant(kTRUE);
     }
 
     peaks.push_back(p);
@@ -2465,7 +2441,7 @@ void RooFitUtils::ApplySeedToChannel(const TString &channel) {
     if (cp.low_exp_tail_amplitude >= 0 && cga > 0)
       p.ratio_low_exp->setVal(cp.low_exp_tail_amplitude / cga);
     if (cp.low_exp_tail_ratio > 0)
-      p.tau_low_exp->setVal(cp.low_exp_tail_ratio);
+      p.tau_ratio_low_exp->setVal(cp.low_exp_tail_ratio);
     if (cp.low_lin_tail_amplitude >= 0 && cga > 0)
       p.ratio_low_lin->setVal(cp.low_lin_tail_amplitude / cga);
     if (cp.low_lin_tail_slope > -1)
@@ -2473,7 +2449,7 @@ void RooFitUtils::ApplySeedToChannel(const TString &channel) {
     if (cp.high_exp_tail_amplitude >= 0 && cga > 0)
       p.ratio_high_exp->setVal(cp.high_exp_tail_amplitude / cga);
     if (cp.high_exp_tail_ratio > 0)
-      p.tau_high_exp->setVal(cp.high_exp_tail_ratio);
+      p.tau_ratio_high_exp->setVal(cp.high_exp_tail_ratio);
   }
   if (seed.bkg_constant >= 0)
     bkg.bkg_yield->setVal(seed.bkg_constant);
@@ -2534,16 +2510,16 @@ void RooFitUtils::ApplyChannelShapeLocks() {
         p.ratio_step->setConstant(kTRUE);
       if (p.ratio_low_exp)
         p.ratio_low_exp->setConstant(kTRUE);
-      if (p.tau_low_exp)
-        p.tau_low_exp->setConstant(kTRUE);
+      if (p.tau_ratio_low_exp)
+        p.tau_ratio_low_exp->setConstant(kTRUE);
       if (p.ratio_low_lin)
         p.ratio_low_lin->setConstant(kTRUE);
       if (p.slope_low_lin)
         p.slope_low_lin->setConstant(kTRUE);
       if (p.ratio_high_exp)
         p.ratio_high_exp->setConstant(kTRUE);
-      if (p.tau_high_exp)
-        p.tau_high_exp->setConstant(kTRUE);
+      if (p.tau_ratio_high_exp)
+        p.tau_ratio_high_exp->setConstant(kTRUE);
     }
   }
 }
@@ -2615,22 +2591,54 @@ PeakFitResult RooFitUtils::ExtractPeakResultFor(const RooFitPeakModel &p) {
   r.step_amplitude_error = p.ratio_step->getError() * ga;
   r.low_exp_tail_amplitude = p.ratio_low_exp->getVal() * ga;
   r.low_exp_tail_amplitude_error = p.ratio_low_exp->getError() * ga;
-  r.low_exp_tail_ratio = p.tau_low_exp->getVal();
-  r.low_exp_tail_ratio_error = p.tau_low_exp->getError();
+  r.low_exp_tail_ratio = p.tau_ratio_low_exp->getVal();
+  r.low_exp_tail_ratio_error = p.tau_ratio_low_exp->getError();
   r.low_lin_tail_amplitude = p.ratio_low_lin->getVal() * ga;
   r.low_lin_tail_amplitude_error = p.ratio_low_lin->getError() * ga;
   r.low_lin_tail_slope = p.slope_low_lin->getVal();
   r.low_lin_tail_slope_error = p.slope_low_lin->getError();
   r.high_exp_tail_amplitude = p.ratio_high_exp->getVal() * ga;
   r.high_exp_tail_amplitude_error = p.ratio_high_exp->getError() * ga;
-  r.high_exp_tail_ratio = p.tau_high_exp->getVal();
-  r.high_exp_tail_ratio_error = p.tau_high_exp->getError();
+  r.high_exp_tail_ratio = p.tau_ratio_high_exp->getVal();
+  r.high_exp_tail_ratio_error = p.tau_ratio_high_exp->getError();
   return r;
 }
 
 // ---------------------------------------------------------------------------
 // Per-parameter diagnostics
 // ---------------------------------------------------------------------------
+
+// Populate one FitParameterDiagnostic from a RooRealVar. The variable is
+// nullptr for a component that was not enabled (its model object was never
+// built), so the diagnostic records only its name. The near-limit flags fire
+// when the value sits within a margin of its bound; the margin is the larger
+// of a small absolute tolerance and a fraction of the full range, so tight
+// limits don't get skipped.
+static void
+RooFitExtractParamDiagnostic(RooRealVar *rv, const std::string &name,
+                             std::vector<FitParameterDiagnostic> &diags) {
+  FitParameterDiagnostic d;
+  d.name = name;
+  if (rv) {
+    d.value = rv->getVal();
+    d.error = rv->getError();
+    d.lo = rv->getMin();
+    d.hi = rv->getMax();
+    d.has_limits = kTRUE;
+    Double_t range = d.hi - d.lo;
+    if (range > 0) {
+      Double_t abs_tol = 1e-4;
+      Double_t frac_tol = 1e-3;
+      Double_t margin = TMath::Max(abs_tol, frac_tol * range);
+      if (d.value - d.lo < margin)
+        d.near_lower = kTRUE;
+      if (d.hi - d.value < margin)
+        d.near_upper = kTRUE;
+      d.near_limit = d.near_lower || d.near_upper;
+    }
+  }
+  diags.push_back(d);
+}
 
 std::vector<FitParameterDiagnostic>
 RooFitUtils::ExtractParameterDiagnostics(const TString &channel) {
@@ -2647,58 +2655,46 @@ RooFitUtils::ExtractParameterDiagnostics(const TString &channel) {
   if (!cfg)
     return diags;
 
-  const auto &peaks = sim_channel_peaks_[channel];
-  const auto &bkg = sim_channel_bkg_[channel];
-
-  // Helper to extract one param
-  auto extract = [&](RooRealVar *rv, const std::string &name) {
-    FitParameterDiagnostic d;
-    d.name = name;
-    if (rv) {
-      d.value = rv->getVal();
-      d.error = rv->getError();
-      d.lo = rv->getMin();
-      d.hi = rv->getMax();
-      d.has_limits = kTRUE;
-      Double_t range = d.hi - d.lo;
-      if (range > 0) {
-        Double_t abs_tol = 1e-4;
-        Double_t frac_tol = 1e-3;
-        Double_t margin = TMath::Max(abs_tol, frac_tol * range);
-        if (d.value - d.lo < margin)
-          d.near_lower = kTRUE;
-        if (d.hi - d.value < margin)
-          d.near_upper = kTRUE;
-        d.near_limit = d.near_lower || d.near_upper;
-      }
-    }
-    diags.push_back(d);
-  };
+  const std::vector<RooFitPeakModel> &peaks = sim_channel_peaks_[channel];
+  const RooFitBackgroundModel &bkg = sim_channel_bkg_[channel];
 
   // Peak parameters
   for (size_t pi = 0; pi < peaks.size(); pi++) {
     TString suffix = TString::Format("%d", pi + 1);
     TString cname = channel + ":";
-    extract(peaks[pi].mu, (cname + "Mu" + suffix).Data());
-    extract(peaks[pi].sigma, (cname + "Sigma" + suffix).Data());
-    extract(peaks[pi].gaus_yield, (cname + "GausAmplitude" + suffix).Data());
-    extract(peaks[pi].ratio_step, (cname + "StepAmplitude" + suffix).Data());
-    extract(peaks[pi].ratio_low_exp,
-            (cname + "LowExpTailAmplitude" + suffix).Data());
-    extract(peaks[pi].tau_low_exp, (cname + "LowExpTailRatio" + suffix).Data());
-    extract(peaks[pi].ratio_low_lin,
-            (cname + "LowLinTailAmplitude" + suffix).Data());
-    extract(peaks[pi].slope_low_lin,
-            (cname + "LowLinTailSlope" + suffix).Data());
-    extract(peaks[pi].ratio_high_exp,
-            (cname + "HighExpTailAmplitude" + suffix).Data());
-    extract(peaks[pi].tau_high_exp,
-            (cname + "HighExpTailRatio" + suffix).Data());
+    RooFitExtractParamDiagnostic(peaks[pi].mu, (cname + "Mu" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(peaks[pi].sigma,
+                                 (cname + "Sigma" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(
+        peaks[pi].gaus_yield, (cname + "GausAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(
+        peaks[pi].ratio_step, (cname + "StepAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(
+        peaks[pi].ratio_low_exp,
+        (cname + "LowExpTailAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks[pi].tau_ratio_low_exp,
+                                 (cname + "LowExpTailRatio" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(
+        peaks[pi].ratio_low_lin,
+        (cname + "LowLinTailAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks[pi].slope_low_lin,
+                                 (cname + "LowLinTailSlope" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(
+        peaks[pi].ratio_high_exp,
+        (cname + "HighExpTailAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks[pi].tau_ratio_high_exp,
+                                 (cname + "HighExpTailRatio" + suffix).Data(),
+                                 diags);
   }
 
   // Background parameters
-  extract(bkg.bkg_yield, TString(channel + ":BkgConstant").Data());
-  extract(bkg.bkg_slope, TString(channel + ":BkgSlope").Data());
+  RooFitExtractParamDiagnostic(bkg.bkg_yield,
+                               TString(channel + ":BkgConstant").Data(), diags);
+  RooFitExtractParamDiagnostic(bkg.bkg_slope,
+                               TString(channel + ":BkgSlope").Data(), diags);
 
   return diags;
 }
@@ -2707,46 +2703,33 @@ std::vector<FitParameterDiagnostic>
 RooFitUtils::ExtractParameterDiagnosticsSingle() {
   std::vector<FitParameterDiagnostic> diags;
 
-  auto extract = [&](RooRealVar *rv, const std::string &name) {
-    FitParameterDiagnostic d;
-    d.name = name;
-    if (rv) {
-      d.value = rv->getVal();
-      d.error = rv->getError();
-      d.lo = rv->getMin();
-      d.hi = rv->getMax();
-      d.has_limits = kTRUE;
-      Double_t range = d.hi - d.lo;
-      if (range > 0) {
-        Double_t abs_tol = 1e-4;
-        Double_t frac_tol = 1e-3;
-        Double_t margin = TMath::Max(abs_tol, frac_tol * range);
-        if (d.value - d.lo < margin)
-          d.near_lower = kTRUE;
-        if (d.hi - d.value < margin)
-          d.near_upper = kTRUE;
-        d.near_limit = d.near_lower || d.near_upper;
-      }
-    }
-    diags.push_back(d);
-  };
-
   for (size_t pi = 0; pi < peaks_.size(); pi++) {
     TString suffix = TString::Format("%d", pi + 1);
-    extract(peaks_[pi].mu, ("Mu" + suffix).Data());
-    extract(peaks_[pi].sigma, ("Sigma" + suffix).Data());
-    extract(peaks_[pi].gaus_yield, ("GausAmplitude" + suffix).Data());
-    extract(peaks_[pi].ratio_step, ("StepAmplitude" + suffix).Data());
-    extract(peaks_[pi].ratio_low_exp, ("LowExpTailAmplitude" + suffix).Data());
-    extract(peaks_[pi].tau_low_exp, ("LowExpTailRatio" + suffix).Data());
-    extract(peaks_[pi].ratio_low_lin, ("LowLinTailAmplitude" + suffix).Data());
-    extract(peaks_[pi].slope_low_lin, ("LowLinTailSlope" + suffix).Data());
-    extract(peaks_[pi].ratio_high_exp,
-            ("HighExpTailAmplitude" + suffix).Data());
-    extract(peaks_[pi].tau_high_exp, ("HighExpTailRatio" + suffix).Data());
+    RooFitExtractParamDiagnostic(peaks_[pi].mu, ("Mu" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].sigma, ("Sigma" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].gaus_yield,
+                                 ("GausAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].ratio_step,
+                                 ("StepAmplitude" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].ratio_low_exp,
+                                 ("LowExpTailAmplitude" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].tau_ratio_low_exp,
+                                 ("LowExpTailRatio" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].ratio_low_lin,
+                                 ("LowLinTailAmplitude" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].slope_low_lin,
+                                 ("LowLinTailSlope" + suffix).Data(), diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].ratio_high_exp,
+                                 ("HighExpTailAmplitude" + suffix).Data(),
+                                 diags);
+    RooFitExtractParamDiagnostic(peaks_[pi].tau_ratio_high_exp,
+                                 ("HighExpTailRatio" + suffix).Data(), diags);
   }
-  extract(bkg_.bkg_yield, "BkgConstant");
-  extract(bkg_.bkg_slope, "BkgSlope");
+  RooFitExtractParamDiagnostic(bkg_.bkg_yield, "BkgConstant", diags);
+  RooFitExtractParamDiagnostic(bkg_.bkg_slope, "BkgSlope", diags);
 
   return diags;
 }
@@ -2920,7 +2903,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       union_hi = sim_channels_[i].fit_range_high;
   }
   x_->setRange(union_lo, union_hi);
-  x_->setRange("fitrange", union_lo, union_hi);
+  x_->setRange(kFitRangeName, union_lo, union_hi);
 
   for (size_t i = 0; i < sim_channels_.size(); i++) {
     ApplySeedToChannel(sim_channels_[i].name);
@@ -2959,8 +2942,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   if (interactive_) {
     if (LoadSimInteractiveParams(input_name, base_label)) {
       sim_valid = kTRUE;
-      Float_t loaded_lo = x_->getMin("fitrange");
-      Float_t loaded_hi = x_->getMax("fitrange");
+      Float_t loaded_lo = x_->getMin(kFitRangeName);
+      Float_t loaded_hi = x_->getMax(kFitRangeName);
       for (size_t i = 0; i < sim_channels_.size(); i++) {
         sim_channels_[i].fit_range_low = loaded_lo;
         sim_channels_[i].fit_range_high = loaded_hi;
@@ -2982,7 +2965,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         Int_t load_eval_errors = fit_debug_ ? 10 : -1;
         fit_result = sim_pdf_->fitTo(
             *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-            RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
+            RooFit::Range(kFitRangeName), RooFit::SplitRange(kTRUE),
             RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(load_print_level),
             RooFit::PrintEvalErrors(load_eval_errors), RooFit::Strategy(1),
             RooFit::Minimizer("Minuit2", "migrad"),
@@ -2990,22 +2973,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
             BestAvailableBackend());
         // Gate on EDM, not on the status code. Minuit2 routinely returns a
         // nonzero status (covariance forced positive-definite, or a post-migrad
-        // Hesse quirk) on fits that have genuinely converged: on the 73mGe
-        // precal this path reaches edm ~0.26 against the stated tolerance of 1,
-        // with chi2/ndf ~1.5-2.3, versus edm ~24000 and chi2 ~8 from a cold
-        // start. Gating on status alone discarded every one of those good fits
-        // and silently emptied the results. The status is still reported in the
-        // diagnostics block below, so a genuine failure remains visible.
-        // Threshold note: edm is an ABSOLUTE distance-to-minimum in function
-        // units, and Minuit's printed "edm < 1" criterion is scaled for
-        // chi2-like functions. For an extended NLL of magnitude ~1e7, edm ~2 is
-        // a relative precision of ~1e-7 -- converged by any practical measure.
-        // edm < 1 demonstrably mis-ranked these fits: it rejected a run with
-        // chi2/ndf 1.45/2.23 (edm 1.80) while accepting one with 1.98/2.61
-        // (edm 0.32). Requiring covQual >= 2 additionally means Minuit built at
-        // least an approximate covariance, which a genuinely diverged fit does
-        // not -- the cold start reached edm 24000 with chi2/ndf ~8.
-        //
+        // Hesse quirk) on fits that have genuinely converged.
         // chi2/ndf per channel is the measure to actually judge quality on, and
         // it is printed for every channel below.
         Double_t refit_edm = fit_result ? fit_result->edm() : -1.0;
@@ -3044,8 +3012,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       gROOT->SetBatch(was_batch);
       sim_valid = accepted;
       if (accepted) {
-        Float_t edited_lo = x_->getMin("fitrange");
-        Float_t edited_hi = x_->getMax("fitrange");
+        Float_t edited_lo = x_->getMin(kFitRangeName);
+        Float_t edited_hi = x_->getMax(kFitRangeName);
         for (size_t i = 0; i < sim_channels_.size(); i++) {
           sim_channels_[i].fit_range_low = edited_lo;
           sim_channels_[i].fit_range_high = edited_hi;
@@ -3069,7 +3037,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::PrintErrors);
       RooAbsReal *nll = sim_pdf_->createNLL(
           *sim_combined_data_, RooFit::Extended(kTRUE),
-          RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE));
+          RooFit::Range(kFitRangeName), RooFit::SplitRange(kTRUE));
       Double_t nll_seed = (nll != 0) ? nll->getVal() : 0.0;
       std::cout << "=== AU_ROOFIT_FIT_DEBUG: seed NLL = " << nll_seed
                 << (std::isfinite(nll_seed) ? "" : "   <== NON-FINITE")
@@ -3088,18 +3056,13 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     Int_t eval_errors = fit_debug_ ? 10 : -1;
     fit_result = sim_pdf_->fitTo(
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-        RooFit::Range("fitrange"), RooFit::SplitRange(kTRUE),
+        RooFit::Range(kFitRangeName), RooFit::SplitRange(kTRUE),
         RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(print_level),
         RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(1),
         RooFit::Minimizer("Minuit2", "migrad"),
         RooFit::ExternalConstraints(sim_constraint_set_),
         BestAvailableBackend());
-    // Same EDM-based criterion as the refit-after-load path above, for the same
-    // reason: Minuit2 returns a nonzero status on covariance grounds for fits
-    // that have genuinely reached the minimum, and gating on status alone
-    // silently discards them. Freeing the post-cal peak shape adds parameters
-    // and makes that outcome routine -- it produced status 3 with edm 0.02-0.25
-    // on fits whose per-channel chi2/ndf were fine, and emptied the results.
+    // Same EDM-based criterion as the refit-after-load path above
     Double_t cold_edm = fit_result ? fit_result->edm() : -1.0;
     Int_t cold_covq = fit_result ? fit_result->covQual() : -1;
     sim_valid = (fit_result &&

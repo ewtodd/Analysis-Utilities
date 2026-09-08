@@ -57,11 +57,11 @@ RooAbsPdf *MakeGaussian(const TString &name, RooRealVar &x, RooRealVar &mu,
 RooAbsPdf *MakeStepShelf(const TString &name, RooRealVar &x, RooRealVar &mu,
                          RooRealVar &sigma);
 RooAbsPdf *MakeLowExpTail(const TString &name, RooRealVar &x, RooRealVar &mu,
-                          RooRealVar &sigma, RooRealVar &tau);
+                          RooRealVar &sigma, RooRealVar &tau_ratio);
 RooAbsPdf *MakeLowLinTail(const TString &name, RooRealVar &x, RooRealVar &mu,
                           RooRealVar &sigma, RooRealVar &slope);
 RooAbsPdf *MakeHighExpTail(const TString &name, RooRealVar &x, RooRealVar &mu,
-                           RooRealVar &sigma, RooRealVar &tau);
+                           RooRealVar &sigma, RooRealVar &tau_ratio);
 RooAbsPdf *MakeLinearBackground(const TString &name, RooRealVar &x,
                                 RooRealVar &slope);
 } // namespace RooFitFunctions
@@ -72,11 +72,11 @@ struct RooFitPeakModel {
   RooRealVar *gaus_yield = nullptr;
   RooRealVar *ratio_step = nullptr;
   RooRealVar *ratio_low_exp = nullptr;
-  RooRealVar *tau_low_exp = nullptr;
+  RooRealVar *tau_ratio_low_exp = nullptr;
   RooRealVar *ratio_low_lin = nullptr;
   RooRealVar *slope_low_lin = nullptr;
   RooRealVar *ratio_high_exp = nullptr;
-  RooRealVar *tau_high_exp = nullptr;
+  RooRealVar *tau_ratio_high_exp = nullptr;
 
   RooAbsPdf *gauss_pdf = nullptr;
   RooAbsPdf *step_pdf = nullptr;
@@ -132,11 +132,7 @@ struct RooFitParamLink {
 // Gaussian penalty on (mu_hi - mu_lo) rather than by fixing either centroid.
 // Locking the two mu values and constraining their separation are different
 // statements: locking pins the pair to an absolute scale as well, while this
-// leaves the pair free to slide together and forbids only the STRETCH. Use it
-// where the spacing is known far better than the placement -- an atomic
-// doublet whose separation is tabulated to <1 eV, measured by a detector whose
-// absolute gain is known to parts in 1e3.
-//
+// leaves the pair free to slide together and forbids only the STRETCH.
 // sigma is the uncertainty on delta, so the constraint stays a measurement and
 // not a hard equality; set it to the literature error on the spacing.
 struct RooFitSeparationConstraint {
@@ -166,8 +162,8 @@ private:
   Bool_t fit_debug_;
   // See SetRefitAfterLoad(). Default kFALSE preserves the historic behaviour.
   Bool_t refit_after_load_ = kFALSE;
-  // Upper bound on the exponential tail DECAY LENGTHS, in keV. See
-  // SetTailRatioMax(). 100.0 preserves the historic behaviour.
+  // Upper bound on the exponential tail decay ratios tau/sigma. See
+  // SetTailRatioMax().
   Double_t tail_ratio_max_ = 100.0;
   std::vector<Double_t> manual_params_;
 
@@ -194,8 +190,6 @@ private:
   RooSimultaneous *sim_pdf_;
   RooDataSet *sim_combined_data_;
   Bool_t sim_mode_;
-
-  static constexpr const char *kFitRangeName = "fitrange";
 
   void InitState();
   void BuildDisplayHistogram();
@@ -285,6 +279,8 @@ private:
   void RegisterOwned(RooAbsArg *arg);
 
 public:
+  static constexpr const char *kFitRangeName = "fitrange";
+
   RooFitUtils();
   RooFitUtils(const std::vector<Double_t> &events, Float_t fit_range_low,
               Float_t fit_range_high, Float_t display_bin_width_kev,
@@ -336,28 +332,17 @@ public:
   // values cannot respond to anything upstream that has changed.
   //
   // With this enabled the saved parameters instead SEED a real minimisation.
-  // That keeps what the hand-tuned state is genuinely good for (a starting
-  // point close to the optimum, which the automated cold start does not reach:
-  // on the 73mGe precal it converges to chi2/ndf ~ 1.4 from a saved seed versus
-  // ~8 cold, with edm 24000x tolerance) while making the result reproducible
-  // and responsive to upstream changes.
-  //
   // Default kFALSE: existing callers keep the historic replay behaviour.
   void SetRefitAfterLoad(Bool_t refit = kTRUE) { refit_after_load_ = refit; }
 
-  // Upper bound on the exponential tail decay lengths (LowExpTailRatio,
-  // HighExpTailRatio), in keV. The historic default is 100, which on a typical
-  // fit window is longer than the window itself -- over such a range the
+  // Upper bound on the dimensionless decay ratio tau/sigma (LowExpTailRatio,
+  // HighExpTailRatio). The historic default is 100, which on a typical fit
+  // window makes tau longer than the window itself -- over such a range the
   // exponential is flat, so the "tail" becomes a constant pedestal and is
-  // degenerate with the background yield. A fit will then happily park the
-  // parameter at the bound, and on the 73mGe data it does exactly that:
-  // HighExpTailRatio pinned at 100 with its amplitude simultaneously pinned at
-  // 0.5, in fit after fit, hand-tuned ones included.
-  //
-  // Set this to a physically motivated value (a charge-collection or pileup
-  // shoulder decays over a few keV, not tens) so the component either describes
+  // degenerate with the background yield.
+  // Set this to a physically motivated value so the component either describes
   // a real tail or fits to nothing, rather than absorbing background.
-  void SetTailRatioMax(Double_t tau_max) { tail_ratio_max_ = tau_max; }
+  void SetTailRatioMax(Double_t ratio_max) { tail_ratio_max_ = ratio_max; }
 
   void SetManualParameters(const std::vector<Double_t> &params);
   void SetManualParameter(Int_t index, Double_t value);

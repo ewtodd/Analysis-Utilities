@@ -206,21 +206,23 @@ Double_t RooStepShelf::analyticalIntegral(Int_t code,
 }
 
 RooLowExpTail::RooLowExpTail(const char *name, const char *title, RooAbsReal &x,
-                             RooAbsReal &mu, RooAbsReal &sigma, RooAbsReal &tau)
+                             RooAbsReal &mu, RooAbsReal &sigma,
+                             RooAbsReal &tau_ratio)
     : RooAbsPdf(name, title), x_("x", "x", this, x), mu_("mu", "mu", this, mu),
-      sigma_("sigma", "sigma", this, sigma), tau_("tau", "tau", this, tau) {}
+      sigma_("sigma", "sigma", this, sigma),
+      tau_ratio_("tau_ratio", "tau_ratio", this, tau_ratio) {}
 
 RooLowExpTail::RooLowExpTail(const RooLowExpTail &other, const char *name)
     : RooAbsPdf(other, name), x_("x", this, other.x_),
       mu_("mu", this, other.mu_), sigma_("sigma", this, other.sigma_),
-      tau_("tau", this, other.tau_) {}
+      tau_ratio_("tau_ratio", this, other.tau_ratio_) {}
 
 Double_t RooLowExpTail::evaluate() const {
   Double_t sigma = (Double_t)sigma_;
-  Double_t ratio = (Double_t)tau_;
-  if (sigma <= 0 || ratio <= 0)
+  Double_t tau_ratio = (Double_t)tau_ratio_;
+  if (sigma <= 0 || tau_ratio <= 0)
     return 0.0;
-  Double_t tau = ratio * sigma;
+  Double_t tau = tau_ratio * sigma;
   Double_t y = (Double_t)x_ - (Double_t)mu_;
   return ExpTailDensity(y, sigma, tau);
 }
@@ -231,13 +233,13 @@ void RooLowExpTail::doEval(RooFit::EvalContext &ctx) const {
   size_t n = output.size();
   Double_t sigma = ctx.at(sigma_)[0];
   Double_t mu = ctx.at(mu_)[0];
-  Double_t ratio = ctx.at(tau_)[0];
-  if (sigma <= 0 || ratio <= 0) {
+  Double_t tau_ratio = ctx.at(tau_ratio_)[0];
+  if (sigma <= 0 || tau_ratio <= 0) {
     for (size_t i = 0; i < n; ++i)
       output[i] = kDensityFloor;
     return;
   }
-  Double_t tau = ratio * sigma;
+  Double_t tau = tau_ratio * sigma;
   Double_t inv_tau = 1.0 / tau;
   Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
 #ifdef AU_ROOFIT_BACKEND_CUDA
@@ -268,10 +270,10 @@ Double_t RooLowExpTail::analyticalIntegral(Int_t code,
   if (code != 1)
     return 1e-300;
   Double_t sigma = (Double_t)sigma_;
-  Double_t ratio = (Double_t)tau_;
-  if (sigma <= 0 || ratio <= 0)
+  Double_t tau_ratio = (Double_t)tau_ratio_;
+  if (sigma <= 0 || tau_ratio <= 0)
     return 1e-300;
-  Double_t tau = ratio * sigma;
+  Double_t tau = tau_ratio * sigma;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);
@@ -362,21 +364,22 @@ Double_t RooLowLinTail::analyticalIntegral(Int_t code,
 
 RooHighExpTail::RooHighExpTail(const char *name, const char *title,
                                RooAbsReal &x, RooAbsReal &mu, RooAbsReal &sigma,
-                               RooAbsReal &tau)
+                               RooAbsReal &tau_ratio)
     : RooAbsPdf(name, title), x_("x", "x", this, x), mu_("mu", "mu", this, mu),
-      sigma_("sigma", "sigma", this, sigma), tau_("tau", "tau", this, tau) {}
+      sigma_("sigma", "sigma", this, sigma),
+      tau_ratio_("tau_ratio", "tau_ratio", this, tau_ratio) {}
 
 RooHighExpTail::RooHighExpTail(const RooHighExpTail &other, const char *name)
     : RooAbsPdf(other, name), x_("x", this, other.x_),
       mu_("mu", this, other.mu_), sigma_("sigma", this, other.sigma_),
-      tau_("tau", this, other.tau_) {}
+      tau_ratio_("tau_ratio", this, other.tau_ratio_) {}
 
 Double_t RooHighExpTail::evaluate() const {
   Double_t sigma = (Double_t)sigma_;
-  Double_t ratio = (Double_t)tau_;
-  if (sigma <= 0 || ratio <= 0)
+  Double_t tau_ratio = (Double_t)tau_ratio_;
+  if (sigma <= 0 || tau_ratio <= 0)
     return 0.0;
-  Double_t tau = ratio * sigma;
+  Double_t tau = tau_ratio * sigma;
   Double_t z = (Double_t)mu_ - (Double_t)x_;
   return ExpTailDensity(z, sigma, tau);
 }
@@ -387,13 +390,13 @@ void RooHighExpTail::doEval(RooFit::EvalContext &ctx) const {
   size_t n = output.size();
   Double_t sigma = ctx.at(sigma_)[0];
   Double_t mu = ctx.at(mu_)[0];
-  Double_t ratio = ctx.at(tau_)[0];
-  if (sigma <= 0 || ratio <= 0) {
+  Double_t tau_ratio = ctx.at(tau_ratio_)[0];
+  if (sigma <= 0 || tau_ratio <= 0) {
     for (size_t i = 0; i < n; ++i)
       output[i] = kDensityFloor;
     return;
   }
-  Double_t tau = ratio * sigma;
+  Double_t tau = tau_ratio * sigma;
   Double_t inv_tau = 1.0 / tau;
   Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
 #ifdef AU_ROOFIT_BACKEND_CUDA
@@ -424,10 +427,10 @@ Double_t RooHighExpTail::analyticalIntegral(Int_t code,
   if (code != 1)
     return 1e-300;
   Double_t sigma = (Double_t)sigma_;
-  Double_t ratio = (Double_t)tau_;
-  if (sigma <= 0 || ratio <= 0)
+  Double_t tau_ratio = (Double_t)tau_ratio_;
+  if (sigma <= 0 || tau_ratio <= 0)
     return 1e-300;
-  Double_t tau = ratio * sigma;
+  Double_t tau = tau_ratio * sigma;
   Double_t mu = (Double_t)mu_;
   Double_t x_lo = x_.min(rangeName);
   Double_t x_hi = x_.max(rangeName);
