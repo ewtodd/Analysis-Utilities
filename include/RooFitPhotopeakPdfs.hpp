@@ -41,7 +41,7 @@ class RooLowExpTail : public RooAbsPdf {
 public:
   RooLowExpTail() {}
   RooLowExpTail(const char *name, const char *title, RooAbsReal &x,
-                RooAbsReal &mu, RooAbsReal &sigma, RooAbsReal &tau);
+                RooAbsReal &mu, RooAbsReal &sigma, RooAbsReal &tau_ratio);
   RooLowExpTail(const RooLowExpTail &other, const char *name = nullptr);
   TObject *clone(const char *newname = nullptr) const override {
     return new RooLowExpTail(*this, newname);
@@ -63,7 +63,7 @@ protected:
   RooRealProxy x_;
   RooRealProxy mu_;
   RooRealProxy sigma_;
-  RooRealProxy tau_;
+  RooRealProxy tau_ratio_;
   Double_t evaluate() const override;
 
   ClassDefOverride(RooLowExpTail, 1)
@@ -105,7 +105,7 @@ class RooHighExpTail : public RooAbsPdf {
 public:
   RooHighExpTail() {}
   RooHighExpTail(const char *name, const char *title, RooAbsReal &x,
-                 RooAbsReal &mu, RooAbsReal &sigma, RooAbsReal &tau);
+                 RooAbsReal &mu, RooAbsReal &sigma, RooAbsReal &tau_ratio);
   RooHighExpTail(const RooHighExpTail &other, const char *name = nullptr);
   TObject *clone(const char *newname = nullptr) const override {
     return new RooHighExpTail(*this, newname);
@@ -127,7 +127,7 @@ protected:
   RooRealProxy x_;
   RooRealProxy mu_;
   RooRealProxy sigma_;
-  RooRealProxy tau_;
+  RooRealProxy tau_ratio_;
   Double_t evaluate() const override;
 
   ClassDefOverride(RooHighExpTail, 1)

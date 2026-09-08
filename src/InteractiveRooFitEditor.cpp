@@ -47,11 +47,11 @@ InteractiveRooFitEditor::InteractiveRooFitEditor(
     params_.push_back(p.gaus_yield);
     params_.push_back(p.ratio_step);
     params_.push_back(p.ratio_low_exp);
-    params_.push_back(p.tau_low_exp);
+    params_.push_back(p.tau_ratio_low_exp);
     params_.push_back(p.ratio_low_lin);
     params_.push_back(p.slope_low_lin);
     params_.push_back(p.ratio_high_exp);
-    params_.push_back(p.tau_high_exp);
+    params_.push_back(p.tau_ratio_high_exp);
   }
   params_.push_back(bkg_->bkg_yield);
   params_.push_back(bkg_->bkg_slope);
@@ -770,7 +770,7 @@ void InteractiveRooFitEditor::OnRangeChanged() {
   range_high_ = new_hi;
 
   x_->setRange(range_low_, range_high_);
-  x_->setRange("fitrange", range_low_, range_high_);
+  x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
 
   if (events_) {
     RooFitUtils::RefillDisplayHistogram(
@@ -796,7 +796,7 @@ void InteractiveRooFitEditor::DoRefit() {
 
   RooFitResult *res = total_pdf_->fitTo(
       *data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-      RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
+      RooFit::Range(RooFitUtils::kFitRangeName), RooFit::SumW2Error(kFALSE),
       RooFit::PrintLevel(-1), RooFit::PrintEvalErrors(-1), RooFit::Strategy(2),
       RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
   if (res)
@@ -823,7 +823,8 @@ void InteractiveRooFitEditor::DoCancel() {
     }
   }
   x_->setRange(original_range_low_, original_range_high_);
-  x_->setRange("fitrange", original_range_low_, original_range_high_);
+  x_->setRange(RooFitUtils::kFitRangeName, original_range_low_,
+               original_range_high_);
   accepted_ = kFALSE;
   done_ = kTRUE;
 }
@@ -844,7 +845,7 @@ void InteractiveRooFitEditor::DoReset() {
   range_low_ = original_range_low_;
   range_high_ = original_range_high_;
   x_->setRange(range_low_, range_high_);
-  x_->setRange("fitrange", range_low_, range_high_);
+  x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
   hist_draw_->GetXaxis()->SetRangeUser(0.9 * range_low_, 1.1 * range_high_);
   syncing_ = kTRUE;
   range_slider_->SetPosition(range_low_, range_high_);

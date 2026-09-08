@@ -56,11 +56,11 @@ InteractiveSimultaneousFitEditor::InteractiveSimultaneousFitEditor(
       cv.params.push_back(p.gaus_yield);
       cv.params.push_back(p.ratio_step);
       cv.params.push_back(p.ratio_low_exp);
-      cv.params.push_back(p.tau_low_exp);
+      cv.params.push_back(p.tau_ratio_low_exp);
       cv.params.push_back(p.ratio_low_lin);
       cv.params.push_back(p.slope_low_lin);
       cv.params.push_back(p.ratio_high_exp);
-      cv.params.push_back(p.tau_high_exp);
+      cv.params.push_back(p.tau_ratio_high_exp);
     }
     cv.params.push_back(cv.bkg->bkg_yield);
     cv.params.push_back(cv.bkg->bkg_slope);
@@ -817,7 +817,7 @@ void InteractiveSimultaneousFitEditor::OnRangeChanged() {
   range_high_ = new_hi;
 
   x_->setRange(range_low_, range_high_);
-  x_->setRange("fitrange", range_low_, range_high_);
+  x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
   ApplyBackgroundSlopeBounds();
 
   for (size_t ci = 0; ci < channels_.size(); ci++) {
@@ -853,8 +853,9 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
     // Un-suppress RooFit eval errors so the pdf producing an invalid NLL is
     // named, and report the pre-fit NLL at the current parameter values.
     RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::PrintErrors);
-    RooAbsReal *nll = sim_pdf_->createNLL(
-        *combined_data_, RooFit::Extended(kTRUE), RooFit::Range("fitrange"));
+    RooAbsReal *nll =
+        sim_pdf_->createNLL(*combined_data_, RooFit::Extended(kTRUE),
+                            RooFit::Range(RooFitUtils::kFitRangeName));
     Double_t nll_seed = (nll != 0) ? nll->getVal() : 0.0;
     std::cout << "=== AU_ROOFIT_FIT_DEBUG: pre-refit NLL = " << nll_seed
               << (std::isfinite(nll_seed) ? "" : "   <== NON-FINITE")
@@ -868,7 +869,7 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
   Int_t eval_errors = fit_debug_ ? 10 : -1;
   RooFitResult *res = sim_pdf_->fitTo(
       *combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
-      RooFit::Range("fitrange"), RooFit::SumW2Error(kFALSE),
+      RooFit::Range(RooFitUtils::kFitRangeName), RooFit::SumW2Error(kFALSE),
       RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(eval_errors),
       RooFit::Strategy(1), RooFit::Minimizer("Minuit2", "migrad"),
       BestAvailableBackend());
@@ -900,7 +901,8 @@ void InteractiveSimultaneousFitEditor::DoCancel() {
     }
   }
   x_->setRange(original_range_low_, original_range_high_);
-  x_->setRange("fitrange", original_range_low_, original_range_high_);
+  x_->setRange(RooFitUtils::kFitRangeName, original_range_low_,
+               original_range_high_);
   accepted_ = kFALSE;
   done_ = kTRUE;
 }
@@ -924,7 +926,7 @@ void InteractiveSimultaneousFitEditor::DoReset() {
   range_low_ = original_range_low_;
   range_high_ = original_range_high_;
   x_->setRange(range_low_, range_high_);
-  x_->setRange("fitrange", range_low_, range_high_);
+  x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
   ApplyBackgroundSlopeBounds();
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     channels_[ci].hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
@@ -984,8 +986,9 @@ void InteractiveSimultaneousFitEditor::DiagnoseInvalidComponents() {
       for (Int_t k = 0; k < 5; k++) {
         if (comps[k] == 0)
           continue;
-        RooAbsReal *integ = comps[k]->createIntegral(
-            nset, RooFit::NormSet(nset), RooFit::Range("fitrange"));
+        RooAbsReal *integ =
+            comps[k]->createIntegral(nset, RooFit::NormSet(nset),
+                                     RooFit::Range(RooFitUtils::kFitRangeName));
         Double_t nrm = (integ != 0) ? integ->getVal() : 0.0;
         if (integ != 0)
           delete integ;

@@ -95,6 +95,7 @@ private:
 
   Bool_t use_manual_init_;
   Bool_t interactive_;
+  Double_t tail_ratio_max_ = 100.0;
   std::vector<Double_t> manual_params_;
 
   Double_t EstimateBackground();
@@ -134,6 +135,7 @@ public:
   void SetInteractive(Bool_t interactive = kTRUE) {
     interactive_ = interactive;
   }
+  void SetTailRatioMax(Double_t ratio_max) { tail_ratio_max_ = ratio_max; }
 
   void SetManualParameters(const std::vector<Double_t> &params);
   void SetManualParameter(Int_t index, Double_t value);
