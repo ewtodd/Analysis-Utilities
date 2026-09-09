@@ -20,6 +20,22 @@
 #include <TTimer.h>
 #include <iostream>
 
+/**
+ * @brief Interactive editor for a `TF1` fit from FittingUtils.
+ *
+ * The fit and residual pads update live as parameters move. Parameters can be
+ * fixed or freed individually, bounds edited, and Refit re-runs the minimiser
+ * from the current values as starting points. The residual panel is marked with
+ * dashed guide lines at plus and minus three sigma.
+ *
+ * @note Normally reached through the Launch function below rather than
+ *       constructed directly; the launcher owns the event loop, the batch-mode
+ *       toggle and the X error-handler guard.
+ *
+ * @warning None of the objects passed in are owned by the editor, and all of
+ *          them must outlive it. Accepting writes the edited values back into
+ *          them in place.
+ */
 class InteractiveFitEditor : public TGMainFrame {
 private:
   static const Int_t kSliderRes = 10000;
@@ -121,21 +137,74 @@ private:
   static Int_t PeakStyle(Int_t peak_idx);
 
 public:
+  /**
+   * @brief Build the editor around an existing histogram and fit function.
+   * @param parent     Parent window, normally `gClient->GetRoot()`.
+   * @param hist       Histogram being fitted. Borrowed.
+   * @param fit_func   Fit function, edited in place. Borrowed.
+   * @param range_low  Initial lower fit bound.
+   * @param range_high Initial upper fit bound.
+   * @param num_peaks  Peaks in the model, 1 to 3; decides the tab layout.
+   * @param info_label Optional annotation shown in the editor.
+   */
   InteractiveFitEditor(const TGWindow *parent, TH1 *hist, TF1 *fit_func,
                        Double_t range_low, Double_t range_high, Int_t num_peaks,
                        const TString &info_label = "");
+  /// @brief Destroys the widgets and drawing objects the editor created.
   virtual ~InteractiveFitEditor();
 
+  /**
+   * @brief ROOT GUI message dispatch for every widget in the editor.
+   * @param msg   Encoded message type and subtype.
+   * @param parm1 Widget id that raised it.
+   * @param parm2 Message-specific payload.
+   * @return `kTRUE` once handled.
+   */
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);
+  /**
+   * @brief Redraw tick.
+   *
+   * Parameter edits set a dirty flag rather than redrawing inline; this
+   * coalesces them so dragging a slider does not queue one full redraw per
+   * pixel of travel.
+   *
+   * @param timer Timer that fired.
+   * @return `kTRUE` once handled.
+   */
   virtual Bool_t HandleTimer(TTimer *timer);
+  /// @brief Window-manager close. Treated as a cancel, not an accept.
   virtual void CloseWindow();
 
+  /// @brief Whether the user accepted rather than cancelled.
+  /// @return `kTRUE` if Accept was pressed. Only meaningful once IsDone().
   Bool_t WasAccepted() const { return accepted_; }
+  /// @brief Whether the editor has finished and the loop may exit.
   Bool_t IsDone() const { return done_; }
+  /// @brief The coalescing redraw timer, for the driving event loop.
+  /// @return Borrowed pointer; the editor owns it.
   TTimer *GetRedrawTimer() { return redraw_timer_; }
+  /// @brief The canvas holding the fit and residual pads.
+  /// @return Borrowed pointer; the editor owns it.
   TRootEmbeddedCanvas *GetEmbeddedCanvas() { return embedded_canvas_; }
 };
 
+/**
+ * @brief Open the editor and pump its event loop until the user is done.
+ *
+ * Disables ROOT batch mode for the duration and restores it afterwards, so
+ * ordinary plot output is unaffected, and installs the tolerant X error handler
+ * from InteractiveEditorX11Guard.hpp around the loop.
+ *
+ * @param hist       Histogram being fitted.
+ * @param fit_func   Fit function, updated in place if the user accepts.
+ * @param range_low  Initial lower fit bound.
+ * @param range_high Initial upper fit bound.
+ * @param num_peaks  Peaks in the model, 1 to 3.
+ * @param info_label Optional annotation shown in the editor.
+ *
+ * @return `kTRUE` if the user accepted; `kFALSE` on cancel, in which case
+ *         @p fit_func is left as it was.
+ */
 Bool_t LaunchInteractiveFitEditor(TH1 *hist, TF1 *fit_func, Double_t range_low,
                                   Double_t range_high, Int_t num_peaks,
                                   const TString &info_label);

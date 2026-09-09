@@ -34,10 +34,15 @@ search box covers the whole reference.
 
 ## AI-assisted development disclosure
 
-Parts of this codebase — primarily the interactive GUI editor and routine
-boilerplate — were written with the help of
+Parts of this codebase — primarily the interactive GUI editor, the API
+documentation, and routine boilerplate — were written with the help of
 [Claude Code](https://claude.ai/claude-code) and/or
 [son-of-anton](https://github.com/ewtodd/son-of-anton).
+
+That includes this site: both these narrative guides and the Doxygen comments
+behind the API reference. Those comments describe behaviour derived by reading
+the implementations rather than from a specification, so where the reference
+and the code disagree, the code is what runs.
 
 All changes to the core analysis logic (fitting models, signal processing,
 result extraction) are human-reviewed and approved before being committed.

@@ -25,6 +25,22 @@
 #include <TTimer.h>
 #include <vector>
 
+/**
+ * @brief Interactive editor for an unbinned RooFit fit from RooFitUtils.
+ *
+ * The fit and residual pads update live as parameters move. Parameters can be
+ * fixed or freed individually, bounds edited, and Refit re-runs the minimiser
+ * from the current values as starting points. The residual panel is marked with
+ * dashed guide lines at plus and minus three sigma.
+ *
+ * @note Normally reached through the Launch function below rather than
+ *       constructed directly; the launcher owns the event loop, the batch-mode
+ *       toggle and the X error-handler guard.
+ *
+ * @warning None of the objects passed in are owned by the editor, and all of
+ *          them must outlive it. Accepting writes the edited values back into
+ *          them in place.
+ */
 class InteractiveRooFitEditor : public TGMainFrame {
 private:
   static const Int_t kSliderRes = 10000;
@@ -137,6 +153,27 @@ private:
   Double_t ComponentExpected(RooAbsPdf *pdf, Double_t yield, Double_t xv);
 
 public:
+  /**
+   * @brief Build the editor around a converged RooFit model.
+   * @param parent                Parent window, normally `gClient->GetRoot()`.
+   * @param hist                  Display histogram. Borrowed.
+   * @param events                Event-level values behind the histogram, so
+   *                              the display can be rebinned as the range
+   *                              changes. Borrowed.
+   * @param display_bin_width_kev Display bin width.
+   * @param total_pdf             Summed model. Borrowed.
+   * @param x                     Observable. Borrowed.
+   * @param data                  Unbinned dataset. Borrowed.
+   * @param peaks                 Per-peak parameter models, edited in place.
+   * @param bkg                   Background model, edited in place.
+   * @param range_low             Initial lower fit bound.
+   * @param range_high            Initial upper fit bound.
+   * @param info_label            Optional annotation shown in the editor.
+   *
+   * @note Moving the range slider rebuilds the display histogram from
+   *       @p events, so binning follows the zoom. The fit itself stays
+   * unbinned.
+   */
   InteractiveRooFitEditor(const TGWindow *parent, TH1 *hist,
                           const std::vector<Double_t> *events,
                           Float_t display_bin_width_kev, RooAbsPdf *total_pdf,
@@ -144,18 +181,65 @@ public:
                           std::vector<RooFitPeakModel> *peaks,
                           RooFitBackgroundModel *bkg, Double_t range_low,
                           Double_t range_high, const TString &info_label = "");
+  /// @brief Destroys the widgets and drawing objects the editor created.
   virtual ~InteractiveRooFitEditor();
 
+  /**
+   * @brief ROOT GUI message dispatch for every widget in the editor.
+   * @param msg   Encoded message type and subtype.
+   * @param parm1 Widget id that raised it.
+   * @param parm2 Message-specific payload.
+   * @return `kTRUE` once handled.
+   */
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);
+  /**
+   * @brief Redraw tick.
+   *
+   * Parameter edits set a dirty flag rather than redrawing inline; this
+   * coalesces them so dragging a slider does not queue one full redraw per
+   * pixel of travel.
+   *
+   * @param timer Timer that fired.
+   * @return `kTRUE` once handled.
+   */
   virtual Bool_t HandleTimer(TTimer *timer);
+  /// @brief Window-manager close. Treated as a cancel, not an accept.
   virtual void CloseWindow();
 
+  /// @brief Whether the user accepted rather than cancelled.
+  /// @return `kTRUE` if Accept was pressed. Only meaningful once IsDone().
   Bool_t WasAccepted() const { return accepted_; }
+  /// @brief Whether the editor has finished and the loop may exit.
   Bool_t IsDone() const { return done_; }
+  /// @brief The coalescing redraw timer, for the driving event loop.
+  /// @return Borrowed pointer; the editor owns it.
   TTimer *GetRedrawTimer() { return redraw_timer_; }
+  /// @brief The canvas holding the fit and residual pads.
+  /// @return Borrowed pointer; the editor owns it.
   TRootEmbeddedCanvas *GetEmbeddedCanvas() { return embedded_canvas_; }
 };
 
+/**
+ * @brief Open the RooFit editor and pump its event loop until the user is done.
+ *
+ * Same batch-mode and X error-handler handling as
+ * LaunchInteractiveFitEditor().
+ *
+ * @param hist                  Display histogram.
+ * @param events                Event-level values, for live rebinning.
+ * @param display_bin_width_kev Display bin width.
+ * @param total_pdf             Summed model.
+ * @param x                     Observable.
+ * @param data                  Unbinned dataset.
+ * @param peaks                 Per-peak parameter models, updated on accept.
+ * @param bkg                   Background model, updated on accept.
+ * @param range_low             Initial lower fit bound.
+ * @param range_high            Initial upper fit bound.
+ * @param info_label            Optional annotation shown in the editor.
+ *
+ * @return `kTRUE` if the user accepted; `kFALSE` on cancel, leaving every
+ *         parameter as it was.
+ */
 Bool_t LaunchInteractiveRooFitEditor(
     TH1 *hist, const std::vector<Double_t> *events,
     Float_t display_bin_width_kev, RooAbsPdf *total_pdf, RooRealVar *x,

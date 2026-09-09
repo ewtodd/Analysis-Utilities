@@ -24,7 +24,7 @@
           };
         };
 
-        version = "26.8.27";
+        version = "26.9.9";
 
         rootWithCuda = pkgs.root.overrideAttrs (old: {
           cmakeFlags = (old.cmakeFlags or [ ]) ++ [
