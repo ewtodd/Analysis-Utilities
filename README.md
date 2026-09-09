@@ -72,10 +72,15 @@ serves; that build fails if doxygen emits any warning.
 
 ## AI-assisted development disclosure
 
-Parts of this codebase — primarily the interactive GUI editor and routine
-boilerplate — were written with the help of
+Parts of this codebase — primarily the interactive GUI editor, the API
+documentation, and routine boilerplate — were written with the help of
 [Claude Code](https://claude.ai/claude-code) and/or
 [son-of-anton](https://github.com/ewtodd/son-of-anton).
+
+The documentation covers both the narrative guides and the Doxygen comments on
+the public headers. Those describe behaviour derived by reading the
+implementations rather than from a specification, so where documentation and
+code disagree, the code is what runs.
 
 All changes to the core analysis logic (fitting models, signal processing,
 result extraction) are human-reviewed and approved before being committed.
@@ -89,7 +94,6 @@ set of commits affecting these parts of the code.
 - [x] Convert CoMPASS binary files to ROOT
 - [x] Convert WaveDump binary files to ROOT (742 family digitizers only)
 - [x] Convert SOLARIS DAQ (SOL) binary files to ROOT
-- [ ] Convert CoMPASS CSV files to ROOT
 
 ## License
 

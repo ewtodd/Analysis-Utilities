@@ -51,10 +51,14 @@
   parameters too. A reader who can already tell from the source what `sigma`
   means is not the reader these are written for.
 - Public declarations in `include/*.hpp` — classes, structs, enums, free
-  functions, and public member functions — carry a Doxygen block. The headers
-  are not fully annotated yet; anything you add or change gets one, and
-  annotating neighboring declarations while you are already in a file is
-  welcome.
+  functions, and public member functions — carry a Doxygen block. Coverage is
+  complete and `WARN_IF_UNDOCUMENTED` is on, so adding an undocumented public
+  declaration fails `nix build .#docs`. Private members are not extracted and
+  do not need blocks.
+- Document a function at one declaration only. A forward declaration and its
+  real declaration are the same entity to doxygen, so two blocks get merged and
+  the `@param` list is reported as doubled — see the note above
+  `LaunchInteractiveFitEditor` in `FittingUtils.hpp`.
 - Document at minimum what the entity does, every `@param` (with units and
   valid ranges where they matter), `@return`, and `@throws` where it applies.
   Add `@note` or `@warning` for ownership, thread-safety, and ROOT global-state

@@ -27,17 +27,34 @@
 #include <map>
 #include <vector>
 
+/**
+ * @brief Everything the simultaneous editor needs to show one channel.
+ *
+ * The caller fills in the model and data members; the editor fills in the
+ * widget and drawing members as it builds that channel's tab, and writes edited
+ * values back through @ref params on accept.
+ *
+ * @note Every pointer here is borrowed. RooFitUtils owns the model objects and
+ *       the editor owns the widgets, so a view must not outlive either.
+ */
 struct SimEditorChannelView {
-  TString name;
-  TH1 *hist;
+  TString name; ///< Channel name, shown on the tab.
+  TH1 *hist;    ///< Display histogram for this channel.
+  /// Event-level values behind @ref hist, so the display can be rebinned live
+  /// as the fit range changes.
   const std::vector<Double_t> *events;
-  Float_t display_bin_width_kev;
-  RooAbsPdf *pdf;
-  RooAbsData *data;
-  std::vector<RooFitPeakModel> *peaks;
-  RooFitBackgroundModel *bkg;
-  Int_t num_peaks;
+  Float_t display_bin_width_kev;       ///< Display bin width.
+  RooAbsPdf *pdf;                      ///< This channel's summed model.
+  RooAbsData *data;                    ///< This channel's unbinned dataset.
+  std::vector<RooFitPeakModel> *peaks; ///< Per-peak parameter models.
+  RooFitBackgroundModel *bkg;          ///< Background model.
+  Int_t num_peaks;                     ///< Peaks in this channel.
 
+  /// @name Parameter state
+  /// @ref params is the live set the editor writes through; the `original_*`
+  /// vectors are the snapshot Reset restores, and the `current_*` vectors track
+  /// bounds as the user edits them.
+  /// @{
   std::vector<RooRealVar *> params;
   std::vector<Double_t> original_params;
   std::vector<Double_t> original_bounds_low;
@@ -45,6 +62,11 @@ struct SimEditorChannelView {
   std::vector<Bool_t> original_fixed;
   std::vector<Double_t> current_bounds_low;
   std::vector<Double_t> current_bounds_high;
+  /// @}
+
+  /// @name Widgets and drawing objects
+  /// Populated by the editor when it builds this channel's tab.
+  /// @{
 
   std::vector<TGHSlider *> sliders;
   std::vector<TGNumberEntry *> value_entries;
@@ -65,8 +87,25 @@ struct SimEditorChannelView {
   TF1 *minus3_line;
   TLatex *chi2_label;
   Int_t n_res_points;
+  /// @}
 };
 
+/**
+ * @brief Interactive editor for a multi-channel simultaneous RooFit fit.
+ *
+ * The fit and residual pads update live as parameters move. Parameters can be
+ * fixed or freed individually, bounds edited, and Refit re-runs the minimiser
+ * from the current values as starting points. The residual panel is marked with
+ * dashed guide lines at plus and minus three sigma.
+ *
+ * @note Normally reached through the Launch function below rather than
+ *       constructed directly; the launcher owns the event loop, the batch-mode
+ *       toggle and the X error-handler guard.
+ *
+ * @warning None of the objects passed in are owned by the editor, and all of
+ *          them must outlive it. Accepting writes the edited values back into
+ *          them in place.
+ */
 class InteractiveSimultaneousFitEditor : public TGMainFrame {
 private:
   static const Int_t kSliderRes = 10000;
@@ -162,24 +201,83 @@ private:
   static Int_t PeakStyle(Int_t peak_idx);
 
 public:
+  /**
+   * @brief Build the editor around a converged simultaneous model.
+   * @param parent         Parent window, normally `gClient->GetRoot()`.
+   * @param sim_pdf        The `RooSimultaneous` model. Borrowed.
+   * @param combined_data  Combined dataset across every channel. Borrowed.
+   * @param x              Shared observable. Borrowed.
+   * @param channel_views  One view per channel; each gets its own tab, and its
+   *                       parameters are edited in place.
+   * @param range_low      Initial lower fit bound.
+   * @param range_high     Initial upper fit bound.
+   * @param info_label     Optional annotation shown in the editor.
+   * @param fit_debug      `kTRUE` to un-suppress RooFit evaluation errors and
+   *                       print the seed NLL on refit, so an invalid-NLL
+   *                       failure names the offending PDF.
+   */
   InteractiveSimultaneousFitEditor(
       const TGWindow *parent, RooSimultaneous *sim_pdf,
       RooAbsData *combined_data, RooRealVar *x,
       const std::vector<SimEditorChannelView> &channel_views,
       Double_t range_low, Double_t range_high, const TString &info_label = "",
       Bool_t fit_debug = kFALSE);
+  /// @brief Destroys the widgets and drawing objects the editor created.
   virtual ~InteractiveSimultaneousFitEditor();
 
+  /**
+   * @brief ROOT GUI message dispatch for every widget in the editor.
+   * @param msg   Encoded message type and subtype.
+   * @param parm1 Widget id that raised it.
+   * @param parm2 Message-specific payload.
+   * @return `kTRUE` once handled.
+   */
   virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t parm2);
+  /**
+   * @brief Redraw tick.
+   *
+   * Parameter edits set a dirty flag rather than redrawing inline; this
+   * coalesces them so dragging a slider does not queue one full redraw per
+   * pixel of travel.
+   *
+   * @param timer Timer that fired.
+   * @return `kTRUE` once handled.
+   */
   virtual Bool_t HandleTimer(TTimer *timer);
+  /// @brief Window-manager close. Treated as a cancel, not an accept.
   virtual void CloseWindow();
 
+  /// @brief Whether the user accepted rather than cancelled.
+  /// @return `kTRUE` if Accept was pressed. Only meaningful once IsDone().
   Bool_t WasAccepted() const { return accepted_; }
+  /// @brief Whether the editor has finished and the loop may exit.
   Bool_t IsDone() const { return done_; }
+  /// @brief The coalescing redraw timer, for the driving event loop.
+  /// @return Borrowed pointer; the editor owns it.
   TTimer *GetRedrawTimer() { return redraw_timer_; }
+  /// @brief The per-channel views, carrying the edited parameters.
+  /// @return Borrowed pointer to the editor's own vector.
   std::vector<SimEditorChannelView> *GetChannels() { return &channels_; }
 };
 
+/**
+ * @brief Open the simultaneous editor and pump its event loop.
+ *
+ * Same batch-mode and X error-handler handling as
+ * LaunchInteractiveFitEditor(). Refit re-runs the joint minimisation across
+ * every channel at once, not one channel at a time.
+ *
+ * @param sim_pdf       The `RooSimultaneous` model.
+ * @param combined_data Combined dataset across every channel.
+ * @param x             Shared observable.
+ * @param channel_views One view per channel, updated on accept.
+ * @param range_low     Initial lower fit bound.
+ * @param range_high    Initial upper fit bound.
+ * @param info_label    Optional annotation shown in the editor.
+ * @param fit_debug     `kTRUE` to un-suppress RooFit evaluation errors.
+ *
+ * @return `kTRUE` if the user accepted; `kFALSE` on cancel.
+ */
 Bool_t LaunchInteractiveSimultaneousFitEditor(
     RooSimultaneous *sim_pdf, RooAbsData *combined_data, RooRealVar *x,
     std::vector<SimEditorChannelView> &channel_views, Double_t range_low,
