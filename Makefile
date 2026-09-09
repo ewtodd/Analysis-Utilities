@@ -1,6 +1,6 @@
-CXX = $(shell root-config --cxx)
-CXXFLAGS = $(shell root-config --cflags) -std=c++17 -Wall -Wextra -O3 -fopenmp -fPIC
-ROOTLIBS = $(shell root-config --glibs) -lRooFit -lRooFitCore -fopenmp
+CXX = $(shell root-config --cxx 2>/dev/null)
+CXXFLAGS = $(shell root-config --cflags 2>/dev/null) -std=c++17 -Wall -Wextra -O3 -fopenmp -fPIC
+ROOTLIBS = $(shell root-config --glibs 2>/dev/null) -lRooFit -lRooFitCore -fopenmp
 # Directories
 SRCDIR = src
 INCDIR = include
@@ -69,4 +69,36 @@ install: $(SHAREDLIB) $(STATICLIB)
 	    analysis-utilities.pc.in > $(PREFIX)/lib/pkgconfig/analysis-utilities.pc
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR)
-.PHONY: all install clean
+
+# API documentation — the plain-make counterpart of the CMake `docs` target.
+# flake.nix stays the canonical version source, parsed here the same way that
+# CMakeLists.txt parses it rather than keeping a second copy that drifts.
+DOCSDIR = docs
+AU_VERSION = $(shell sed -n 's/^ *version = "\([^"]*\)"; *$$/\1/p' flake.nix | head -1)
+AU_HAVE_DOT = $(shell command -v dot >/dev/null 2>&1 && echo YES || echo NO)
+# doxygen-awesome-css is data-only, so it is located by env var rather than
+# PATH. Both dev shells export DOXYGEN_AWESOME_CSS.
+AU_AWESOME_DIR ?= $(DOXYGEN_AWESOME_CSS)
+
+docs: Doxyfile.in
+	@command -v doxygen >/dev/null 2>&1 || \
+	  { echo "doxygen not found - enter the dev shell first with 'nix develop'"; exit 1; }
+	@test -f "$(AU_AWESOME_DIR)/doxygen-awesome.css" || \
+	  { echo "doxygen-awesome-css not found - set DOXYGEN_AWESOME_CSS or run inside 'nix develop'"; exit 1; }
+	@mkdir -p $(DOCSDIR)
+	sed -e 's|@AU_VERSION@|$(AU_VERSION)|g' \
+	    -e 's|@AU_SOURCE_DIR@|$(CURDIR)|g' \
+	    -e 's|@AU_DOXYGEN_OUTPUT_DIR@|$(CURDIR)/$(DOCSDIR)|g' \
+	    -e 's|@AU_DOXYGEN_HAVE_DOT@|$(AU_HAVE_DOT)|g' \
+	    -e 's|@AU_DOXYGEN_AWESOME_DIR@|$(AU_AWESOME_DIR)|g' \
+	    Doxyfile.in > $(DOCSDIR)/Doxyfile
+	doxygen $(DOCSDIR)/Doxyfile
+	@echo "API documentation: $(CURDIR)/$(DOCSDIR)/html/index.html"
+	@echo "Doxygen warnings:  $(CURDIR)/$(DOCSDIR)/doxygen-warnings.log"
+
+# Kept out of `clean` so that rebuilding the library does not quietly discard a
+# generated doc tree someone has open in a browser.
+clean-docs:
+	rm -rf $(DOCSDIR)
+
+.PHONY: all install clean docs clean-docs

@@ -90,6 +90,46 @@
         utils = mkUtils { cuda = false; };
         utilsCuda = mkUtils { cuda = true; };
 
+        # The published API reference, served straight out of the store by the
+        # Caddy vhost on nu. Deliberately delegates to `make docs` so the
+        # Doxyfile substitution logic lives in exactly one place.
+        docs = pkgs.stdenv.mkDerivation {
+          pname = "analysis-utilities-docs";
+          inherit version;
+
+          src = ./.;
+
+          nativeBuildInputs = with pkgs; [
+            doxygen
+            graphviz
+          ];
+
+          dontConfigure = true;
+
+          buildPhase = ''
+            runHook preBuild
+            export DOXYGEN_AWESOME_CSS="${pkgs.doxygen-awesome-css}/share/doxygen-awesome-css"
+            make docs
+
+            # A warning here means a broken \ref, a malformed doc block, or a
+            # parameter that no longer exists. Failing the build is what keeps
+            # the published site honest, and gives CI the check for free.
+            if [ -s docs/doxygen-warnings.log ]; then
+              echo "doxygen emitted warnings:" >&2
+              cat docs/doxygen-warnings.log >&2
+              exit 1
+            fi
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out
+            cp -r docs/html/. $out/
+            runHook postInstall
+          '';
+        };
+
         pythonPackage = pkgs.python3Packages.buildPythonPackage {
           pname = "analysis-utilities";
           inherit version;
@@ -133,6 +173,8 @@
         # flakes that opt in pull utils.packages.${system}.cuda.
         packages.cuda = utilsCuda;
         packages.pythonPackage = pythonPackage;
+        # Static site for au.ethanwtodd.com; CI publishes this to Pages.
+        packages.docs = docs;
         # Re-export the CUDA-overlaid ROOT so downstream consumers can pull it
         # without duplicating the overrideAttrs block. Plain pkgs.root is left
         # for downstream to grab directly from nixpkgs.
@@ -144,6 +186,9 @@
             gnumake
             pkg-config
             clang-tools
+            # API docs: `make docs` / `cmake --build build --target docs`.
+            doxygen
+            graphviz
             (python3.withPackages (
               python-pkgs: with python-pkgs; [
                 numpy
@@ -156,6 +201,7 @@
 
           shellHook = ''
             export SHELL="${pkgs.bash}/bin/bash"
+            export DOXYGEN_AWESOME_CSS="${pkgs.doxygen-awesome-css}/share/doxygen-awesome-css"
             echo "Development environment for working on the analysis utilities source (CPU)"
             export CPLUS_INCLUDE_PATH="$PWD/include''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
             export ROOT_INCLUDE_PATH="$PWD/include:${pkgs.root}/include"
@@ -169,6 +215,9 @@
               gnumake
               pkg-config
               clang-tools
+              # API docs: `make docs` / `cmake --build build --target docs`.
+              doxygen
+              graphviz
               (python3.withPackages (
                 python-pkgs: with python-pkgs; [
                   numpy
@@ -187,6 +236,7 @@
 
           shellHook = ''
             export SHELL="${pkgs.bash}/bin/bash"
+            export DOXYGEN_AWESOME_CSS="${pkgs.doxygen-awesome-css}/share/doxygen-awesome-css"
             echo "Development environment for working on the analysis utilities source (CUDA, AU_ROOFIT_BACKEND_CUDA=1)"
             export NIX_CFLAGS_COMPILE="-DAU_ROOFIT_BACKEND_CUDA=1''${NIX_CFLAGS_COMPILE:+ $NIX_CFLAGS_COMPILE}"
             export CPLUS_INCLUDE_PATH="$PWD/include''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"

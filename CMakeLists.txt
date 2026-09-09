@@ -127,3 +127,64 @@ configure_file(
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/analysis-utilities.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
+
+# ---------------------------------------------------------------------------
+# API documentation
+#
+# Doxygen is not needed to build or install the library, so the target is only
+# defined when doxygen is present — `nix build` never sees it. graphviz is
+# likewise optional; without dot the inheritance and include graphs are simply
+# left out of the generated HTML.
+#
+#   cmake --build build --target docs
+# ---------------------------------------------------------------------------
+option(AU_BUILD_DOCS "Define the 'docs' target when Doxygen is available" ON)
+if(AU_BUILD_DOCS)
+    find_package(Doxygen OPTIONAL_COMPONENTS dot)
+endif()
+if(AU_BUILD_DOCS AND DOXYGEN_FOUND)
+    # Default to the in-tree docs/ that .gitignore already covers, so the
+    # generated HTML is one relative path away from the source being read.
+    set(AU_DOCS_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/docs"
+        CACHE PATH "Directory the 'docs' target writes generated API documentation to")
+
+    # doxygen-awesome-css ships only data files, so it cannot be found on PATH.
+    # The dev shells export DOXYGEN_AWESOME_CSS; packages.docs sets it directly.
+    set(AU_DOXYGEN_AWESOME_DIR "$ENV{DOXYGEN_AWESOME_CSS}"
+        CACHE PATH "Directory containing doxygen-awesome.css")
+
+    set(AU_SOURCE_DIR ${CMAKE_SOURCE_DIR})
+    set(AU_DOXYGEN_OUTPUT_DIR ${AU_DOCS_OUTPUT_DIR})
+    if(TARGET Doxygen::dot)
+        set(AU_DOXYGEN_HAVE_DOT YES)
+    else()
+        set(AU_DOXYGEN_HAVE_DOT NO)
+        message(STATUS "graphviz (dot) not found — API docs will omit inheritance and include graphs")
+    endif()
+
+    if(NOT EXISTS "${AU_DOXYGEN_AWESOME_DIR}/doxygen-awesome.css")
+        message(FATAL_ERROR
+            "doxygen-awesome-css not found at '${AU_DOXYGEN_AWESOME_DIR}'. "
+            "Enter a dev shell (nix develop), or pass "
+            "-DAU_DOXYGEN_AWESOME_DIR=<dir containing doxygen-awesome.css>. "
+            "Configure with -DAU_BUILD_DOCS=OFF to skip the docs target entirely.")
+    endif()
+
+    configure_file(
+        ${CMAKE_SOURCE_DIR}/Doxyfile.in
+        ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+        @ONLY
+    )
+
+    add_custom_target(docs
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${AU_DOXYGEN_OUTPUT_DIR}
+        COMMAND Doxygen::doxygen ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+        COMMAND ${CMAKE_COMMAND} -E echo "API documentation: ${AU_DOXYGEN_OUTPUT_DIR}/html/index.html"
+        COMMAND ${CMAKE_COMMAND} -E echo "Doxygen warnings:  ${AU_DOXYGEN_OUTPUT_DIR}/doxygen-warnings.log"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+elseif(AU_BUILD_DOCS)
+    message(STATUS "Doxygen not found — the 'docs' target is unavailable")
+endif()
