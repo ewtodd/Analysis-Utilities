@@ -35,9 +35,9 @@ enum class PlotSaveFormat {
 /**
  * @brief All-static helpers for publication-quality ROOT graphics.
  *
- * No instantiation is required or possible in practice — every member is
- * static. SetStylePreferences() must be called before anything else; the other
- * methods print a warning to stdout if it has not been, but still run.
+ * No instantiation is required or possible. SetStylePreferences() must be
+ * called before anything else; the other methods print a warning to stdout if
+ * it has not been, but still run.
  *
  * @note Several methods return heap-allocated ROOT objects. ROOT's own
  *       ownership rules apply and are called out per method; in general the
@@ -86,7 +86,7 @@ public:
                                           const TString title = "");
 
   /**
-   * @brief Apply the house style to a graph without drawing it.
+   * @brief Apply the preferred style to a graph without drawing it.
    *
    * Sets line colour and width, 0.06 axis title and label sizes, 1.2 title
    * offsets, and 506 x-axis divisions.
@@ -99,7 +99,7 @@ public:
                              const TString title = "");
 
   /**
-   * @brief Apply the house style to a graph with error bars.
+   * @brief Apply the preferred style to a graph with error bars.
    *
    * As the `TGraph` overload, plus marker style 20 at size 1.2 in the same
    * colour as the line — the usual look for a data series with uncertainties.
@@ -112,7 +112,7 @@ public:
                              const TString title = "");
 
   /**
-   * @brief Apply the house style to a 1-D histogram without drawing it.
+   * @brief Apply the preferred style to a 1-D histogram without drawing it.
    *
    * Sets line colour and width, hollow fill, 0.06 axis title and label sizes,
    * 1.2 title offsets, and axis divisions tuned for spectra. The x axis is
@@ -126,7 +126,7 @@ public:
                                  const TString title = "");
 
   /**
-   * @brief Apply the house style to a 2-D histogram and its canvas.
+   * @brief Apply the preferred style to a 2-D histogram and its canvas.
    *
    * Styles the axes as for the 1-D case, then enables log-z on @p canvas and
    * widens its right margin to 0.15 to make room for the colour axis.
@@ -149,6 +149,66 @@ public:
    * @note The canvas is made current, so subsequent `Draw()` calls land on it.
    */
   static TCanvas *GetConfiguredCanvas(Bool_t logy = kFALSE);
+
+  /**
+   * @brief A canvas with the standard plot area and a legend pad to its right.
+   *
+   * The plot pad is exactly the standard 1200 px wide and @p plot_height_px
+   * tall, with the preferred margins, grid and ticks, so everything drawn on it
+   * comes out as on GetConfiguredCanvas(); the canvas is wider by
+   * @p legend_width_px. The legend pad is transparent and margin-less and
+   * runs from the plot frame's right edge, over the plot pad's blank right
+   * margin, to the canvas edge, so a legend placed in it can sit as close to
+   * the frame as wanted. LegendWidthPx() gives the width a legend needs, from
+   * which the caller picks @p legend_width_px and the box position. A plot
+   * taller than the standard 800 px is for a panel below the plot: see
+   * SplitPadForPanel().
+   *
+   * @param[out] plot            The plot pad, drawn and made current.
+   * @param[out] legend_pad      The legend pad, drawn over the plot pad's
+   *                             right margin.
+   * @param legend_width_px      Width added to the canvas for the legend, in
+   *                             pixels; the legend pad is this plus the plot
+   *                             pad's right margin.
+   * @param plot_height_px       Height of the plot pad and the canvas, in
+   *                             pixels. 800 by default.
+   * @param logy                 `kTRUE` for a logarithmic y axis on the plot
+   *                             pad.
+   *
+   * @return The canvas, with a randomised name. **The caller owns this
+   *         pointer**; the pads belong to the canvas.
+   */
+  static TCanvas *GetConfiguredCanvasWithSideLegend(TPad *&plot,
+                                                    TPad *&legend_pad,
+                                                    Int_t legend_width_px = 600,
+                                                    Int_t plot_height_px = 800,
+                                                    Bool_t logy = kFALSE);
+
+  /**
+   * @brief Split a pad into a main pad above and a panel below, leaving the
+   *        main pad's frame exactly as it would be on its own.
+   *
+   * For a residual or deviation panel under a plot. The upper pad is the pad
+   * less @p panel_height_px at the bottom, with all four of the pad's
+   * margins, grid, ticks and log-y setting, so a frame drawn on it is
+   * pixel-for-pixel the frame of a standard figure when the pad is the
+   * standard height plus the panel. The lower pad is transparent and reaches
+   * up over the upper pad's blank bottom margin to the foot of its frame, so
+   * the two frames share the x axis with only a small gap; it keeps the
+   * pad's left, right and bottom margins with a small top margin. Margins
+   * are the standard fractions; ScaleFigure() on the parent sizes the
+   * panel's margins and axis text to match. The caller hides the upper
+   * frame's x-axis labels and title.
+   *
+   * @param pad              Pad to split. Its own margins stay as they were.
+   * @param panel_height_px  Height added below the main pad for the panel,
+   *                         in pixels: the pad's height less the main pad's.
+   * @param[out] upper       The main pad, drawn first.
+   * @param[out] lower       The panel, drawn over the main pad's bottom
+   *                         margin.
+   */
+  static void SplitPadForPanel(TVirtualPad *pad, Int_t panel_height_px,
+                               TPad *&upper, TPad *&lower);
 
   /**
    * @brief Write a canvas to disk under the configured plots base directory.
@@ -243,6 +303,200 @@ public:
    */
   static TLegend *AddLegend(Double_t x1 = 0.7, Double_t x2 = 0.9,
                             Double_t y1 = 0.7, Double_t y2 = 0.9);
+
+  /**
+   * @brief Rendered width of a text in a pixel-sized font.
+   *
+   * Measured by ROOT on a scratch canvas, so it is what the text will take on
+   * any pad, whatever the pad's size.
+   *
+   * @param text    Text to measure. ROOT `TLatex` markup is honoured.
+   * @param size_px Font size in pixels. 30 by default, the size AddLegend()
+   *                uses.
+   * @param font    ROOT font code, of precision 3 so the size is in pixels.
+   *                43 by default, the font AddLegend() uses.
+   *
+   * @return The width in pixels.
+   */
+  static Double_t TextWidthPx(const TString &text, Double_t size_px = 30.0,
+                              Int_t font = 43);
+
+  /**
+   * @brief Width a legend box needs for its labels at AddLegend()'s font.
+   *
+   * A `TLegend` gives the leading @p margin of its width to the symbol column
+   * and draws the labels after it, while a header starts at the box's left
+   * edge, so the box must be the widest label over (1 - margin) or the
+   * header's width, whichever is larger, plus @p padding_px each side.
+   *
+   * @param labels     The entry labels. ROOT `TLatex` markup is honoured.
+   * @param header     The header, or empty for none.
+   * @param size_px    Font size in pixels. 30 by default.
+   * @param margin     The legend's symbol-column fraction. 0.25 by default,
+   *                   `TLegend`'s own default.
+   * @param padding_px Clear space inside each side of the box, in pixels. 15
+   *                   by default.
+   *
+   * @return The box width in pixels.
+   */
+  static Double_t LegendWidthPx(const std::vector<TString> &labels,
+                                const TString &header = "",
+                                Double_t size_px = 30.0, Double_t margin = 0.25,
+                                Double_t padding_px = 15.0);
+
+  /**
+   * @brief How much larger a pad is than the standard plot area, by width.
+   *
+   * A figure placed at a fixed column width is shrunk by its pixel width, so
+   * everything on a wider plot has to be drawn proportionally larger to
+   * print at the same size as on the standard 1200x800 canvas. This is that
+   * proportion, the pad's pixel width over @p reference_width_px. For a
+   * canvas it is the canvas width; for the plot pad of
+   * GetConfiguredCanvasWithSideLegend() it is 1.
+   *
+   * @param pad                Pad, or canvas, to measure. Null gives 1.
+   * @param reference_width_px Width of the standard plot area, in pixels.
+   *                           1200 by default, the width of
+   *                           GetConfiguredCanvas().
+   *
+   * @return The pad width divided by the reference width.
+   */
+  static Double_t FigureScale(TVirtualPad *pad,
+                              Int_t reference_width_px = 1200);
+
+  /**
+   * @brief Scale everything on a pad, and its sub-pads, to print like the
+   *        standard figure.
+   *
+   * The one call for a figure of non-standard size or layout, made once,
+   * after everything is drawn. Works out the scale of @p pad with
+   * FigureScale() and applies ScalePad() to it and, through it, to every pad
+   * inside it: pad margins, axis text, legends, text, line widths and marker
+   * sizes all come out as on the standard canvas multiplied by that scale,
+   * whatever share of the figure each pad takes. Pass the canvas for a plain
+   * figure, or the plot pad of GetConfiguredCanvasWithSideLegend(). Line
+   * widths and marker sizes are multiplied in place, so calling this twice
+   * doubles the effect.
+   *
+   * @param pad                 Pad, or canvas, to scale. Null is tolerated and
+   *                            ignored.
+   * @param reference_width_px  Width of the standard plot area, in pixels.
+   *                            1200 by default.
+   * @param reference_height_px Height of the standard plot area, in pixels.
+   *                            800 by default.
+   */
+  static void ScaleFigure(TVirtualPad *pad, Int_t reference_width_px = 1200,
+                          Int_t reference_height_px = 800);
+
+  /**
+   * @brief Scale one pad and everything drawn on it, recursively.
+   *
+   * Margins are taken as fractions of the standard plot area and multiplied
+   * by its size over the pad's own pixel size on each axis, times @p scale,
+   * so they hold the same number of text lines as on the standard canvas.
+   * Then each primitive is scaled: a histogram or frame by
+   * ScaleAxisFontsToPad(), a legend by ScaleLegend(), text by ScaleText(),
+   * anything with line attributes by ScaleLine(), anything with marker
+   * attributes by ScaleMarker(), and a nested pad by this function again.
+   *
+   * @param pad                 Pad to scale. Null is tolerated and ignored.
+   * @param scale               Overall scale, normally from FigureScale().
+   * @param reference_width_px  Width of the standard plot area, in pixels.
+   * @param reference_height_px Height of the standard plot area, in pixels.
+   */
+  static void ScalePad(TVirtualPad *pad, Double_t scale,
+                       Int_t reference_width_px = 1200,
+                       Int_t reference_height_px = 800);
+
+  /**
+   * @brief Size a frame's axis text as on the standard canvas, times a scale.
+   *
+   * The preferred 0.06 title and label sizes are fractions of the pad's smaller
+   * pixel dimension, so a pad taking part of a figure renders them smaller
+   * than a standard one. This sets every non-zero title and label size of
+   * both axes so the text comes out at 0.06 of @p reference_height_px pixels
+   * times @p scale, whatever the pad's size. A size already at zero, hiding
+   * that axis's text, stays zero. ROOT places a title at its offset times the
+   * title size measured along the other axis of the pad, so the 1.2 preferred
+   * offsets are rescaled by the pad's aspect ratio to put each title the same
+   * number of pixels from its axis as on the standard canvas.
+   *
+   * @param frame               Histogram or frame whose axes are styled. Null
+   *                            is tolerated and ignored.
+   * @param pad                 The pad the frame is drawn on. Null is tolerated
+   *                            and ignored.
+   * @param scale               Overall scale, normally from FigureScale().
+   * @param reference_width_px  Width of the standard plot area, in pixels.
+   * @param reference_height_px Height of the standard plot area, in pixels.
+   */
+  static void ScaleAxisFontsToPad(TH1 *frame, TVirtualPad *pad,
+                                  Double_t scale = 1.0,
+                                  Int_t reference_width_px = 1200,
+                                  Int_t reference_height_px = 800);
+
+  /**
+   * @brief Set a legend's text to AddLegend()'s 30 px times a scale.
+   *
+   * @param legend Legend to resize. Null is tolerated and ignored.
+   * @param scale  Overall scale, normally from FigureScale().
+   */
+  static void ScaleLegend(TLegend *legend, Double_t scale);
+
+  /**
+   * @brief Scale a text object with its pad.
+   *
+   * A pixel-sized font (precision 3, such as AddText()'s 43) is multiplied by
+   * @p scale. A relative font is a fraction of the pad's smaller pixel
+   * dimension, so it is reset to give the pixels it would have on the
+   * standard canvas, times @p scale.
+   *
+   * @param text                Text to resize. Null is tolerated and ignored.
+   * @param pad                 The pad the text is drawn on. Null is tolerated
+   *                            and ignored.
+   * @param scale               Overall scale, normally from FigureScale().
+   * @param reference_height_px Height of the standard plot area, in pixels.
+   */
+  static void ScaleText(TText *text, TVirtualPad *pad, Double_t scale,
+                        Int_t reference_height_px = 800);
+
+  /**
+   * @brief Draw a figure title centred in a pad's top margin, at the size
+   *        ROOT's own pad title has on the standard canvas.
+   *
+   * ROOT sizes a histogram's pad title from the pad height, so on a pad that
+   * takes part of a figure, such as the upper pad of SplitPadForPanel(), it
+   * comes out small. This draws the title as text in a pixel-sized font of
+   * 36 px times @p scale instead, which matches the standard title; give the
+   * frame no title of its own. Call it after ScaleFigure(), with the scale
+   * that used.
+   *
+   * @param pad   Pad to draw on. Null is tolerated and ignored.
+   * @param title Title text. ROOT `TLatex` markup is honoured.
+   * @param scale Overall scale, normally from FigureScale().
+   *
+   * @return The drawn `TLatex`, owned by the pad. Null when nothing was drawn.
+   */
+  static TLatex *DrawTitle(TVirtualPad *pad, const TString &title,
+                           Double_t scale = 1.0);
+
+  /**
+   * @brief Multiply a line width by a scale, rounded to a whole pixel.
+   *
+   * A width of zero, meaning no line, stays zero.
+   *
+   * @param line  Object with line attributes. Null is tolerated and ignored.
+   * @param scale Overall scale, normally from FigureScale().
+   */
+  static void ScaleLine(TAttLine *line, Double_t scale);
+
+  /**
+   * @brief Multiply a marker size by a scale.
+   *
+   * @param marker Object with marker attributes. Null is tolerated and
+   *               ignored.
+   * @param scale  Overall scale, normally from FigureScale().
+   */
+  static void ScaleMarker(TAttMarker *marker, Double_t scale);
 
   /**
    * @brief Create and draw a text annotation on the current pad.
