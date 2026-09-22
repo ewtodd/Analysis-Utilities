@@ -1,4 +1,9 @@
 #include "PlottingUtils.hpp"
+#include <TAttLine.h>
+#include <TAttMarker.h>
+#include <TAxis.h>
+#include <TList.h>
+#include <TText.h>
 
 PlotSaveFormat PlottingUtils::save_format_ = PlotSaveFormat::kPNG;
 Bool_t PlottingUtils::preferences_set_ = kFALSE;
@@ -173,6 +178,74 @@ TCanvas *PlottingUtils::GetConfiguredCanvas(Bool_t logy) {
   return canvas;
 }
 
+TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(TPad *&plot,
+                                                          TPad *&legend_pad,
+                                                          Int_t legend_width_px,
+                                                          Int_t plot_height_px,
+                                                          Bool_t logy) {
+  WarnIfNotConfigured("GetConfiguredCanvasWithSideLegend");
+  const Int_t plot_width_px = 1200;
+  const Int_t canvas_width_px = plot_width_px + TMath::Max(0, legend_width_px);
+  TCanvas *canvas =
+      new TCanvas(GetRandomName(), "", canvas_width_px, plot_height_px);
+  canvas->SetTicks(1, 1);
+  const Double_t split = Double_t(plot_width_px) / Double_t(canvas_width_px);
+  plot = new TPad(GetRandomName(), "", 0.0, 0.0, split, 1.0);
+  plot->SetGridx(1);
+  plot->SetGridy(1);
+  plot->SetTicks(1, 1);
+  plot->SetLogy(logy);
+  const Double_t frame_right = split * (1.0 - plot->GetRightMargin());
+  legend_pad = new TPad(GetRandomName(), "", frame_right, 0.0, 1.0, 1.0);
+  legend_pad->SetFillStyle(4000);
+  legend_pad->SetMargin(0.0, 0.0, 0.0, 0.0);
+  plot->Draw();
+  legend_pad->Draw();
+  plot->cd();
+  return canvas;
+}
+
+void PlottingUtils::SplitPadForPanel(TVirtualPad *pad, Int_t panel_height_px,
+                                     TPad *&upper, TPad *&lower) {
+  upper = nullptr;
+  lower = nullptr;
+  if (!pad || !pad->GetCanvas())
+    return;
+  const Double_t pad_height_px = pad->GetCanvas()->GetWh() * pad->GetAbsHNDC();
+  if (!(pad_height_px > 0.0) || panel_height_px <= 0 ||
+      panel_height_px >= pad_height_px)
+    return;
+  const Double_t upper_height_px = pad_height_px - panel_height_px;
+  const Double_t split = Double_t(panel_height_px) / pad_height_px;
+  const Double_t lower_top =
+      (panel_height_px + pad->GetBottomMargin() * upper_height_px) /
+      pad_height_px;
+  TVirtualPad *previous = gPad;
+  pad->cd();
+  upper = new TPad(GetRandomName(), "", 0.0, split, 1.0, 1.0);
+  upper->SetLeftMargin(pad->GetLeftMargin());
+  upper->SetRightMargin(pad->GetRightMargin());
+  upper->SetTopMargin(pad->GetTopMargin());
+  upper->SetBottomMargin(pad->GetBottomMargin());
+  upper->SetGridx(pad->GetGridx());
+  upper->SetGridy(pad->GetGridy());
+  upper->SetTicks(pad->GetTickx(), pad->GetTicky());
+  upper->SetLogy(pad->GetLogy());
+  lower = new TPad(GetRandomName(), "", 0.0, 0.0, 1.0, lower_top);
+  lower->SetFillStyle(4000);
+  lower->SetLeftMargin(pad->GetLeftMargin());
+  lower->SetRightMargin(pad->GetRightMargin());
+  lower->SetTopMargin(0.03);
+  lower->SetBottomMargin(pad->GetBottomMargin());
+  lower->SetGridx(pad->GetGridx());
+  lower->SetGridy(pad->GetGridy());
+  lower->SetTicks(pad->GetTickx(), pad->GetTicky());
+  upper->Draw();
+  lower->Draw();
+  if (previous)
+    previous->cd();
+}
+
 void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
                                TString output_subdirectory,
                                PlotSaveOptions save_options) {
@@ -249,6 +322,175 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   leg->Draw();
 
   return leg;
+}
+
+Double_t PlottingUtils::TextWidthPx(const TString &text, Double_t size_px,
+                                    Int_t font) {
+  if (text.Length() == 0)
+    return 0.0;
+  TVirtualPad *previous = gPad;
+  const Int_t scratch_px = 1000;
+  TCanvas *scratch = new TCanvas(GetRandomName(), "", scratch_px, scratch_px);
+  TLatex latex(0.1, 0.5, text);
+  latex.SetNDC();
+  latex.SetTextFont(font);
+  latex.SetTextSize(size_px);
+  const Double_t width_px = latex.GetXsize() * scratch_px;
+  delete scratch;
+  if (previous)
+    previous->cd();
+  return width_px;
+}
+
+Double_t PlottingUtils::LegendWidthPx(const std::vector<TString> &labels,
+                                      const TString &header, Double_t size_px,
+                                      Double_t margin, Double_t padding_px) {
+  Double_t width_px = TextWidthPx(header, size_px);
+  for (std::size_t i = 0; i < labels.size(); i++)
+    width_px = TMath::Max(width_px, TextWidthPx(labels[i], size_px) /
+                                        TMath::Max(0.05, 1.0 - margin));
+  return width_px + 2.0 * padding_px;
+}
+
+Double_t PlottingUtils::FigureScale(TVirtualPad *pad,
+                                    Int_t reference_width_px) {
+  if (!pad || !pad->GetCanvas() || reference_width_px <= 0)
+    return 1.0;
+  const Double_t pad_width_px = pad->GetCanvas()->GetWw() * pad->GetAbsWNDC();
+  return pad_width_px / Double_t(reference_width_px);
+}
+
+void PlottingUtils::ScaleFigure(TVirtualPad *pad, Int_t reference_width_px,
+                                Int_t reference_height_px) {
+  WarnIfNotConfigured("ScaleFigure");
+  if (!pad)
+    return;
+  ScalePad(pad, FigureScale(pad, reference_width_px), reference_width_px,
+           reference_height_px);
+}
+
+void PlottingUtils::ScalePad(TVirtualPad *pad, Double_t scale,
+                             Int_t reference_width_px,
+                             Int_t reference_height_px) {
+  if (!pad || !pad->GetCanvas())
+    return;
+  const Double_t pad_width_px = pad->GetCanvas()->GetWw() * pad->GetAbsWNDC();
+  const Double_t pad_height_px = pad->GetCanvas()->GetWh() * pad->GetAbsHNDC();
+  if (!(pad_width_px > 0.0) || !(pad_height_px > 0.0))
+    return;
+  const Double_t x_factor = reference_width_px * scale / pad_width_px;
+  const Double_t y_factor = reference_height_px * scale / pad_height_px;
+  pad->SetLeftMargin(TMath::Min(0.9, pad->GetLeftMargin() * x_factor));
+  pad->SetRightMargin(TMath::Min(0.9, pad->GetRightMargin() * x_factor));
+  pad->SetTopMargin(TMath::Min(0.9, pad->GetTopMargin() * y_factor));
+  pad->SetBottomMargin(TMath::Min(0.9, pad->GetBottomMargin() * y_factor));
+
+  TList *primitives = pad->GetListOfPrimitives();
+  if (!primitives)
+    return;
+  TIter next(primitives);
+  for (TObject *object = next(); object; object = next()) {
+    if (object->InheritsFrom(TVirtualPad::Class())) {
+      ScalePad(static_cast<TVirtualPad *>(object), scale, reference_width_px,
+               reference_height_px);
+      continue;
+    }
+    if (object->InheritsFrom(TLegend::Class())) {
+      ScaleLegend(static_cast<TLegend *>(object), scale);
+      continue;
+    }
+    if (object->InheritsFrom(TText::Class())) {
+      ScaleText(static_cast<TText *>(object), pad, scale, reference_height_px);
+      continue;
+    }
+    if (object->InheritsFrom(TH1::Class()))
+      ScaleAxisFontsToPad(static_cast<TH1 *>(object), pad, scale,
+                          reference_width_px, reference_height_px);
+    ScaleLine(dynamic_cast<TAttLine *>(object), scale);
+    ScaleMarker(dynamic_cast<TAttMarker *>(object), scale);
+  }
+}
+
+void PlottingUtils::ScaleAxisFontsToPad(TH1 *frame, TVirtualPad *pad,
+                                        Double_t scale,
+                                        Int_t reference_width_px,
+                                        Int_t reference_height_px) {
+  WarnIfNotConfigured("ScaleAxisFontsToPad");
+  if (!frame || !pad || !pad->GetCanvas() || reference_width_px <= 0 ||
+      reference_height_px <= 0)
+    return;
+  const Double_t pad_width_px = pad->GetCanvas()->GetWw() * pad->GetAbsWNDC();
+  const Double_t pad_height_px = pad->GetCanvas()->GetWh() * pad->GetAbsHNDC();
+  const Double_t pad_px = TMath::Min(pad_width_px, pad_height_px);
+  if (!(pad_px > 0.0))
+    return;
+  const Double_t size = 0.06 * reference_height_px * scale / pad_px;
+  const Double_t reference_aspect =
+      Double_t(TMath::Min(reference_width_px, reference_height_px)) /
+      Double_t(reference_width_px);
+  TAxis *axes[2] = {frame->GetXaxis(), frame->GetYaxis()};
+  for (Int_t i = 0; i < 2; i++) {
+    if (axes[i]->GetTitleSize() > 0.0)
+      axes[i]->SetTitleSize(size);
+    if (axes[i]->GetLabelSize() > 0.0)
+      axes[i]->SetLabelSize(size);
+  }
+  frame->GetXaxis()->SetTitleOffset(1.2 * pad_px / pad_height_px);
+  frame->GetYaxis()->SetTitleOffset(1.2 * (pad_px / pad_width_px) /
+                                    reference_aspect);
+}
+
+void PlottingUtils::ScaleLegend(TLegend *legend, Double_t scale) {
+  if (!legend)
+    return;
+  legend->SetTextSize(30.0 * scale);
+}
+
+void PlottingUtils::ScaleText(TText *text, TVirtualPad *pad, Double_t scale,
+                              Int_t reference_height_px) {
+  if (!text || !pad || !pad->GetCanvas())
+    return;
+  const Int_t precision = text->GetTextFont() % 10;
+  if (precision == 3) {
+    text->SetTextSize(text->GetTextSize() * scale);
+    return;
+  }
+  const Double_t pad_width_px = pad->GetCanvas()->GetWw() * pad->GetAbsWNDC();
+  const Double_t pad_height_px = pad->GetCanvas()->GetWh() * pad->GetAbsHNDC();
+  const Double_t pad_px = TMath::Min(pad_width_px, pad_height_px);
+  if (!(pad_px > 0.0))
+    return;
+  text->SetTextSize(text->GetTextSize() * reference_height_px * scale / pad_px);
+}
+
+TLatex *PlottingUtils::DrawTitle(TVirtualPad *pad, const TString &title,
+                                 Double_t scale) {
+  if (!pad || title.Length() == 0)
+    return nullptr;
+  TVirtualPad *previous = gPad;
+  pad->cd();
+  TLatex *text = new TLatex(0.5, 1.0 - 0.5 * pad->GetTopMargin(), title);
+  text->SetNDC();
+  text->SetTextFont(43);
+  text->SetTextSize(36.0 * scale);
+  text->SetTextAlign(22);
+  text->Draw();
+  if (previous)
+    previous->cd();
+  return text;
+}
+
+void PlottingUtils::ScaleLine(TAttLine *line, Double_t scale) {
+  if (!line || line->GetLineWidth() == 0)
+    return;
+  line->SetLineWidth(
+      Width_t(TMath::Max(1, TMath::Nint(line->GetLineWidth() * scale))));
+}
+
+void PlottingUtils::ScaleMarker(TAttMarker *marker, Double_t scale) {
+  if (!marker)
+    return;
+  marker->SetMarkerSize(marker->GetMarkerSize() * scale);
 }
 
 TLatex *PlottingUtils::AddText(const TString label, Double_t x, Double_t y,
