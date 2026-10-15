@@ -91,10 +91,8 @@
 - `README.md` is a short pointer to the published site for people browsing
   GitHub. It is deliberately not in doxygen's `INPUT`; do not grow it back into
   a second copy of the documentation.
-- `doc/theme/custom.css` holds the Kanagawa palette (Kanagawa base16, dark
-  only). The portfolio site at ethanwtodd.com keeps a copy of the same values in
-  its own repository — if you change a colour here, change it there too or the
-  two sites stop matching.
+- The site's theme (the Kanagawa palette) lives in the website repository
+  (github:ewtodd/website), not here. Change colours there.
 
 ## Python
 
@@ -108,13 +106,39 @@
 
 ## Publishing
 
-- The site at docs.ethanwtodd.com/analysis-utilities is `nix build .#docs`,
-  served as a store path by the Caddy vhost on `nu` (see
-  `/etc/nixos/modules/services/reverse-proxy`). There is no CI publish step and
-  no CNAME file: DNS is a Namecheap A record maintained by the `namecheap-ddns`
-  timer, like every other subdomain.
+- docs.ethanwtodd.com/analysis-utilities is the website repository's `docs`
+  package (~/Software/website), which takes this repository as a flake input;
+  the Caddy vhost on `nu` serves it. There is no CI publish step.
+- To publish a documentation change: push here, run `nix flake update
+  analysis-utilities` in ~/Software/website and push that, then `nix flake
+  update website` in /etc/nixos and deploy nu (`colmena apply --on nu`).
 - Doxygen emits only relative links, which is what allows the site to be served
-  under a path prefix. Do not introduce root-absolute URLs into `doc/pages` or
-  the theme, or the prefixed deployment breaks while local previews still work.
-- Publishing a documentation change therefore means `nix flake update` on the
-  `/etc/nixos` side, not a push to this repository.
+  under a path prefix. Do not introduce root-absolute URLs into `doc/pages`, or
+  the prefixed deployment breaks while local previews still work.
+
+## Review checklists
+
+- Every change to core analysis logic is human-reviewed before commit
+  (README). Core: fitting models (`FittingUtils`, `RooFitUtils`,
+  `RooFitPhotopeakPdfs` and the PDFs' `doEval`/integrals, fit math in the
+  `Interactive*FitEditor` classes), signal processing
+  (`WaveformProcessingUtils`), result extraction (`FitResult`,
+  `Save*/Load*InteractiveParams`). `BinaryUtils`, `InitUtils`, `IOUtils`,
+  `PlottingUtils`, `gpu/*.cu` dispatch, build files and docs are tooling. A
+  small fix to fit logic is core; a `gpu/*.cu`-only perf change is tooling
+  unless it changes the math.
+- For a core change, write `checks/REVIEW-<slug>-<YYYY-MM-DD>.md` (tracked),
+  following the newest file there. No code: `path:line-range`, what the lines
+  do, and a `Check:` asking ewt to confirm something specific, not a
+  restatement. Line numbers from the working tree (`grep -n`), not a diff;
+  ascending within a file; core first, then tooling, then "checked and
+  excluded", nits last. Leave boxes `- [ ]`.
+- Agent commits are the ones authored by son-of-anton-bot (the history carries
+  no `Co-Authored-By` trailers).
+
+## Commits
+
+- A Conventional Commits summary line with scope (`feat(PlottingUtils): …`,
+  `fix(RooFitUtils): …`, `docs: …`), a blank line, then a body that explains
+  what changed and why.
+- Agent commits: `--author="son-of-anton-bot <307402699+son-of-anton-bot@users.noreply.github.com>"`.
