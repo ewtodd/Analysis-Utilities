@@ -2625,6 +2625,7 @@ RooFitExtractParamDiagnostic(RooRealVar *rv, const std::string &name,
     d.lo = rv->getMin();
     d.hi = rv->getMax();
     d.has_limits = kTRUE;
+    d.is_constant = rv->isConstant();
     Double_t range = d.hi - d.lo;
     if (range > 0) {
       Double_t abs_tol = 1e-4;
@@ -2939,6 +2940,14 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   RooFitResult *fit_result = nullptr;
   Bool_t sim_valid = kFALSE;
 
+  // RooCmdArg::none() passes exactly nothing, so the defaults of these three
+  // members reproduce the historic fitTo() call byte for byte.
+  RooCmdArg max_calls_arg = (fit_max_calls_ > 0)
+                                ? RooFit::MaxCalls(fit_max_calls_)
+                                : RooCmdArg::none();
+  RooCmdArg hesse_arg =
+      fit_final_hesse_ ? RooFit::Hesse(kTRUE) : RooCmdArg::none();
+
   if (interactive_) {
     if (LoadSimInteractiveParams(input_name, base_label)) {
       sim_valid = kTRUE;
@@ -2967,7 +2976,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
             *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
             RooFit::Range(kFitRangeName), RooFit::SplitRange(kTRUE),
             RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(load_print_level),
-            RooFit::PrintEvalErrors(load_eval_errors), RooFit::Strategy(1),
+            RooFit::PrintEvalErrors(load_eval_errors),
+            RooFit::Strategy(fit_strategy_), max_calls_arg, hesse_arg,
             RooFit::Minimizer("Minuit2", "migrad"),
             RooFit::ExternalConstraints(sim_constraint_set_),
             BestAvailableBackend());
@@ -2986,6 +2996,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
           std::cout << "WARNING: simultaneous refit from saved params did not "
                        "converge cleanly (edm = "
                     << refit_edm << ")" << std::endl;
+        if (save_after_refit_ && fit_result)
+          SaveSimInteractiveParams(input_name, base_label);
       }
     } else {
       std::vector<SimEditorChannelView> views;
@@ -3058,8 +3070,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         *sim_combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
         RooFit::Range(kFitRangeName), RooFit::SplitRange(kTRUE),
         RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(print_level),
-        RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(1),
-        RooFit::Minimizer("Minuit2", "migrad"),
+        RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(fit_strategy_),
+        max_calls_arg, hesse_arg, RooFit::Minimizer("Minuit2", "migrad"),
         RooFit::ExternalConstraints(sim_constraint_set_),
         BestAvailableBackend());
     // Same EDM-based criterion as the refit-after-load path above
@@ -3083,12 +3095,33 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   Double_t diag_edm = -1;
   Double_t diag_min_nll = -1;
 
+  std::vector<FitParameterCorrelation> diag_correlations;
   if (fit_result) {
     has_diag = kTRUE;
     diag_status = fit_result->status();
     diag_cov_qual = fit_result->covQual();
     diag_edm = fit_result->edm();
     diag_min_nll = fit_result->minNll();
+
+    // The correlation matrix is indexed in floatParsFinal() order. Keep only
+    // the strongly correlated pairs; the full matrix would bloat FitResult.
+    const RooArgList &final_pars = fit_result->floatParsFinal();
+    const TMatrixDSym &corr = fit_result->correlationMatrix();
+    Int_t n_par = final_pars.getSize();
+    if (corr.GetNrows() == n_par) {
+      for (Int_t i = 0; i < n_par; i++) {
+        for (Int_t j = i + 1; j < n_par; j++) {
+          Double_t rho = corr(i, j);
+          if (TMath::Abs(rho) >= 0.95) {
+            FitParameterCorrelation c;
+            c.name1 = final_pars.at(i)->GetName();
+            c.name2 = final_pars.at(j)->GetName();
+            c.rho = rho;
+            diag_correlations.push_back(c);
+          }
+        }
+      }
+    }
   }
 
   if (has_diag) {
@@ -3127,6 +3160,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     cr.min_nll = diag_min_nll;
     cr.parameter_diagnostics =
         ExtractParameterDiagnostics(sim_channels_[i].name);
+    cr.parameter_correlations = diag_correlations;
     results.push_back(cr);
 
     TString chi2_label = Form("#chi^{2}/ndf = %.3f", chi2);

@@ -179,15 +179,29 @@ struct PeakFitResult {
  * @note Only populated by RooFitUtils simultaneous fits.
  */
 struct FitParameterDiagnostic {
-  std::string name;           ///< Parameter name as RooFit knows it.
-  Double_t value = 0;         ///< Fitted value.
-  Double_t error = 0;         ///< Fitted uncertainty.
-  Double_t lo = 0;            ///< Lower bound, if #has_limits.
-  Double_t hi = 0;            ///< Upper bound, if #has_limits.
-  Bool_t has_limits = kFALSE; ///< Whether the parameter was bounded.
-  Bool_t near_lower = kFALSE; ///< Sits within a small margin of #lo.
-  Bool_t near_upper = kFALSE; ///< Sits within a small margin of #hi.
-  Bool_t near_limit = kFALSE; ///< Either of the two above.
+  std::string name;            ///< Parameter name as RooFit knows it.
+  Double_t value = 0;          ///< Fitted value.
+  Double_t error = 0;          ///< Fitted uncertainty.
+  Double_t lo = 0;             ///< Lower bound, if #has_limits.
+  Double_t hi = 0;             ///< Upper bound, if #has_limits.
+  Bool_t has_limits = kFALSE;  ///< Whether the parameter was bounded.
+  Bool_t near_lower = kFALSE;  ///< Sits within a small margin of #lo.
+  Bool_t near_upper = kFALSE;  ///< Sits within a small margin of #hi.
+  Bool_t near_limit = kFALSE;  ///< Either of the two above.
+  Bool_t is_constant = kFALSE; ///< Whether the parameter was fixed in the fit.
+};
+
+/**
+ * @brief One pair of fitted parameters whose correlation is strongly nonzero.
+ *
+ * Populated only by RooFitUtils simultaneous fits, from the final
+ * `RooFitResult` correlation matrix. Only pairs with |rho| >= 0.95 are stored,
+ * so an empty vector means no pair is strongly correlated.
+ */
+struct FitParameterCorrelation {
+  std::string name1; ///< First parameter name as RooFit knows it.
+  std::string name2; ///< Second parameter name.
+  Double_t rho = 0;  ///< Correlation coefficient, in [-1, 1].
 };
 
 /**
@@ -223,6 +237,9 @@ struct FitResult {
   Int_t n_invalid_nll = -1; ///< Invalid NLL evaluations; `-1` if unknown.
   /// One entry per fitted `RooRealVar`, peak and background alike.
   std::vector<FitParameterDiagnostic> parameter_diagnostics;
+  /// Parameter pairs with |rho| >= 0.95 from the final fit. Empty when no
+  /// pair reaches that threshold.
+  std::vector<FitParameterCorrelation> parameter_correlations;
   /// @}
 };
 

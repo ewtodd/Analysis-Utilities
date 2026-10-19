@@ -296,6 +296,13 @@ private:
   Bool_t fit_debug_;
   // See SetRefitAfterLoad(). Default kFALSE preserves the historic behaviour.
   Bool_t refit_after_load_ = kFALSE;
+  // See SetSaveAfterRefit(). Default kFALSE preserves the historic behaviour.
+  Bool_t save_after_refit_ = kFALSE;
+  // See SetFitStrategy(), SetFitMaxCalls() and SetFitFinalHesse(). Defaults
+  // reproduce the historic simultaneous-fit configuration exactly.
+  Int_t fit_strategy_ = 1;
+  Int_t fit_max_calls_ = 0;
+  Bool_t fit_final_hesse_ = kFALSE;
   // Upper bound on the exponential tail decay ratios tau/sigma. See
   // SetTailRatioMax().
   Double_t tail_ratio_max_ = 100.0;
@@ -554,6 +561,51 @@ public:
    *          behaviour. Turn it on for any fit whose inputs may change.
    */
   void SetRefitAfterLoad(Bool_t refit = kTRUE) { refit_after_load_ = refit; }
+
+  /**
+   * @brief Save the minimised endpoint after a refit from saved parameters.
+   *
+   * With SetRefitAfterLoad() the fit starts from a saved `.simroofits` file
+   * but does not write back, because the historic behaviour only saved from
+   * the editor. Enabling this writes the endpoint to the same file after the
+   * refit, so a subsequent call restarts from the previous endpoint.
+   *
+   * @param save `kTRUE` to save the endpoint after the refit.
+   *
+   * @warning Defaults to `kFALSE` so existing callers are unchanged. Enabling
+   *          it overwrites the saved state in the active plots directory.
+   */
+  void SetSaveAfterRefit(Bool_t save = kFALSE) { save_after_refit_ = save; }
+
+  /**
+   * @brief Select the Minuit2 strategy used by simultaneous fits.
+   *
+   * The value is passed to `RooFit::Strategy()`. The default, 1, reproduces
+   * the historic behaviour.
+   *
+   * @param strategy Minuit2 strategy code (0, 1 or 2).
+   */
+  void SetFitStrategy(Int_t strategy = 1) { fit_strategy_ = strategy; }
+
+  /**
+   * @brief Cap the number of function calls in a simultaneous fit.
+   *
+   * A positive value is passed to `RooFit::MaxCalls()`. Zero, the default,
+   * passes nothing and leaves the minimizer's own default in place.
+   *
+   * @param max_calls Maximum calls, or 0 for the minimizer default.
+   */
+  void SetFitMaxCalls(Int_t max_calls = 0) { fit_max_calls_ = max_calls; }
+
+  /**
+   * @brief Run an explicit HESSE after the simultaneous MIGRAD.
+   *
+   * The value is passed to `RooFit::Hesse()`. The default, `kFALSE`, leaves
+   * the historic behaviour unchanged.
+   *
+   * @param hesse `kTRUE` to finish the fit with HESSE.
+   */
+  void SetFitFinalHesse(Bool_t hesse = kFALSE) { fit_final_hesse_ = hesse; }
 
   /**
    * @brief Cap the dimensionless tail decay ratio `tau / sigma`.
