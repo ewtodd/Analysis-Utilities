@@ -11,8 +11,9 @@ also exposes a Python package: a bridge that makes the whole C++ API usable from
 PyROOT, and a loader for reading ROOT TTrees into numpy arrays and pandas
 DataFrames.
 
-> **Warning**
-> Currently in active development; breaking changes are all but guaranteed.
+> [!NOTE]
+> **Mostly stable as of version 26.10.19** (19 October 2026). Breaking changes
+> are now uncommon, though still possible.
 
 ## Documentation
 

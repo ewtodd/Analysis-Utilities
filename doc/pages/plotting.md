@@ -49,7 +49,9 @@ styling. No object instantiation required.
   (CWD-relative) and is configurable via `SetPlotsBaseDir` or
   `InitUtils::SetROOTPreferences`. Parent directories are created automatically.
   `PlotSaveOptions` controls linear (`kLINEAR`), log (`kLOG`), or both
-  (`kBOTH`, default). Log variants are prefixed with `log_`.
+  (`kBOTH`, default). Log variants are prefixed with `log_`. A PDF gets an
+  unrotated page with the canvas's own shape, so it can go straight into
+  LaTeX.
 - `SetPlotsBaseDir(dir)` / `GetPlotsBaseDir()` — set/inspect the plot output
   base directory. Trailing slashes are stripped on set. Pass an absolute path so
   output is anchored to a project root regardless of CWD.

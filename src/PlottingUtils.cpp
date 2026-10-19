@@ -267,8 +267,14 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
 
   TString prefix = full_dir + "/";
 
+  // Left to itself, ROOT prints a canvas at least as wide as it is tall onto
+  // a portrait page turned by 90 degrees, which LaTeX then places sideways or
+  // shrunk. "Portrait" gives an unrotated page with the canvas's own shape.
+  TString print_option =
+      (save_format_ == PlotSaveFormat::kPDF) ? "pdf Portrait" : "";
+
   if (save_options != PlotSaveOptions::kLOG)
-    canvas->Print(prefix + output_filename);
+    canvas->Print(prefix + output_filename, print_option);
 
   if (save_options != PlotSaveOptions::kLINEAR) {
     TList *primitives = canvas->GetListOfPrimitives();
@@ -296,7 +302,7 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
-    canvas->Print(prefix + "log_" + output_filename);
+    canvas->Print(prefix + "log_" + output_filename, print_option);
 
     canvas->SetLogy(kFALSE);
     canvas->Modified();

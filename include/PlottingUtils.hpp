@@ -234,6 +234,10 @@ public:
    *
    * @note The canvas is left with log-y disabled on return, whatever it was
    *       set to beforehand.
+   * @note PDFs are printed with ROOT's `Portrait` option, so the page has the
+   *       canvas's own shape and is not rotated. Without it ROOT puts any
+   *       canvas at least as wide as it is tall onto a portrait page turned
+   *       by 90 degrees, which LaTeX places sideways or shrunk.
    */
   static void SaveFigure(TCanvas *canvas, TString output_filename,
                          TString output_subdirectory = "",
