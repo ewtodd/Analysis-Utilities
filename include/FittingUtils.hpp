@@ -176,7 +176,7 @@ struct PeakFitResult {
  * somewhere it does not want to go, so the near-limit flags are worth checking
  * before trusting a converged fit.
  *
- * @note Only populated by RooFitUtils simultaneous fits.
+ * @note For now, only populated by RooFitUtils simultaneous fits.
  */
 struct FitParameterDiagnostic {
   std::string name;            ///< Parameter name as RooFit knows it.

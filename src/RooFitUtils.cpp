@@ -2941,7 +2941,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   Bool_t sim_valid = kFALSE;
 
   // RooCmdArg::none() passes exactly nothing, so the defaults of these three
-  // members reproduce the historic fitTo() call byte for byte.
+  // members reproduce the historic fitTo() call.
   RooCmdArg max_calls_arg = (fit_max_calls_ > 0)
                                 ? RooFit::MaxCalls(fit_max_calls_)
                                 : RooCmdArg::none();
