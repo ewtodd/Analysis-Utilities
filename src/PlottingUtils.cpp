@@ -271,7 +271,7 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
   // a portrait page turned by 90 degrees, which LaTeX then places sideways or
   // shrunk. "Portrait" gives an unrotated page with the canvas's own shape.
   TString print_option =
-      (save_format_ == PlotSaveFormat::kPDF) ? "pdf Portrait" : "";
+      (save_format_ == PlotSaveFormat::kPDF) ? "pdf Portrait" : "png";
 
   if (save_options != PlotSaveOptions::kLOG)
     canvas->Print(prefix + output_filename, print_option);
