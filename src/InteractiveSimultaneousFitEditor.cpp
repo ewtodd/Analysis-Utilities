@@ -1247,8 +1247,19 @@ Bool_t LaunchInteractiveSimultaneousFitEditor(
 
   editor->DontCallClose();
   editor->UnmapWindow();
-  gSystem->ProcessEvents();
+  // Drain the X events the unmapping generates. One ProcessEvents() is not
+  // enough: crossing/configure events arrive asynchronously from the server,
+  // and any still queued when the windows are destroyed are later dispatched
+  // to the freed TRootEmbeddedContainer, whose fCanvas back-pointer has been
+  // deleted -- a segfault in TRootEmbeddedContainer::HandleCrossing, or in
+  // the first canvas painted afterwards. Sleep briefly between passes so the
+  // server has time to deliver the events while the widgets are still alive.
+  for (Int_t teardown_pass = 0; teardown_pass < 20; teardown_pass++) {
+    gSystem->ProcessEvents();
+    gSystem->Sleep(5);
+  }
   delete editor;
+  PlottingUtils::NoteInteractiveEditorClosed();
 
   AURestoreXErrorHandler(xerr_save);
   return result;

@@ -3,12 +3,36 @@
 #include <TAttMarker.h>
 #include <TAxis.h>
 #include <TList.h>
+#include <TROOT.h>
+#include <TSystem.h>
 #include <TText.h>
 
 PlotSaveFormat PlottingUtils::save_format_ = PlotSaveFormat::kPNG;
 Bool_t PlottingUtils::preferences_set_ = kFALSE;
 Width_t PlottingUtils::line_width_ = 2;
 TString PlottingUtils::plots_base_dir_ = "plots";
+Bool_t PlottingUtils::batch_graphics_tainted_ = kFALSE;
+
+void PlottingUtils::NoteInteractiveEditorClosed() {
+  batch_graphics_tainted_ = kTRUE;
+}
+
+TCanvas *PlottingUtils::CreateCanvas(const TString &name, Int_t width,
+                                     Int_t height) {
+  // ROOT bug: after an editor has taken gROOT out of batch mode and back, a
+  // canvas built through the batch GUI factory resolves its TGX11 window
+  // context to null, and painting the canvas background segfaults in
+  // TGX11::DrawBoxW. Building it while ROOT is momentarily in GUI mode always
+  // yields a valid context; switch straight back so file output is unchanged.
+  if (gROOT->IsBatch() && batch_graphics_tainted_) {
+    gROOT->SetBatch(kFALSE);
+    TCanvas *canvas = new TCanvas(name, "", width, height);
+    gROOT->SetBatch(kTRUE);
+    canvas->SetBatch(kTRUE);
+    return canvas;
+  }
+  return new TCanvas(name, "", width, height);
+}
 
 void PlottingUtils::SetPlotsBaseDir(const TString &dir) {
   TString d = dir;
@@ -166,7 +190,7 @@ void PlottingUtils::ConfigureAndDraw2DHistogram(TH2 *hist, TCanvas *canvas,
 
 TCanvas *PlottingUtils::GetConfiguredCanvas(Bool_t logy) {
   WarnIfNotConfigured("GetConfiguredCanvas");
-  TCanvas *canvas = new TCanvas(GetRandomName(), "", 1200, 800);
+  TCanvas *canvas = CreateCanvas(GetRandomName(), 1200, 800);
 
   canvas->SetGridx(1);
   canvas->SetGridy(1);
@@ -187,7 +211,7 @@ TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(TPad *&plot,
   const Int_t plot_width_px = 1200;
   const Int_t canvas_width_px = plot_width_px + TMath::Max(0, legend_width_px);
   TCanvas *canvas =
-      new TCanvas(GetRandomName(), "", canvas_width_px, plot_height_px);
+      CreateCanvas(GetRandomName(), canvas_width_px, plot_height_px);
   canvas->SetTicks(1, 1);
   const Double_t split = Double_t(plot_width_px) / Double_t(canvas_width_px);
   plot = new TPad(GetRandomName(), "", 0.0, 0.0, split, 1.0);
@@ -336,7 +360,7 @@ Double_t PlottingUtils::TextWidthPx(const TString &text, Double_t size_px,
     return 0.0;
   TVirtualPad *previous = gPad;
   const Int_t scratch_px = 1000;
-  TCanvas *scratch = new TCanvas(GetRandomName(), "", scratch_px, scratch_px);
+  TCanvas *scratch = CreateCanvas(GetRandomName(), scratch_px, scratch_px);
   TLatex latex(0.1, 0.5, text);
   latex.SetNDC();
   latex.SetTextFont(font);

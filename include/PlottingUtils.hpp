@@ -536,13 +536,32 @@ public:
   /// @return 2 after SetStylePreferences(PlotSaveFormat::kPNG), 1 for kPDF.
   static Width_t GetLineWidth() { return line_width_; };
 
+  /**
+   * @brief Tell PlottingUtils that an interactive fit editor has closed.
+   *
+   * The interactive editors temporarily take ROOT out of batch mode
+   * (`gROOT->SetBatch(kFALSE)`) to show their GUI and then switch it back.
+   * After that round trip, a canvas built through ROOT's batch GUI factory
+   * resolves its `TGX11` window context to null, and painting the canvas
+   * background segfaults in `TGX11::DrawBoxW` (called from
+   * `TPadPainter::DrawBox`). Call this once after an editor has been
+   * destroyed so the canvas helpers below build subsequent canvases through
+   * the GUI factory, which always yields a valid context, and then put them
+   * back into batch mode.
+   *
+   * @note Only has an effect while ROOT is in batch mode; harmless otherwise.
+   */
+  static void NoteInteractiveEditorClosed();
+
 private:
   static PlotSaveFormat save_format_;
   static Bool_t preferences_set_;
   static Width_t line_width_;
   static TString plots_base_dir_;
+  static Bool_t batch_graphics_tainted_;
   static void SetTurboPalette();
   static void WarnIfNotConfigured(const TString method_name);
+  static TCanvas *CreateCanvas(const TString &name, Int_t width, Int_t height);
   static void PlotPullHistogram(TGraph *residuals, const TString &output_name,
                                 const TString &output_subdirectory);
 };
