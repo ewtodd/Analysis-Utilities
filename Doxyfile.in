@@ -32,6 +32,12 @@ INPUT                  = "@AU_SOURCE_DIR@/doc/pages" \
                          "@AU_SOURCE_DIR@/src" \
                          "@AU_SOURCE_DIR@/gpu"
 
+# include/roofit_batchcompute/ holds verbatim copies of ROOT's batch-compute
+# headers, not Analysis-Utilities' public API. They carry ROOT's own doxygen
+# comments (whose @param names do not always match the arguments), so exclude
+# the directory rather than document it here.
+EXCLUDE                  = "@AU_SOURCE_DIR@/include/roofit_batchcompute"
+
 # python/ is deliberately absent. The package already carries real docstrings,
 # and doxygen's Python output is strictly worse than what pdoc or Sphinx would
 # produce from the same source. Document it with a Python-native tool or not
