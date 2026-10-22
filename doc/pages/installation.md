@@ -31,16 +31,17 @@ nix develop
 
 ## Binary cache
 
-The CUDA-overlaid ROOT and the `packages.cuda` library are large to build from
-source. **e-desktop** (the primary development host for this project) re-serves
-its nix store as a binary cache so other machines can fetch the pre-built
-artifacts directly instead of rebuilding.
+Both ROOT builds (`packages.root` and `packages.rootCuda`, built from a pinned
+ROOT master commit; see @ref cuda) and the `packages.cuda` library are large to
+build from source. **e-desktop** (the primary development host for this
+project) re-serves its nix store as a binary cache so other machines can fetch
+the pre-built artifacts directly instead of rebuilding.
 
 - **URL:** `https://cache.ethanwtodd.com`
 - **Use on other hosts:** add the URL as a substituter (and trust its signing
   key) in your `nix.conf` / `nixos-rebuild` config. Once configured, `nix build`
-  and `nix develop` will transparently pull `packages.cuda` and
-  `packages.rootCuda` from the cache instead of compiling.
+  and `nix develop` will transparently pull `packages.root`, `packages.cuda`
+  and `packages.rootCuda` from the cache instead of compiling.
 
 @warning Do not override the `nixpkgs` input (e.g. via
 `inputs.utils.inputs.nixpkgs.follows`). Overriding it changes the derivation

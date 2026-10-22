@@ -4,6 +4,21 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
+    # ROOT master, pinned by commit, for the CUDA build only. It has the CUDA
+    # evaluator fixes (root-project/root PRs #23263 and #23753) that no 6.40
+    # release carries. Bump it deliberately, by editing the commit here, and run
+    # `nix run .#cuda-regression` afterwards.
+    root-src = {
+      url = "github:root-project/root/e0e5723692467ac53dcc5871e990a68f1e5adf30";
+      flake = false;
+    };
+    # The clad tag that ROOT commit builds against
+    # (interpreter/cling/tools/plugins/clad/CMakeLists.txt).
+    clad-src = {
+      url = "github:vgvassilev/clad/v2.5";
+      flake = false;
+    };
   };
 
   outputs =
@@ -11,6 +26,8 @@
       self,
       nixpkgs,
       flake-utils,
+      root-src,
+      clad-src,
     }:
     (flake-utils.lib.eachDefaultSystem (
       system:
@@ -26,13 +43,80 @@
 
         version = "26.10.22";
 
-        rootWithCuda = pkgs.root.overrideAttrs (old: {
-          cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+        # ROOT for both builds: nixpkgs' 6.40 derivation rebuilt from the
+        # root-src master commit above. Released ROOT up to 6.40.04 computes a
+        # wrong likelihood for ranged RooSimultaneous fits (root-project/root
+        # #23444, fixed in master by 96d8760a77), so no package here uses it.
+        rootMaster = pkgs.root.overrideAttrs (old: {
+          version = "6.41.01-unstable-2026-10-19";
+          src = root-src;
+
+          # Master needs LLVM 22, newer than the patched Clang nixpkgs builds for
+          # 6.40, so build ROOT's bundled LLVM and Clang instead and drop
+          # nixpkgs' LLVM 20 ones. A derivation-valued attribute is a build input
+          # even when unused, hence clang = null.
+          clang = null;
+          clad_src = clad-src;
+          buildInputs = pkgs.lib.filter (
+            input: input != null && input != old.clang && input != pkgs.llvm_20
+          ) (old.buildInputs or [ ]);
+
+          # nixpkgs deletes every builtins/ directory except two; master keeps
+          # mandatory components there, so leave them all. Optional builtins stay
+          # off by default, and fail-on-missing still refuses a silent fallback.
+          #
+          # Master patches clad inside its ExternalProject with `git checkout` and
+          # `git apply`, which needs a writable git clone; the clad input is a
+          # read-only store path. So apply the same patch to a writable copy here,
+          # take it out of ROOT's patch list, and build clad from the copy.
+          # --replace-fail stops the build if a ROOT bump changes that list.
+          preConfigure = ''
+            substituteInPlace cmake/modules/SearchInstalledSoftware.cmake \
+              --replace-fail 'set(lcgpackages ' '#set(lcgpackages '
+            patchShebangs cmake/unix/
+
+            cladPatch="$PWD/interpreter/cling/tools/plugins/clad/patches/lld_lookup_no_default_path.patch"
+            cp -r --no-preserve=mode ${clad-src} "$NIX_BUILD_TOP/clad"
+            (cd "$NIX_BUILD_TOP/clad" && git apply --ignore-space-change \
+              --ignore-whitespace "$cladPatch")
+            substituteInPlace interpreter/cling/tools/plugins/clad/CMakeLists.txt \
+              --replace-fail 'list(APPEND _clad_patches_list "lld_lookup_no_default_path.patch")' ""
+            appendToVar cmakeFlags "-DCLAD_SOURCE_DIR=$NIX_BUILD_TOP/clad"
+          '';
+
+          cmakeFlags = [
+            "-Dbuiltin_clang=ON"
+            "-Dbuiltin_llvm=ON"
+            # Master downloads the HTTP server's civetweb and the web GUI's
+            # openui5 at build time, which the sandbox forbids. Nothing here
+            # uses either; turning http off also turns webgui off.
+            "-Dhttp=OFF"
+            "-Dwebgui=OFF"
+            # The bundled Clang only searches the FHS include paths, so it cannot
+            # find glibc's headers (rootcling fails on <features.h>). nixpkgs'
+            # patched Clang for 6.40 is built with the same setting.
+            "-DC_INCLUDE_DIRS=${pkgs.lib.getDev pkgs.stdenv.cc.libc}/include"
+            "-Dfail-on-missing=ON"
+            "-Dfftw3=ON"
+            "-Dfitsio=OFF"
+            "-Dmathmore=ON"
+            "-Dsqlite=OFF"
+            "-Dvdt=OFF"
+          ];
+
+          # nixpkgs' separate debug output adds -ggdb to every compile, which
+          # with the bundled LLVM and Clang means building all of them with
+          # debug information.
+          separateDebugInfo = false;
+        });
+
+        rootWithCuda = rootMaster.overrideAttrs (old: {
+          cmakeFlags = old.cmakeFlags ++ [
             "-Dcuda=ON"
             "-DCMAKE_CUDA_ARCHITECTURES=89"
           ];
           buildInputs =
-            (old.buildInputs or [ ])
+            old.buildInputs
             ++ (with pkgs.cudaPackages; [
               cuda_nvcc
               cuda_cudart
@@ -42,25 +126,22 @@
 
         # The CUDA build compiles against two of ROOT's private batch-compute
         # headers (RooBatchCompute::Config and CudaStream), which no ROOT
-        # install ships. Taking them from the very tarball rootWithCuda is built
-        # from means they can never disagree with its libraries. The explicit
-        # member paths make a ROOT bump that moves either file fail here, loudly.
+        # install ships. Copying them from the very source rootWithCuda is built
+        # from means they can never disagree with its libraries; cp fails loudly
+        # if a ROOT bump moves either file.
         rootBatchComputeHeaders =
           pkgs.runCommand "root-batchcompute-headers-${rootWithCuda.version}" { }
             ''
-              tar -xzf ${rootWithCuda.src} --strip-components=1 \
-                root-${rootWithCuda.version}/roofit/batchcompute/res/RooBatchCompute.h \
-                root-${rootWithCuda.version}/roofit/batchcompute/src/CudaInterface.h
               mkdir -p $out/include/roofit_batchcompute
-              cp roofit/batchcompute/res/RooBatchCompute.h \
-                roofit/batchcompute/src/CudaInterface.h \
+              cp ${rootWithCuda.src}/roofit/batchcompute/res/RooBatchCompute.h \
+                ${rootWithCuda.src}/roofit/batchcompute/src/CudaInterface.h \
                 $out/include/roofit_batchcompute/
             '';
 
         mkUtils =
           { cuda }:
           let
-            root = if cuda then rootWithCuda else pkgs.root;
+            root = if cuda then rootWithCuda else rootMaster;
             cudaBuildInputs = pkgs.lib.optionals cuda (
               with pkgs.cudaPackages;
               [
@@ -108,10 +189,12 @@
         utils = mkUtils { cuda = false; };
         utilsCuda = mkUtils { cuda = true; };
 
-        # CUDA backend regression check (tests/CudaRegression.cpp): CPU/CUDA NLL
-        # agreement, reference NLL values, and the CUDA speed-up over the CPU on
-        # a toy photopeak model. It needs a GPU, which the build sandbox does not
-        # have, so it is an app rather than a check: `nix run .#cuda-regression`.
+        # Regression check (tests/CudaRegression.cpp): CPU/CUDA NLL agreement,
+        # RooFit's NLL against a directly computed likelihood, reference NLL
+        # values, and the CUDA speed-up over the CPU, on toy photopeak models in
+        # the configurations the library fits. It needs a GPU, which the build
+        # sandbox does not have, so it is an app rather than a check:
+        # `nix run .#cuda-regression`.
         cudaRegression = pkgs.stdenv.mkDerivation {
           pname = "analysis-utilities-cuda-regression";
           inherit version;
@@ -231,9 +314,10 @@
         packages.pythonPackage = pythonPackage;
         # Static site for au.ethanwtodd.com; CI publishes this to Pages.
         packages.docs = docs;
-        # Re-export the CUDA-overlaid ROOT so downstream consumers can pull it
-        # without duplicating the overrideAttrs block. Plain pkgs.root is left
-        # for downstream to grab directly from nixpkgs.
+        # The ROOT each library build links against. Downstream code must build
+        # against the matching one, not pkgs.root: a different ROOT is a
+        # different ABI, and released ROOT has the ranged-fit bug noted above.
+        packages.root = rootMaster;
         packages.rootCuda = rootWithCuda;
         packages.cudaRegression = cudaRegression;
         apps.cuda-regression = {
@@ -244,7 +328,7 @@
 
         devShells.cpu = pkgs.mkShell {
           buildInputs = with pkgs; [
-            root
+            rootMaster
             gnumake
             pkg-config
             clang-tools
@@ -266,7 +350,7 @@
             export DOXYGEN_AWESOME_CSS="${pkgs.doxygen-awesome-css}/share/doxygen-awesome-css"
             echo "Development environment for working on the analysis utilities source (CPU)"
             export CPLUS_INCLUDE_PATH="$PWD/include''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
-            export ROOT_INCLUDE_PATH="$PWD/include:${pkgs.root}/include"
+            export ROOT_INCLUDE_PATH="$PWD/include:${rootMaster}/include"
             export LD_LIBRARY_PATH="$PWD/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           '';
         };

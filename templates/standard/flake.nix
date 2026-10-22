@@ -3,10 +3,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    utils = {
-      url = "github:ewtodd/Analysis-Utilities";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    utils.url = "github:ewtodd/Analysis-Utilities";
   };
   outputs =
     {
@@ -20,7 +17,7 @@
       let
         # Default CPU build. To opt into the GPU path, swap:
         #   analysis-utils -> utils.packages.${system}.cuda
-        #   pkgs.root      -> utils.packages.${system}.rootCuda
+        #   root           -> utils.packages.${system}.rootCuda
         # and uncomment the NIX_CFLAGS_COMPILE export in shellHook below.
         pkgs = import nixpkgs {
           inherit system;
@@ -32,6 +29,7 @@
         };
 
         analysis-utils = utils.packages.${system}.default;
+        root = utils.packages.${system}.root;
       in
       {
         devShells.default = pkgs.mkShell {
@@ -42,7 +40,7 @@
           ];
           buildInputs = [
             analysis-utils
-            pkgs.root
+            root
           ];
           shellHook = ''
             echo "Analysis-Utilities version: ${analysis-utils.version}"

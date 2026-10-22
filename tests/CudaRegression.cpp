@@ -1,13 +1,25 @@
-// Regression check for the CUDA backend of the photopeak PDFs.
+// Regression check for the CUDA backend and for the likelihood RooFit builds.
 //
-// Builds a toy single-channel model and a four-channel simultaneous model from
-// the library's PDFs, with 1M events per channel, and checks that:
+// Builds toy models from the library's PDFs, with 1M events per channel, in the
+// three configurations the library fits: a single channel, four channels with
+// SplitRange (RooFitUtils::FitSimultaneous) and four channels over one shared
+// range (the interactive simultaneous editor). For each it checks that:
 //   1. the CPU and CUDA backends give the same NLL at many parameter points;
-//   2. the CPU NLL at the start point still matches a recorded reference, which
-//      catches value changes made by this library or by a ROOT bump, even when
-//      both backends change together;
-//   3. the CUDA backend, selected through BestAvailableBackend() as the
-//      library's own fits do, beats the CPU backend by a minimum factor.
+//   2. RooFit's NLL equals the likelihood the model defines, computed directly
+//      from the components' values and integrals, up to a constant, at several
+//      parameter points (released ROOT up to 6.40.04 fails this for the
+//      simultaneous configurations, root-project/root#23444);
+//   3. the CPU NLL at the start point still matches a recorded reference, which
+//      also catches changes to the PDFs themselves;
+//   4. the CUDA backend, selected through BestAvailableBackend() as the
+//      library's own fits do, beats the CPU backend by a minimum factor (single
+//      and SplitRange configurations);
+//   5. Migrad fits with likelihood offsetting, which every fit in the library
+//      uses, converge and reach the same parameters on CPU and CUDA (single
+//      and SplitRange configurations). RooFit applies the offset only inside
+//      the minimiser, so only a fit exercises it. These fits use a simpler
+//      model generated from itself, with 100k events per channel, so that each
+//      has one clear minimum and the CPU fits stay short.
 //
 // It needs a GPU, so it cannot run inside the build sandbox. Run it with
 // `nix run .#cuda-regression`; it exits non-zero if any check fails.
@@ -20,10 +32,13 @@
 #include <RooArgList.h>
 #include <RooCategory.h>
 #include <RooDataSet.h>
+#include <RooFitResult.h>
 #include <RooGaussian.h>
 #include <RooGlobalFunc.h>
+#include <RooMinimizer.h>
 #include <RooMsgService.h>
 #include <RooPolynomial.h>
+#include <RooRandom.h>
 #include <RooRealVar.h>
 #include <RooSimultaneous.h>
 #include <TROOT.h>
@@ -43,43 +58,51 @@
 namespace {
 
 const Long64_t kEventsPerChannel = 1000000;
+const Long64_t kFitEventsPerChannel = 100000;
 const Int_t kSimultaneousChannels = 4;
 const Int_t kWarmupEvaluations = 5;
 const Int_t kTimedEvaluations = 100;
 const Int_t kAgreementPoints = 40;
+const Int_t kDirectPoints = 3;
 const Double_t kMaxBackendRelativeDifference = 1e-10;
+const Double_t kMaxDirectRelativeMismatch = 1e-9;
 const Double_t kMaxReferenceRelativeDifference = 1e-9;
+// Largest CPU/CUDA difference of a fitted parameter, in units of its error.
+// Each fit stops somewhere within an EDM below 1e-3 of the minimum, so a few
+// hundredths of an error are expected; a broken offset path is far outside.
+const Double_t kMaxFitSigmaDifference = 0.05;
+const Double_t kMaxConvergedEdm = 1e-3;
 
-// Limits on the CUDA-to-CPU ratio of the median time per NLL evaluation. The
-// simultaneous limit is looser because ROOT 6.40's CUDA path recomputes every
-// channel on every evaluation, while the CPU path skips the unchanged ones.
-// Tighten it once the pinned ROOT skips clean nodes on CUDA as well.
-const Double_t kMaxSingleTimeRatio = 0.3;
-const Double_t kMaxSimultaneousTimeRatio = 0.6;
+// Limit on the CUDA-to-CPU ratio of the median time per NLL evaluation.
+const Double_t kMaxTimeRatio = 0.15;
 
-// CPU NLL at the start point, recorded with ROOT 6.40.00. After a deliberate
-// change to the model or the PDFs, replace these with the values the check
-// prints.
-const Double_t kReferenceSingleStartNll = -9884771.017917;
-const Double_t kReferenceSimultaneousStartNll = -34051638.494087;
+// CPU NLL at the start point, recorded with ROOT master e0e5723692 after the
+// direct-likelihood check passed. After a deliberate change to the model or
+// the PDFs, replace these with the values the check prints.
+const Double_t kReferenceSingleStartNll = -9903979.467281;
+const Double_t kReferenceSplitStartNll = -34073745.226293;
+const Double_t kReferenceSharedStartNll = -33516393.886244;
 
 struct ToyChannel {
   TString name;
   Double_t center;
   RooAddPdf *pdf;
   RooDataSet *data;
+  TString yieldRange; ///< The range this channel's yields count events in.
 };
 
 struct ToyModel {
-  TString label;
+  RooRealVar *x;
+  std::vector<ToyChannel> channels;
   RooAbsPdf *pdf;
   RooAbsData *data;
   RooArgList floating;
   Bool_t simultaneous;
 };
 
-ToyChannel BuildChannel(Int_t index, RooRealVar &x, RooRealVar &lowTau,
-                        RooRealVar &highTau, RooArgList &floating) {
+ToyChannel BuildChannel(Int_t index, Long64_t events, RooRealVar &x,
+                        RooRealVar &lowTau, RooRealVar &highTau,
+                        RooArgList &floating) {
   TString name = TString::Format("ch%d", index);
   Double_t center = 40.0 + 40.0 * index;
   x.setRange("fitrange_" + name, center - 20.0, center + 20.0);
@@ -108,9 +131,9 @@ ToyChannel BuildChannel(Int_t index, RooRealVar &x, RooRealVar &lowTau,
                                   "nLowLin_", "nHighExp_", "nBkg_"};
   RooArgList yields;
   for (Int_t k = 0; k < 6; ++k) {
-    RooRealVar *yield = new RooRealVar(yieldPrefixes[k] + name, "",
-                                       fractions[k] * kEventsPerChannel * 1.02,
-                                       0.0, 3.0 * kEventsPerChannel);
+    RooRealVar *yield =
+        new RooRealVar(yieldPrefixes[k] + name, "",
+                       fractions[k] * events * 1.02, 0.0, 3.0 * events);
     yields.add(*yield);
     floating.add(*yield);
   }
@@ -126,7 +149,7 @@ ToyChannel BuildChannel(Int_t index, RooRealVar &x, RooRealVar &lowTau,
   TRandom3 rng(1000 + index);
   channel.data = new RooDataSet("data_" + name, "", RooArgSet(x));
   Long64_t accepted = 0;
-  while (accepted < kEventsPerChannel) {
+  while (accepted < events) {
     Double_t r = rng.Uniform();
     Double_t value;
     if (r < 0.60)
@@ -150,63 +173,243 @@ ToyChannel BuildChannel(Int_t index, RooRealVar &x, RooRealVar &lowTau,
   return channel;
 }
 
-ToyModel BuildModel(Int_t nChannels) {
-  ToyModel model;
-  model.simultaneous = nChannels > 1;
-  model.label = model.simultaneous
-                    ? TString::Format("simultaneous, %d x %lld events",
-                                      nChannels, kEventsPerChannel)
-                    : TString::Format("single, %lld events", kEventsPerChannel);
-
-  RooRealVar *x = new RooRealVar("x", "x", 0.0, 40.0 + 40.0 * nChannels);
-  RooRealVar *lowTau = new RooRealVar("lowTau", "", 3.2, 0.5, 10.0);
-  RooRealVar *highTau = new RooRealVar("highTau", "", 2.1, 0.5, 10.0);
-  model.floating.add(RooArgList(*lowTau, *highTau));
-
-  std::vector<ToyChannel> channels;
-  for (Int_t i = 0; i < nChannels; ++i)
-    channels.push_back(BuildChannel(i, *x, *lowTau, *highTau, model.floating));
-  Double_t low = channels.front().center - 20.0;
-  Double_t high = channels.back().center + 20.0;
-  x->setRange("fitrange", low, high);
+// As RooFitUtils does: the default range of x is the fit range (one channel)
+// or the union of the channel windows (several), under the name "fitrange".
+void FinishModel(ToyModel &model) {
+  Double_t low = model.channels.front().center - 20.0;
+  Double_t high = model.channels.back().center + 20.0;
+  model.x->setRange(low, high);
+  model.x->setRange("fitrange", low, high);
 
   if (!model.simultaneous) {
-    model.pdf = channels[0].pdf;
-    model.data = channels[0].data;
-    return model;
+    model.channels[0].yieldRange = "fitrange";
+    model.pdf = model.channels[0].pdf;
+    model.data = model.channels[0].data;
+    return;
   }
   RooCategory *category = new RooCategory("channel", "");
   RooSimultaneous *sim = new RooSimultaneous("sim", "", *category);
   std::map<std::string, RooDataSet *> perChannel;
-  for (size_t i = 0; i < channels.size(); ++i) {
-    // As RooFitUtils::FitSimultaneous does before a SplitRange fit.
-    channels[i].pdf->fixCoefRange("fitrange_" + channels[i].name);
-    category->defineType(channels[i].name.Data());
-    sim->addPdf(*channels[i].pdf, channels[i].name.Data());
-    perChannel[channels[i].name.Data()] = channels[i].data;
+  for (size_t i = 0; i < model.channels.size(); ++i) {
+    category->defineType(model.channels[i].name.Data());
+    sim->addPdf(*model.channels[i].pdf, model.channels[i].name.Data());
+    perChannel[model.channels[i].name.Data()] = model.channels[i].data;
   }
   model.pdf = sim;
   model.data =
-      new RooDataSet("combined", "", RooArgSet(*x), RooFit::Index(*category),
-                     RooFit::Import(perChannel));
+      new RooDataSet("combined", "", RooArgSet(*model.x),
+                     RooFit::Index(*category), RooFit::Import(perChannel));
+}
+
+ToyModel BuildModel(Int_t nChannels, Long64_t events) {
+  ToyModel model;
+  model.simultaneous = nChannels > 1;
+  model.x = new RooRealVar("x", "x", 0.0, 40.0 + 40.0 * nChannels);
+  RooRealVar *lowTau = new RooRealVar("lowTau", "", 3.2, 0.5, 10.0);
+  RooRealVar *highTau = new RooRealVar("highTau", "", 2.1, 0.5, 10.0);
+  model.floating.add(RooArgList(*lowTau, *highTau));
+
+  for (Int_t i = 0; i < nChannels; ++i)
+    model.channels.push_back(
+        BuildChannel(i, events, *model.x, *lowTau, *highTau, model.floating));
+  FinishModel(model);
   return model;
 }
 
-RooAbsReal *CreateNll(ToyModel &model, const RooCmdArg &backend) {
-  if (model.simultaneous)
-    return model.pdf->createNLL(*model.data, backend, RooFit::Extended(kTRUE),
-                                RooFit::Range("fitrange"),
-                                RooFit::SplitRange(kTRUE));
-  return model.pdf->createNLL(*model.data, backend, RooFit::Extended(kTRUE),
-                              RooFit::Range("fitrange"));
+// The model for the fit checks: per channel a Gaussian, both exponential tails
+// and a linear background, with data generated from the model itself and every
+// parameter well inside its limits, so that a fit has one clear minimum. The
+// fit then starts from slightly displaced values.
+ToyModel BuildFitModel(Int_t nChannels, Long64_t events) {
+  RooRandom::randomGenerator()->SetSeed(2024);
+  ToyModel model;
+  model.simultaneous = nChannels > 1;
+  model.x = new RooRealVar("x", "x", 0.0, 40.0 + 40.0 * nChannels);
+  RooRealVar *lowTau = new RooRealVar("lowTau", "", 3.0, 0.5, 10.0);
+  RooRealVar *highTau = new RooRealVar("highTau", "", 2.0, 0.5, 10.0);
+  model.floating.add(RooArgList(*lowTau, *highTau));
+
+  const Double_t fractions[4] = {0.75, 0.10, 0.05, 0.10};
+  const char *yieldPrefixes[4] = {"nGauss_", "nLowExp_", "nHighExp_", "nBkg_"};
+  for (Int_t i = 0; i < nChannels; ++i) {
+    ToyChannel channel;
+    channel.name = TString::Format("ch%d", i);
+    channel.center = 40.0 + 40.0 * i;
+    Double_t low = channel.center - 20.0;
+    Double_t high = channel.center + 20.0;
+    model.x->setRange("fitrange_" + channel.name, low, high);
+
+    RooRealVar *mu = new RooRealVar("mu_" + channel.name, "", channel.center,
+                                    channel.center - 5.0, channel.center + 5.0);
+    RooRealVar *sigma =
+        new RooRealVar("sigma_" + channel.name, "", 1.5, 0.5, 5.0);
+    RooRealVar *bkgSlope =
+        new RooRealVar("bkgSlope_" + channel.name, "", 0.002, -0.004, 0.004);
+    RooArgList components;
+    components.add(
+        *new RooGaussian("gauss_" + channel.name, "", *model.x, *mu, *sigma));
+    components.add(*new RooLowExpTail("lowExp_" + channel.name, "", *model.x,
+                                      *mu, *sigma, *lowTau));
+    components.add(*new RooHighExpTail("highExp_" + channel.name, "", *model.x,
+                                       *mu, *sigma, *highTau));
+    components.add(*new RooPolynomial("bkg_" + channel.name, "", *model.x,
+                                      RooArgList(*bkgSlope)));
+    RooArgList yields;
+    for (Int_t k = 0; k < 4; ++k) {
+      RooRealVar *yield =
+          new RooRealVar(yieldPrefixes[k] + channel.name, "",
+                         fractions[k] * events, 0.0, 3.0 * events);
+      yields.add(*yield);
+      model.floating.add(*yield);
+    }
+    model.floating.add(RooArgList(*mu, *sigma, *bkgSlope));
+    channel.pdf =
+        new RooAddPdf("model_" + channel.name, "", components, yields);
+
+    // Generated over the channel's window, which is x's default range here.
+    model.x->setRange(low, high);
+    channel.data = channel.pdf->generate(RooArgSet(*model.x), events);
+    model.channels.push_back(channel);
+  }
+  FinishModel(model);
+
+  for (Int_t i = 0; i < model.floating.getSize(); ++i) {
+    RooRealVar *parameter = static_cast<RooRealVar *>(model.floating.at(i));
+    TString name = parameter->GetName();
+    if (name.BeginsWith("n"))
+      parameter->setVal(parameter->getVal() * 1.03);
+    else if (name.BeginsWith("mu_"))
+      parameter->setVal(parameter->getVal() + 0.15);
+    else if (name.BeginsWith("sigma_"))
+      parameter->setVal(parameter->getVal() * 1.05);
+    else if (name.BeginsWith("bkgSlope_"))
+      parameter->setVal(0.001);
+    else if (name == "lowTau")
+      parameter->setVal(3.3);
+    else if (name == "highTau")
+      parameter->setVal(1.8);
+  }
+  return model;
 }
 
-Double_t MaxRelativeDifference(RooAbsReal &cpuNll, RooAbsReal &cudaNll,
-                               RooArgList &floating) {
-  std::vector<Double_t> start;
-  for (Int_t i = 0; i < floating.getSize(); ++i)
-    start.push_back(static_cast<RooRealVar *>(floating.at(i))->getVal());
+// As RooFitUtils::FixChannelCoefRanges(): each channel's own window for a
+// SplitRange fit, the shared "fitrange" otherwise.
+void SetYieldRanges(ToyModel &model, Bool_t splitRange) {
+  for (size_t i = 0; i < model.channels.size(); ++i) {
+    ToyChannel &channel = model.channels[i];
+    channel.yieldRange =
+        splitRange ? TString("fitrange_" + channel.name) : TString("fitrange");
+    channel.pdf->fixCoefRange(channel.yieldRange);
+  }
+}
 
+RooAbsReal *CreateNll(ToyModel &model, Bool_t splitRange,
+                      const RooCmdArg &backend, Bool_t offset) {
+  RooCmdArg offsetArg = RooFit::Offset(offset ? "initial" : "off");
+  if (splitRange)
+    return model.pdf->createNLL(*model.data, backend, RooFit::Extended(kTRUE),
+                                RooFit::Range("fitrange"),
+                                RooFit::SplitRange(kTRUE), offsetArg);
+  return model.pdf->createNLL(*model.data, backend, RooFit::Extended(kTRUE),
+                              RooFit::Range("fitrange"), offsetArg);
+}
+
+// The extended NLL the model defines, computed without RooFit's likelihood
+// machinery: for each channel, the sum of its yields y_k minus, over its
+// events, log(sum_k y_k f_k(x) / I_k), where f_k is component k's unnormalised
+// value and I_k its integral over the range the channel's yields refer to.
+Double_t DirectNll(ToyModel &model) {
+  Double_t nll = 0.0;
+  for (size_t c = 0; c < model.channels.size(); ++c) {
+    ToyChannel &channel = model.channels[c];
+    RooArgList components(channel.pdf->pdfList());
+    RooArgList yields(channel.pdf->coefList());
+    std::vector<Double_t> integral;
+    std::vector<Double_t> yield;
+    for (Int_t k = 0; k < components.getSize(); ++k) {
+      RooAbsReal *integralOverRange =
+          static_cast<RooAbsPdf *>(components.at(k))
+              ->createIntegral(RooArgSet(*model.x),
+                               RooFit::Range(channel.yieldRange));
+      integral.push_back(integralOverRange->getVal());
+      delete integralOverRange;
+      yield.push_back(static_cast<RooAbsReal *>(yields.at(k))->getVal());
+      nll += yield.back();
+    }
+    for (Int_t i = 0; i < channel.data->numEntries(); ++i) {
+      model.x->setVal(channel.data->get(i)->getRealValue("x"));
+      Double_t density = 0.0;
+      for (Int_t k = 0; k < components.getSize(); ++k)
+        density += yield[k] *
+                   static_cast<RooAbsPdf *>(components.at(k))->getVal() /
+                   integral[k];
+      nll -= std::log(density);
+    }
+  }
+  return nll;
+}
+
+// Point 0 is the start; the others move yields, shapes and positions.
+void MoveToPoint(RooArgList &floating, const std::vector<Double_t> &start,
+                 Int_t point) {
+  for (Int_t i = 0; i < floating.getSize(); ++i) {
+    RooRealVar *parameter = static_cast<RooRealVar *>(floating.at(i));
+    TString name = parameter->GetName();
+    Double_t value = start[i];
+    if (point == 1) {
+      if (name.BeginsWith("n"))
+        value *= 1.05;
+      else if (name.BeginsWith("sigma_"))
+        value *= 1.1;
+      else if (name == "lowTau")
+        value += 0.3;
+    } else if (point == 2) {
+      if (name.BeginsWith("n"))
+        value *= 0.97;
+      else if (name.BeginsWith("mu_"))
+        value += 0.2;
+      else if (name == "highTau")
+        value -= 0.2;
+      else if (name.BeginsWith("linSlope_"))
+        value *= 1.2;
+    }
+    parameter->setVal(value);
+  }
+}
+
+std::vector<Double_t> Values(RooArgList &floating) {
+  std::vector<Double_t> values;
+  for (Int_t i = 0; i < floating.getSize(); ++i)
+    values.push_back(static_cast<RooRealVar *>(floating.at(i))->getVal());
+  return values;
+}
+
+// RooFit adds parameter-independent terms (one for the category of a
+// simultaneous model, for example), so compare how (RooFit - direct) changes
+// between parameter points rather than its value.
+Double_t MaxDirectMismatch(ToyModel &model, RooAbsReal &nll) {
+  std::vector<Double_t> start = Values(model.floating);
+  Double_t reference = 0.0;
+  Double_t worst = 0.0;
+  for (Int_t point = 0; point < kDirectPoints; ++point) {
+    MoveToPoint(model.floating, start, point);
+    Double_t difference = nll.getVal() - DirectNll(model);
+    if (!std::isfinite(difference)) {
+      worst = std::numeric_limits<Double_t>::infinity();
+      break;
+    }
+    if (point == 0)
+      reference = difference;
+    worst = std::max(worst, std::abs(difference - reference));
+  }
+  MoveToPoint(model.floating, start, 0);
+  return worst;
+}
+
+// The largest absolute difference; the caller scales it by the size of the NLL.
+Double_t MaxBackendDifference(RooAbsReal &cpuNll, RooAbsReal &cudaNll,
+                              RooArgList &floating) {
+  std::vector<Double_t> start = Values(floating);
   TRandom3 rng(4242);
   Double_t worst = 0.0;
   for (Int_t point = 0; point < kAgreementPoints; ++point) {
@@ -219,12 +422,9 @@ Double_t MaxRelativeDifference(RooAbsReal &cpuNll, RooAbsReal &cudaNll,
       worst = std::numeric_limits<Double_t>::infinity();
       break;
     }
-    worst =
-        std::max(worst, std::abs(cpu - cuda) / std::max(1.0, std::abs(cpu)));
+    worst = std::max(worst, std::abs(cpu - cuda));
   }
-
-  for (Int_t i = 0; i < floating.getSize(); ++i)
-    static_cast<RooRealVar *>(floating.at(i))->setVal(start[i]);
+  MoveToPoint(floating, start, 0);
   return worst;
 }
 
@@ -259,30 +459,36 @@ Bool_t Report(const TString &check, Bool_t passed, const TString &detail) {
   return passed;
 }
 
-Bool_t CheckModel(Int_t nChannels, Double_t referenceStartNll,
-                  Double_t maxTimeRatio) {
-  ToyModel model = BuildModel(nChannels);
-  std::cout << model.label << " (" << model.floating.getSize()
+Bool_t CheckConfiguration(ToyModel &model, const TString &label,
+                          Bool_t splitRange, Double_t referenceStartNll,
+                          Bool_t checkSpeed) {
+  std::cout << label << " (" << model.floating.getSize()
             << " floating parameters)" << std::endl;
-
-  RooAbsReal *cpuNll = CreateNll(model, RooFit::EvalBackend::Cpu());
-  RooAbsReal *cudaNll = CreateNll(model, BestAvailableBackend());
+  RooAbsReal *cpuNll =
+      CreateNll(model, splitRange, RooFit::EvalBackend::Cpu(), kFALSE);
+  RooAbsReal *cudaNll =
+      CreateNll(model, splitRange, BestAvailableBackend(), kFALSE);
 
   Double_t startNll = cpuNll->getVal();
+  Double_t backendDifference =
+      MaxBackendDifference(*cpuNll, *cudaNll, model.floating) /
+      std::max(1.0, std::abs(startNll));
+  Double_t directMismatch = MaxDirectMismatch(model, *cpuNll);
+  Double_t directLimit = kMaxDirectRelativeMismatch * std::abs(startNll);
   Double_t referenceDifference = std::abs(startNll - referenceStartNll) /
                                  std::max(1.0, std::abs(referenceStartNll));
-  Double_t backendDifference =
-      MaxRelativeDifference(*cpuNll, *cudaNll, model.floating);
-  Double_t cpuMillis = MedianEvaluationMillis(*cpuNll, model.floating);
-  Double_t cudaMillis = MedianEvaluationMillis(*cudaNll, model.floating);
-  Double_t timeRatio = cudaMillis / cpuMillis;
 
   Bool_t passed = kTRUE;
   passed &= Report(
       "CPU and CUDA agree", backendDifference <= kMaxBackendRelativeDifference,
       TString::Format(
-          "max relative NLL difference %.2e over %d points (limit %.0e)",
+          "max NLL difference %.2e of the NLL over %d points (limit %.0e)",
           backendDifference, kAgreementPoints, kMaxBackendRelativeDifference));
+  passed &= Report(
+      "NLL matches the direct likelihood", directMismatch <= directLimit,
+      TString::Format("(RooFit - direct) varies by %.3g over %d parameter "
+                      "points (limit %.3g)",
+                      directMismatch, kDirectPoints, directLimit));
   passed &= Report(
       "start NLL matches reference",
       referenceDifference <= kMaxReferenceRelativeDifference,
@@ -290,14 +496,83 @@ Bool_t CheckModel(Int_t nChannels, Double_t referenceStartNll,
           "%.6f vs reference %.6f (relative difference %.2e, limit %.0e)",
           startNll, referenceStartNll, referenceDifference,
           kMaxReferenceRelativeDifference));
-  passed &= Report(
-      "CUDA is fast enough", timeRatio <= maxTimeRatio,
-      TString::Format("median per evaluation: CUDA %.3f ms, CPU %.3f ms, "
-                      "ratio %.3f (limit %.2f)",
-                      cudaMillis, cpuMillis, timeRatio, maxTimeRatio));
+  if (checkSpeed) {
+    Double_t cpuMillis = MedianEvaluationMillis(*cpuNll, model.floating);
+    Double_t cudaMillis = MedianEvaluationMillis(*cudaNll, model.floating);
+    Double_t timeRatio = cudaMillis / cpuMillis;
+    passed &= Report(
+        "CUDA is fast enough", timeRatio <= kMaxTimeRatio,
+        TString::Format("median per evaluation: CUDA %.3f ms, CPU %.3f ms, "
+                        "ratio %.3f (limit %.2f)",
+                        cudaMillis, cpuMillis, timeRatio, kMaxTimeRatio));
+  }
   delete cpuNll;
   delete cudaNll;
   return passed;
+}
+
+struct OffsetFit {
+  Int_t status;
+  Double_t edm;
+  Double_t startNll; ///< Absolute NLL at the starting point.
+  Double_t minNll;   ///< As Minuit saw it, so relative to the start if offset.
+  std::vector<Double_t> values;
+  std::vector<Double_t> errors;
+};
+
+// Configured as RooFitUtils' fits are: Minuit2 Migrad with
+// RooFit::Offset("initial"). The parameters are put back afterwards.
+OffsetFit FitWithOffset(ToyModel &model, Bool_t splitRange,
+                        const RooCmdArg &backend) {
+  std::vector<Double_t> start = Values(model.floating);
+  RooAbsReal *nll = CreateNll(model, splitRange, backend, kTRUE);
+  RooMinimizer minimizer(*nll);
+  minimizer.setPrintLevel(-1);
+  minimizer.setStrategy(1);
+  minimizer.setOffsetting(kTRUE);
+
+  OffsetFit fit;
+  fit.startNll = nll->getVal();
+  fit.status = minimizer.minimize("Minuit2", "migrad");
+  RooFitResult *result = minimizer.save();
+  fit.edm = result->edm();
+  fit.minNll = result->minNll();
+  delete result;
+  fit.values = Values(model.floating);
+  for (Int_t i = 0; i < model.floating.getSize(); ++i)
+    fit.errors.push_back(
+        static_cast<RooRealVar *>(model.floating.at(i))->getError());
+
+  MoveToPoint(model.floating, start, 0);
+  delete nll;
+  return fit;
+}
+
+Bool_t CheckOffsetFits(ToyModel &model, const TString &label,
+                       Bool_t splitRange) {
+  OffsetFit cpu = FitWithOffset(model, splitRange, RooFit::EvalBackend::Cpu());
+  OffsetFit cuda = FitWithOffset(model, splitRange, BestAvailableBackend());
+
+  Double_t worst = 0.0;
+  for (Int_t i = 0; i < model.floating.getSize(); ++i)
+    worst = std::max(worst,
+                     std::abs(cpu.values[i] - cuda.values[i]) / cpu.errors[i]);
+  Bool_t converged = cpu.status == 0 && cuda.status == 0 &&
+                     cpu.edm < kMaxConvergedEdm && cuda.edm < kMaxConvergedEdm;
+  // With offsetting, Minuit's minimum is the improvement over the start, a
+  // tiny fraction of the absolute NLL. Without it the comparison would not
+  // test the offset path at all.
+  Bool_t offsetUsed = std::abs(cpu.minNll) < 1e-3 * std::abs(cpu.startNll) &&
+                      std::abs(cuda.minNll) < 1e-3 * std::abs(cuda.startNll);
+  return Report(
+      "fits with offsetting converge and agree (" + label + ")",
+      offsetUsed && converged && worst <= kMaxFitSigmaDifference,
+      TString::Format("CPU / CUDA: status %d / %d, EDM %.2g / %.2g (limit "
+                      "%.0e), minimum %.4f / %.4f of an absolute NLL of "
+                      "%.6g; max parameter difference %.3g sigma (limit %.2f)",
+                      cpu.status, cuda.status, cpu.edm, cuda.edm,
+                      kMaxConvergedEdm, cpu.minNll, cuda.minNll, cpu.startNll,
+                      worst, kMaxFitSigmaDifference));
 }
 
 } // namespace
@@ -308,15 +583,49 @@ int main() {
             << std::endl;
   return 2;
 #else
+  // As RooFitUtils does. ROOT master reports RooArgSet::checkForDup for the
+  // range-projection nodes of a fixCoefRange'd simultaneous model; the direct
+  // likelihood check below shows they do not affect the NLL.
   RooMsgService::instance().setGlobalKillBelow(RooFit::WARNING);
+  for (Int_t i = 0; i < RooMsgService::instance().numStreams(); i++)
+    RooMsgService::instance().getStream(i).removeTopic(RooFit::InputArguments);
   RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::CountErrors);
   std::cout << "CUDA backend regression check, ROOT " << gROOT->GetVersion()
             << std::endl;
 
   Bool_t passed = kTRUE;
-  passed &= CheckModel(1, kReferenceSingleStartNll, kMaxSingleTimeRatio);
-  passed &= CheckModel(kSimultaneousChannels, kReferenceSimultaneousStartNll,
-                       kMaxSimultaneousTimeRatio);
+  ToyModel single = BuildModel(1, kEventsPerChannel);
+  passed &= CheckConfiguration(
+      single, TString::Format("single, %lld events", kEventsPerChannel), kFALSE,
+      kReferenceSingleStartNll, kTRUE);
+
+  ToyModel simultaneous = BuildModel(kSimultaneousChannels, kEventsPerChannel);
+  SetYieldRanges(simultaneous, kTRUE);
+  passed &= CheckConfiguration(
+      simultaneous,
+      TString::Format("simultaneous with SplitRange, %d x %lld events",
+                      kSimultaneousChannels, kEventsPerChannel),
+      kTRUE, kReferenceSplitStartNll, kTRUE);
+  SetYieldRanges(simultaneous, kFALSE);
+  passed &= CheckConfiguration(
+      simultaneous,
+      TString::Format("simultaneous over one shared range, %d x %lld events",
+                      kSimultaneousChannels, kEventsPerChannel),
+      kFALSE, kReferenceSharedStartNll, kFALSE);
+
+  std::cout << TString::Format("fits with offsetting, %lld events per channel",
+                               kFitEventsPerChannel)
+            << std::endl;
+  ToyModel fitSingle = BuildFitModel(1, kFitEventsPerChannel);
+  passed &= CheckOffsetFits(fitSingle, "single", kFALSE);
+  ToyModel fitSimultaneous =
+      BuildFitModel(kSimultaneousChannels, kFitEventsPerChannel);
+  // No shared-range fit: each channel's data only covers its own window, so a
+  // model normalised over the union of windows does not describe it and the
+  // fit has flat directions. The offset machinery is the same in every range
+  // configuration, so these two fits already exercise it.
+  SetYieldRanges(fitSimultaneous, kTRUE);
+  passed &= CheckOffsetFits(fitSimultaneous, "SplitRange", kTRUE);
 
   std::cout << (passed ? "All checks passed." : "Some checks FAILED.")
             << std::endl;

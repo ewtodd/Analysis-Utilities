@@ -18,6 +18,7 @@ output to your flake and include it in a Python environment:
 let
   pkgs = nixpkgs.legacyPackages.${system};
   analysis-utils = utils.packages.${system}.default;
+  root = utils.packages.${system}.root;
   analysis-utilities-py = utils.packages.${system}.pythonPackage;
 in
 {
@@ -30,7 +31,7 @@ in
         ps.pandas
         # add ML libraries here, e.g. ps.scikit-learn
       ]))
-      pkgs.root
+      root
     ];
     shellHook = ''
       export LD_LIBRARY_PATH="${analysis-utils}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
