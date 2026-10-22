@@ -73,7 +73,11 @@ a local or failed solution:
   1 = NotPositiveDefinite, 2 = Approximate, 3 = External)
 - `edm` (estimated distance to minimum) and `min_nll` (minimized negative
   log-likelihood), with `has_fit_diagnostics` flagging whether they are
-  meaningful
+  meaningful. Every fit minimizes with `RooFit::Offset("initial")`: the NLL
+  at the starting point is subtracted, so Minuit2 works with values near zero
+  instead of ~1e7 and can resolve EDM below 1e-3. `min_nll` is therefore the
+  improvement over the start, not the absolute NLL, and values from separately
+  run fits are not comparable.
 - `parameter_diagnostics` — one `FitParameterDiagnostic` per fitted
   `RooRealVar` carrying the value, error, limits, and near-limit flags (set when
   a parameter sits within a small margin of its bound)

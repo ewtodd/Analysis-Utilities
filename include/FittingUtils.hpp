@@ -229,8 +229,15 @@ struct FitResult {
   /// Covariance quality: `0` Exact, `1` NotPositiveDefinite, `2` Approximate,
   /// `3` External. Anything but `0` means the errors are unreliable.
   Int_t cov_qual = -999;
-  Double_t edm = -1;     ///< Estimated distance to the minimum.
-  Double_t min_nll = -1; ///< Minimised negative log-likelihood.
+  Double_t edm = -1; ///< Estimated distance to the minimum.
+  /**
+   * Minimised negative log-likelihood, relative to its value at the fit's
+   * starting point. Every fit in this library minimises with
+   * `RooFit::Offset("initial")`, so this is zero or slightly negative (the
+   * improvement over the start), not the absolute NLL. Values from separately
+   * run fits are therefore not comparable.
+   */
+  Double_t min_nll = -1;
   /// Whether a `RooFitResult` was available, and hence whether the fields in
   /// this group mean anything.
   Bool_t has_fit_diagnostics = kFALSE;

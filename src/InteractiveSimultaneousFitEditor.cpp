@@ -871,8 +871,8 @@ void InteractiveSimultaneousFitEditor::DoRefit() {
       *combined_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
       RooFit::Range(RooFitUtils::kFitRangeName), RooFit::SumW2Error(kFALSE),
       RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(eval_errors),
-      RooFit::Strategy(1), RooFit::Minimizer("Minuit2", "migrad"),
-      BestAvailableBackend());
+      RooFit::Strategy(1), RooFit::Offset("initial"),
+      RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
   if (res)
     delete res;
 

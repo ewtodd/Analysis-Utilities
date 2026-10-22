@@ -564,12 +564,17 @@ std::vector<RooRealVar *> RooFitUtils::CollectFloatingParams() {
 
 RooFitResult *RooFitUtils::RunFit(Bool_t quiet) {
   Int_t print_level = quiet ? -1 : 0;
+  // Offset("initial") subtracts the NLL at the starting point from every
+  // evaluation. An extended NLL over millions of events is of order 1e7, and
+  // Minuit2's EDM floor scales with the function value, so without it fits
+  // stop at EDM ~1 ("machine accuracy limit") with status 3. The constant
+  // moves neither the minimum nor the errors.
   RooFitResult *result = total_pdf_->fitTo(
       *unbinned_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
       RooFit::Range(kFitRangeName), RooFit::SumW2Error(kFALSE),
       RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(-1),
-      RooFit::Strategy(2), RooFit::Minimizer("Minuit2", "migrad"),
-      BestAvailableBackend());
+      RooFit::Strategy(2), RooFit::Offset("initial"),
+      RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
   return result;
 }
 
@@ -3000,7 +3005,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
             RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(load_print_level),
             RooFit::PrintEvalErrors(load_eval_errors),
             RooFit::Strategy(fit_strategy_), max_calls_arg, hesse_arg,
-            RooFit::Minimizer("Minuit2", "migrad"),
+            RooFit::Offset("initial"), RooFit::Minimizer("Minuit2", "migrad"),
             RooFit::ExternalConstraints(sim_constraint_set_),
             BestAvailableBackend());
         // Gate on EDM, not on the status code. Minuit2 routinely returns a
@@ -3097,7 +3102,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         RooFit::Range(kFitRangeName), RooFit::SplitRange(kTRUE),
         RooFit::SumW2Error(kFALSE), RooFit::PrintLevel(print_level),
         RooFit::PrintEvalErrors(eval_errors), RooFit::Strategy(fit_strategy_),
-        max_calls_arg, hesse_arg, RooFit::Minimizer("Minuit2", "migrad"),
+        max_calls_arg, hesse_arg, RooFit::Offset("initial"),
+        RooFit::Minimizer("Minuit2", "migrad"),
         RooFit::ExternalConstraints(sim_constraint_set_),
         BestAvailableBackend());
     // Same EDM-based criterion as the refit-after-load path above
