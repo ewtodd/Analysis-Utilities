@@ -108,6 +108,44 @@
         utils = mkUtils { cuda = false; };
         utilsCuda = mkUtils { cuda = true; };
 
+        # CUDA backend regression check (tests/CudaRegression.cpp): CPU/CUDA NLL
+        # agreement, reference NLL values, and the CUDA speed-up over the CPU on
+        # a toy photopeak model. It needs a GPU, which the build sandbox does not
+        # have, so it is an app rather than a check: `nix run .#cuda-regression`.
+        cudaRegression = pkgs.stdenv.mkDerivation {
+          pname = "analysis-utilities-cuda-regression";
+          inherit version;
+
+          src = ./tests;
+
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          buildInputs = [
+            rootWithCuda
+            utilsCuda
+          ];
+
+          buildPhase = ''
+            runHook preBuild
+            $CXX -O2 -DAU_ROOFIT_BACKEND_CUDA=1 $(root-config --cflags) \
+              -I${utilsCuda}/include CudaRegression.cpp -o cuda-regression \
+              -L${utilsCuda}/lib -lanalysis-utils \
+              $(root-config --glibs) -lRooFit -lRooFitCore
+            runHook postBuild
+          '';
+
+          # libcuda comes from the host driver, which NixOS exposes under
+          # /run/opengl-driver/lib; ROOT_INCLUDE_PATH lets cling find the
+          # dictionary header of the custom PDFs.
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 cuda-regression $out/bin/cuda-regression
+            wrapProgram $out/bin/cuda-regression \
+              --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib \
+              --prefix ROOT_INCLUDE_PATH : ${utilsCuda}/include
+            runHook postInstall
+          '';
+        };
+
         # The published API reference, served straight out of the store by the
         # Caddy vhost on nu. Deliberately delegates to `make docs` so the
         # Doxyfile substitution logic lives in exactly one place.
@@ -197,6 +235,12 @@
         # without duplicating the overrideAttrs block. Plain pkgs.root is left
         # for downstream to grab directly from nixpkgs.
         packages.rootCuda = rootWithCuda;
+        packages.cudaRegression = cudaRegression;
+        apps.cuda-regression = {
+          type = "app";
+          program = "${cudaRegression}/bin/cuda-regression";
+          meta.description = "Check the CUDA backend against the CPU backend for agreement and speed";
+        };
 
         devShells.cpu = pkgs.mkShell {
           buildInputs = with pkgs; [

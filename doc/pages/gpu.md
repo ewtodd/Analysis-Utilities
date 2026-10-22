@@ -72,19 +72,60 @@ input alone lets your machine pull the pre-built artifact from the
 
 ## Performance, measured
 
-On a 4 M-event unbinned extended maximum-likelihood fit (73mGe calibration
-workload, RTX 50-series GPU):
+Unbinned extended maximum-likelihood fits (Minuit2 Migrad, strategy 1) of the
+toy photopeak model in `tests/CudaRegression.cpp`: a Gaussian, all four custom
+tails and a linear background per channel. Measured on an RTX 4090 with NVIDIA
+driver 595.104.02 and ROOT 6.40.00:
 
-| Path | Single fit | Simultaneous fit |
+| Path | Single fit, 4 M events | Simultaneous fit, 4 × 1 M events |
 |------|-----------:|-----------------:|
-| Scalar `evaluate()` (legacy) | ~minutes | ~minutes |
-| OpenMP batched `doEval` | ~2 min | ~3 min |
-| CUDA kernels (`packages.cuda`) | ~6 s | ~36 s |
+| OpenMP batched `doEval` (`packages.default`) | 67 s | 236 s |
+| CUDA, without the allocator workaround | 83 s | 612 s |
+| CUDA (`packages.cuda`) | 7.5 s | 32 s |
 
-The CUDA win for simultaneous fits is smaller than for single fits because once
-`doEval` is effectively free, the remaining time is dominated by Minuit2 itself,
-the analytic normalization integrals (computed on the host per-step), and
-RooFit's evaluator orchestration — none of which benefit from GPU work.
+All three paths reach the same minimum. With the workaround the GPU is 88–93%
+busy during the fit; without it, under 10%.
 
-@note The table above was measured on a 50-series (Blackwell) GPU, while the
-flake's default `cudaCapabilities` targets 8.9.
+### The allocator workaround
+
+ROOT 6.40's CUDA batch-compute backend allocates and frees a small descriptor
+buffer in every kernel dispatch and NLL reduction. Once RooFit's per-node
+buffers are larger than the driver's small-allocation chunk (from roughly 250k
+events per node), no small allocation stays live between those calls. Each
+`cudaMalloc` / `cudaFree` pair then maps and unmaps a fresh chunk, about 0.9 ms
+on the hardware above, and that dominated the time per likelihood evaluation.
+KeepCudaAllocatorChunkMapped() holds one 256-byte allocation for the life of
+the process, which keeps the chunk mapped. BestAvailableBackend() calls it, so
+fits set up through it, including every fit in this library, need nothing
+more. Code that passes `RooFit::EvalBackend::Cuda()` itself should call
+KeepCudaAllocatorChunkMapped() once before building the likelihood.
+
+The simultaneous fit still has a smaller gap. ROOT 6.40's CUDA path recomputes
+every channel on every evaluation, while the CPU path skips unchanged ones.
+ROOT master fixes both problems: PR #23263 removes the per-call allocations and
+PR #23753 skips clean nodes on the CUDA path.
+
+The earlier figures of about 6 s and 36 s came from the 73mGe calibration
+workload on an RTX 50-series GPU with ROOT 6.38.02. That is a different
+workload, GPU and driver, so they are not directly comparable with the table.
+
+## Regression check
+
+`nix run .#cuda-regression` builds the toy models above with 1 M events per
+channel and checks, for a single-channel and a four-channel simultaneous model,
+that:
+
+- the CPU and CUDA backends agree on the NLL to 1e-10 relative at 40 parameter
+  points;
+- the CPU NLL at the start point matches a recorded reference to 1e-9
+  relative, which catches value changes made by both backends at once, as from a
+  ROOT bump;
+- the CUDA backend's median time per evaluation is below a fixed fraction of the
+  CPU backend's (0.3 single, 0.6 simultaneous), so the check does not depend on
+  the hardware.
+
+It needs a GPU, which `nix flake check`'s sandbox does not have, so run it by
+hand after changing the PDFs, the kernels, the flake's ROOT or nixpkgs, or the
+NVIDIA driver. It exits non-zero if any check fails. After a deliberate change
+to the model or the PDFs, update the reference values in
+`tests/CudaRegression.cpp` with the ones it prints.

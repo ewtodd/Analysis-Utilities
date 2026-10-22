@@ -2871,6 +2871,27 @@ void RooFitUtils::DumpChannelCSV(const TString &channel,
   std::cout << "Wrote CSV: " << curve_path << std::endl;
 }
 
+// Tell each channel's RooAddPdf which range its yields are counts in: the
+// channel's own fitrange_<name> window for a SplitRange fit, otherwise the
+// shared kFitRangeName. Without it, an extended ranged fit gets a per-component
+// range projection, a ratio that should be 1 but is the normalised component
+// evaluated at x's current value. A RooGaussian that underflows there makes it
+// 0/0 and the NLL NaN, and ROOT 6.40 prints a RooArgSet::checkForDup error for
+// every one. Curves drawn over the union range (chi2, plots, CSV dumps) then
+// also use the normalisation the fit used.
+void RooFitUtils::FixChannelCoefRanges(Bool_t split_range) {
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    const TString &name = sim_channels_[i].name;
+    RooAddPdf *sum = dynamic_cast<RooAddPdf *>(sim_channel_pdfs_[name]);
+    if (!sum)
+      continue;
+    if (split_range)
+      sum->fixCoefRange(sim_channel_range_names_[name].Data());
+    else
+      sum->fixCoefRange(kFitRangeName);
+  }
+}
+
 std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
                                                     const TString &base_label) {
   std::vector<FitResult> results;
@@ -2970,6 +2991,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       // Identical fitTo() configuration to the non-interactive branch below, so
       // the only difference between the two paths is the starting point.
       if (refit_after_load_) {
+        FixChannelCoefRanges(kTRUE);
         Int_t load_print_level = fit_debug_ ? 1 : 0;
         Int_t load_eval_errors = fit_debug_ ? 10 : -1;
         fit_result = sim_pdf_->fitTo(
@@ -3015,6 +3037,9 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         v.num_peaks = cfg.num_peaks;
         views.push_back(v);
       }
+      // The editor fits every channel over one shared range, without
+      // SplitRange.
+      FixChannelCoefRanges(kFALSE);
       Bool_t was_batch = gROOT->IsBatch();
       gROOT->SetBatch(kFALSE);
       TString info = base_label + " / " + input_name;
@@ -3043,6 +3068,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       }
     }
   } else {
+    FixChannelCoefRanges(kTRUE);
     if (fit_debug_) {
       // Un-suppress RooFit eval errors (the fit normally forces -1) so the
       // offending pdf is named, and report the seed NLL up front.

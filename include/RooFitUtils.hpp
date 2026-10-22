@@ -41,6 +41,32 @@
 #include <vector>
 
 /**
+ * @brief Hold one small CUDA allocation for the rest of the process.
+ *
+ * ROOT 6.40's CUDA batch-compute backend allocates and frees a small
+ * descriptor buffer with `cudaMalloc` / `cudaFree` in every kernel dispatch
+ * and NLL reduction. While no other small device allocation is live, each such
+ * pair maps and then unmaps a fresh driver allocation chunk, which costs about
+ * 0.9 ms (NVIDIA driver 595, RTX 4090). That is the situation as soon as
+ * RooFit's per-node buffers are too large to share that chunk, from roughly
+ * 250k events per node, and it made CUDA fits slower than CPU fits. While one
+ * small allocation stays live, the chunk stays mapped and every later pair is
+ * a sub-allocation of about 1 µs.
+ *
+ * The first call allocates 256 bytes of device memory that are never freed;
+ * later calls do nothing. In a CPU build it does nothing at all.
+ * BestAvailableBackend() calls it, so code that selects the backend through
+ * that function needs nothing more. Code that passes
+ * `RooFit::EvalBackend::Cuda()` itself should call this once before building
+ * the likelihood.
+ *
+ * @note In a CUDA build the first call creates the CUDA context if it does not
+ *       exist yet. If the allocation fails it is ignored: fits still work, just
+ *       without the speed-up.
+ */
+void KeepCudaAllocatorChunkMapped();
+
+/**
  * @brief The best RooFit evaluation backend this build supports.
  *
  * Defaults to CPU, where evaluation is still batched through `doEval()`.
@@ -49,12 +75,16 @@
  *
  * @return A `RooCmdArg` to hand to `fitTo()`.
  *
+ * @note In a CUDA build this also calls KeepCudaAllocatorChunkMapped(), so a
+ *       fit set up with it avoids ROOT's per-dispatch allocation cost.
+ *
  * @warning A downstream project must define the same macro as the prebuilt
  *          library, or its call sites will disagree with the library about
  *          which backend is in use.
  */
 inline RooCmdArg BestAvailableBackend() {
 #if defined(AU_ROOFIT_BACKEND_CUDA) && AU_ROOFIT_BACKEND_CUDA
+  KeepCudaAllocatorChunkMapped();
   return RooFit::EvalBackend::Cuda();
 #else
   return RooFit::EvalBackend::Cpu();
@@ -346,6 +376,7 @@ private:
   void ApplyChannelMuLocks();
   void ApplyChannelBkgLocks();
   void ApplyChannelShapeLocks();
+  void FixChannelCoefRanges(Bool_t split_range);
   void SaveSimInteractiveParams(const TString &input_name,
                                 const TString &base_label);
   Bool_t LoadSimInteractiveParams(const TString &input_name,
