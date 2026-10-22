@@ -41,6 +41,24 @@ if(AU_USE_CUDA)
     endif()
     find_package(CUDAToolkit REQUIRED)
     add_compile_definitions(AU_ROOFIT_BACKEND_CUDA=1)
+
+    # gpu/*.cu and the photopeak doEval need two of ROOT's private batch-compute
+    # headers, RooBatchCompute.h and CudaInterface.h, which no ROOT install
+    # ships. flake.nix extracts them from the source tarball ROOT itself is
+    # built from and passes the directory in; the CUDA dev shell exports it.
+    set(AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR "$ENV{AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR}"
+        CACHE PATH
+        "Directory holding roofit_batchcompute/RooBatchCompute.h and roofit_batchcompute/CudaInterface.h from the ROOT source being linked against")
+    if(NOT EXISTS "${AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR}/roofit_batchcompute/RooBatchCompute.h"
+       OR NOT EXISTS "${AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR}/roofit_batchcompute/CudaInterface.h")
+        message(FATAL_ERROR
+            "AU_USE_CUDA needs ROOT's private batch-compute headers. Set "
+            "AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR to a directory containing "
+            "roofit_batchcompute/RooBatchCompute.h (from "
+            "roofit/batchcompute/res/) and roofit_batchcompute/CudaInterface.h "
+            "(from roofit/batchcompute/src/) of the same ROOT version, or build "
+            "with `nix build .#cuda`, which provides them.")
+    endif()
 endif()
 
 file(GLOB CPP_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
@@ -79,6 +97,7 @@ target_link_libraries(${LIB_NAME} PUBLIC
 )
 if(AU_USE_CUDA)
     target_link_libraries(${LIB_NAME} PUBLIC CUDA::cudart)
+    target_include_directories(${LIB_NAME} PRIVATE ${AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR})
 endif()
 
 # Static library — no dictionary (bundling it here too would risk double
@@ -98,6 +117,7 @@ target_link_libraries(${LIB_NAME}-static PUBLIC
 )
 if(AU_USE_CUDA)
     target_link_libraries(${LIB_NAME}-static PUBLIC CUDA::cudart)
+    target_include_directories(${LIB_NAME}-static PRIVATE ${AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR})
 endif()
 set_target_properties(${LIB_NAME}-static PROPERTIES OUTPUT_NAME ${LIB_NAME})
 

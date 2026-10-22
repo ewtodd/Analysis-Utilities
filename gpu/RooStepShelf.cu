@@ -2,7 +2,7 @@
 
 #include <cuda_runtime.h>
 
-#include "roofit_batchcompute/CudaInterface.h"
+#include <roofit_batchcompute/CudaInterface.h>
 
 namespace {
 
@@ -31,11 +31,6 @@ void RooStepShelf_launchKernel(double *output, const double *x_vals, double mu,
                                RooBatchCompute::CudaInterface::CudaStream *stream) {
   const int threads = 256;
   const int blocks = (n + threads - 1) / threads;
-  // Launch on the per-node stream supplied by ROOT's batch-compute Config so
-  // this kernel overlaps with the other nodes' work instead of serializing on
-  // the legacy default stream. nullptr (CPU-built or stream-less context)
-  // falls back to the default stream. The CudaStream -> cudaStream_t
-  // conversion only exists under __CUDACC__, hence it lives here in the .cu.
   cudaStream_t s = stream ? static_cast<cudaStream_t>(*stream) : cudaStream_t(0);
   RooStepShelfKernel<<<blocks, threads, 0, s>>>(output, x_vals, mu, inv_sigma,
                                                 n);

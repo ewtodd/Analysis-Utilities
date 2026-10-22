@@ -40,6 +40,23 @@
             ]);
         });
 
+        # The CUDA build compiles against two of ROOT's private batch-compute
+        # headers (RooBatchCompute::Config and CudaStream), which no ROOT
+        # install ships. Taking them from the very tarball rootWithCuda is built
+        # from means they can never disagree with its libraries. The explicit
+        # member paths make a ROOT bump that moves either file fail here, loudly.
+        rootBatchComputeHeaders =
+          pkgs.runCommand "root-batchcompute-headers-${rootWithCuda.version}" { }
+            ''
+              tar -xzf ${rootWithCuda.src} --strip-components=1 \
+                root-${rootWithCuda.version}/roofit/batchcompute/res/RooBatchCompute.h \
+                root-${rootWithCuda.version}/roofit/batchcompute/src/CudaInterface.h
+              mkdir -p $out/include/roofit_batchcompute
+              cp roofit/batchcompute/res/RooBatchCompute.h \
+                roofit/batchcompute/src/CudaInterface.h \
+                $out/include/roofit_batchcompute/
+            '';
+
         mkUtils =
           { cuda }:
           let
@@ -74,6 +91,7 @@
             cmakeFlags = pkgs.lib.optionals cuda [
               "-DAU_USE_CUDA=ON"
               "-DCMAKE_CUDA_ARCHITECTURES=89"
+              "-DAU_ROOT_BATCHCOMPUTE_INCLUDE_DIR=${rootBatchComputeHeaders}/include"
             ];
 
             postFixup = pkgs.lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
@@ -239,7 +257,8 @@
             export DOXYGEN_AWESOME_CSS="${pkgs.doxygen-awesome-css}/share/doxygen-awesome-css"
             echo "Development environment for working on the analysis utilities source (CUDA, AU_ROOFIT_BACKEND_CUDA=1)"
             export NIX_CFLAGS_COMPILE="-DAU_ROOFIT_BACKEND_CUDA=1''${NIX_CFLAGS_COMPILE:+ $NIX_CFLAGS_COMPILE}"
-            export CPLUS_INCLUDE_PATH="$PWD/include''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+            export AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR="${rootBatchComputeHeaders}/include"
+            export CPLUS_INCLUDE_PATH="$PWD/include:$AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR''${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
             export ROOT_INCLUDE_PATH="$PWD/include:${rootWithCuda}/include"
             export LD_LIBRARY_PATH="$PWD/lib:/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             mkdir -p "$PWD/gpu"

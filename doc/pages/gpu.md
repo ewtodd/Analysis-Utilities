@@ -28,6 +28,17 @@ defines `AU_ROOFIT_BACKEND_CUDA=1` for the host code, and links `CUDA::cudart`.
 The CPU build never compiles the kernel files and never touches the CUDA
 toolchain.
 
+The kernels launch on the CUDA stream RooFit's evaluator assigns to each node
+of the computation graph, which the custom PDFs read through two of ROOT's
+private batch-compute headers, `RooBatchCompute.h` and `CudaInterface.h`. No
+ROOT install ships them, so the flake extracts both from the same source
+tarball `rootCuda` is built from, and passes their directory to CMake as
+`AU_ROOT_BATCHCOMPUTE_INCLUDE_DIR`; the CUDA dev shell exports it too. A CUDA
+build outside the flake must set that variable to a directory holding
+`roofit_batchcompute/RooBatchCompute.h` (from `roofit/batchcompute/res/`) and
+`roofit_batchcompute/CudaInterface.h` (from `roofit/batchcompute/src/`) taken
+from the source of the ROOT it links against.
+
 ## Opting in from a downstream flake
 
 Swap `default` → `cuda` and `pkgs.root` → `utils.packages.${system}.rootCuda`,

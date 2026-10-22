@@ -7,8 +7,8 @@
 
 #ifdef AU_ROOFIT_BACKEND_CUDA
 #include "RooFitPhotopeakKernels.hpp"
-#include "roofit_batchcompute/RooBatchCompute.h"
 #include <cuda_runtime.h>
+#include <roofit_batchcompute/RooBatchCompute.h>
 
 namespace {
 bool IsDevicePointer(const void *ptr) {
@@ -167,13 +167,10 @@ void RooStepShelf::doEval(RooFit::EvalContext &ctx) const {
   Double_t inv_sigma = 1.0 / sigma;
 #ifdef AU_ROOFIT_BACKEND_CUDA
   if (IsDevicePointer(output.data())) {
-    // Launch on ROOT's per-node CUDA stream so this kernel overlaps with the
-    // other graph nodes' work instead of serializing on the default stream.
-    RooBatchCompute::Config cfg = ctx.config(this);
-    RooBatchCompute::CudaInterface::CudaStream *stream =
-        cfg.useCuda() ? cfg.cudaStream() : nullptr;
+    RooBatchCompute::CudaInterface::CudaStream *node_stream =
+        ctx.config(this).cudaStream();
     RooStepShelf_launchKernel(output.data(), x_vals.data(), mu, inv_sigma, n,
-                              stream);
+                              node_stream);
     return;
   }
 #endif
@@ -251,13 +248,10 @@ void RooLowExpTail::doEval(RooFit::EvalContext &ctx) const {
   Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
 #ifdef AU_ROOFIT_BACKEND_CUDA
   if (IsDevicePointer(output.data())) {
-    // Launch on ROOT's per-node CUDA stream so this kernel overlaps with the
-    // other graph nodes' work instead of serializing on the default stream.
-    RooBatchCompute::Config cfg = ctx.config(this);
-    RooBatchCompute::CudaInterface::CudaStream *stream =
-        cfg.useCuda() ? cfg.cudaStream() : nullptr;
+    RooBatchCompute::CudaInterface::CudaStream *node_stream =
+        ctx.config(this).cudaStream();
     RooLowExpTail_launchKernel(output.data(), x_vals.data(), mu, inv_tau,
-                               inv_sqrt2_sigma, n, stream);
+                               inv_sqrt2_sigma, n, node_stream);
     return;
   }
 #endif
@@ -334,13 +328,10 @@ void RooLowLinTail::doEval(RooFit::EvalContext &ctx) const {
   Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
 #ifdef AU_ROOFIT_BACKEND_CUDA
   if (IsDevicePointer(output.data())) {
-    // Launch on ROOT's per-node CUDA stream so this kernel overlaps with the
-    // other graph nodes' work instead of serializing on the default stream.
-    RooBatchCompute::Config cfg = ctx.config(this);
-    RooBatchCompute::CudaInterface::CudaStream *stream =
-        cfg.useCuda() ? cfg.cudaStream() : nullptr;
+    RooBatchCompute::CudaInterface::CudaStream *node_stream =
+        ctx.config(this).cudaStream();
     RooLowLinTail_launchKernel(output.data(), x_vals.data(), mu, slope,
-                               inv_sqrt2_sigma, n, stream);
+                               inv_sqrt2_sigma, n, node_stream);
     return;
   }
 #endif
@@ -418,13 +409,10 @@ void RooHighExpTail::doEval(RooFit::EvalContext &ctx) const {
   Double_t inv_sqrt2_sigma = 1.0 / (std::sqrt(2.0) * sigma);
 #ifdef AU_ROOFIT_BACKEND_CUDA
   if (IsDevicePointer(output.data())) {
-    // Launch on ROOT's per-node CUDA stream so this kernel overlaps with the
-    // other graph nodes' work instead of serializing on the default stream.
-    RooBatchCompute::Config cfg = ctx.config(this);
-    RooBatchCompute::CudaInterface::CudaStream *stream =
-        cfg.useCuda() ? cfg.cudaStream() : nullptr;
+    RooBatchCompute::CudaInterface::CudaStream *node_stream =
+        ctx.config(this).cudaStream();
     RooHighExpTail_launchKernel(output.data(), x_vals.data(), mu, inv_tau,
-                                inv_sqrt2_sigma, n, stream);
+                                inv_sqrt2_sigma, n, node_stream);
     return;
   }
 #endif
