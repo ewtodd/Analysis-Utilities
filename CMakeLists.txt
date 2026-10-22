@@ -30,7 +30,7 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 find_package(OpenMP REQUIRED)
-find_package(ROOT 6.38 REQUIRED COMPONENTS RooFit RooFitCore)
+find_package(ROOT 6.38 REQUIRED COMPONENTS RooFit RooFitCore Gpad Gui)
 include(${ROOT_USE_FILE})
 
 if(AU_USE_CUDA)
@@ -90,9 +90,15 @@ target_include_directories(${LIB_NAME} PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${ROOT_INCLUDE_DIRS}
 )
+# Gpad and Gui are listed explicitly because RooFit does not pull them in, and
+# the plotting code and interactive editors use them directly. Without them the
+# shared library leaves TCanvas, TPad and TG* symbols for every executable that
+# links it to supply.
 target_link_libraries(${LIB_NAME} PUBLIC
     ROOT::RooFit
     ROOT::RooFitCore
+    ROOT::Gpad
+    ROOT::Gui
     OpenMP::OpenMP_CXX
 )
 if(AU_USE_CUDA)
@@ -113,6 +119,8 @@ target_include_directories(${LIB_NAME}-static PUBLIC
 target_link_libraries(${LIB_NAME}-static PUBLIC
     ROOT::RooFit
     ROOT::RooFitCore
+    ROOT::Gpad
+    ROOT::Gui
     OpenMP::OpenMP_CXX
 )
 if(AU_USE_CUDA)

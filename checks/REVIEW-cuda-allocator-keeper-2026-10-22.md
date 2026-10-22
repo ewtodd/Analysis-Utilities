@@ -255,6 +255,11 @@ this commit
   That is why the regression app uses `--glibs`.
   Left unchanged; this
   branch does not touch the library's link line.
+  Fixed afterwards at ewt's request, in the follow-up `build(CMake)` commit:
+  both library targets now link `ROOT::Gpad` and `ROOT::Gui`, which were the
+  only two libraries `ldd -r` found missing (119 unresolved `TG*`, `TPad` and
+  `TCanvas` symbols, now none). The regression app links with
+  `root-config --libs`.
 - `2ce3aaa`'s message describes the 0/0 as "the component's integral over the fit
   range".
   It is actually the normalised component evaluated at `x`'s current

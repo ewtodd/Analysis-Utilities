@@ -129,7 +129,7 @@
             $CXX -O2 -DAU_ROOFIT_BACKEND_CUDA=1 $(root-config --cflags) \
               -I${utilsCuda}/include CudaRegression.cpp -o cuda-regression \
               -L${utilsCuda}/lib -lanalysis-utils \
-              $(root-config --glibs) -lRooFit -lRooFitCore
+              $(root-config --libs) -lRooFit -lRooFitCore
             runHook postBuild
           '';
 
