@@ -1,7 +1,8 @@
 # LinkPeakShape leaves the centroid free — review checklist, 2026-10-22
 <!---->
 Branch `review/linkpeakshape-fitstatus-yieldratio`, based on `main` at `13c67d8`.
-Not merged and not pushed.
+**Pushed to `main` on 2026-10-22 without ewt's review**, so that 73mGe can check it
+in production. ewt reviews it on 2026-10-23; the boxes below are still open.
 `LinkPeakShape` linked `Mu` along with the shape since `bb1721d` (2026-05-10),
 contrary to its documentation ("leaving position and normalisation free"). It now
 links the eight shape parameters only. `.simroofits` states saved while `Mu` was tied

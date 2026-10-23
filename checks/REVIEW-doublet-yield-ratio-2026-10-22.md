@@ -1,7 +1,8 @@
 # Fixed Gaussian yield ratio in FitDoublePeak — review checklist, 2026-10-22
 <!---->
 Branch `review/linkpeakshape-fitstatus-yieldratio`, on top of `b5b0cf3`.
-Not merged and not pushed.
+**Pushed to `main` on 2026-10-22 without ewt's review**, so that 73mGe can check it
+in production. ewt reviews it on 2026-10-23; the boxes below are still open.
 Item 4 of the linked-tails request: `FitDoublePeak` gains `gaus_yield_ratio`. When
 positive, `GausAmplitude1 = gaus_yield_ratio * GausAmplitude2` and only
 `GausAmplitude2` is fitted. It works like the links: the first peak's
