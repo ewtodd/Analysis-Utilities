@@ -361,11 +361,24 @@ Double_t PlottingUtils::TextWidthPx(const TString &text, Double_t size_px,
   TVirtualPad *previous = gPad;
   const Int_t scratch_px = 1000;
   TCanvas *scratch = CreateCanvas(GetRandomName(), scratch_px, scratch_px);
+  // ROOT master's TLatex::GetXsize parses a pixel-sized (precision 3) font
+  // without the conversion TLatex::PaintLatex applies first, and returns a
+  // width about 30 times too small. Measure what PaintLatex paints instead:
+  // the precision-2 font at the size relative to the smaller pad side.
+  const UInt_t pad_width_px = scratch->GetWw();
+  const UInt_t pad_min_side_px =
+      TMath::Max((UInt_t)1, TMath::Min(scratch->GetWw(), scratch->GetWh()));
+  Int_t measured_font = font;
+  Double_t measured_size = size_px;
+  if (font % 10 > 2) {
+    measured_font = 10 * (font / 10) + 2;
+    measured_size = size_px / pad_min_side_px;
+  }
   TLatex latex(0.1, 0.5, text);
   latex.SetNDC();
-  latex.SetTextFont(font);
-  latex.SetTextSize(size_px);
-  const Double_t width_px = latex.GetXsize() * scratch_px;
+  latex.SetTextFont(measured_font);
+  latex.SetTextSize(measured_size);
+  const Double_t width_px = latex.GetXsize() * pad_width_px;
   delete scratch;
   if (previous)
     previous->cd();
