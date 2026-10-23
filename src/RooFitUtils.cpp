@@ -1184,11 +1184,13 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
   Int_t n_set = 0, n_skipped_fixed = 0;
   Bool_t full_range_exp_tails = kFALSE;
   std::set<RooRealVar *> loaded_from_file;
+  std::set<std::string> names_in_file;
   while (in >> token >> value >> error >> fixed) {
     if (token == kExpTailConventionName) {
       full_range_exp_tails = ((Int_t)value == kExpTailConventionFullRange);
       continue;
     }
+    names_in_file.insert(token);
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
     if (it == by_name.end()) {
       std::cerr << "WARNING: param " << token
@@ -1214,6 +1216,35 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     return kFALSE;
   }
 
+  // A state saved while LinkPeakShape also tied the centroids has no line for
+  // a target peak's Mu. It equalled its source's, so it starts from there
+  // rather than from the AddChannel guess.
+  TString mus_from_source;
+  for (size_t li = 0; li < sim_shape_mu_pairs_.size(); li++) {
+    const RooFitParamLink &pair = sim_shape_mu_pairs_[li];
+    std::string target_name =
+        ParamFullName(pair.target_channel, pair.target_param).Data();
+    std::string source_name =
+        ParamFullName(pair.source_channel, pair.source_param).Data();
+    std::map<std::string, RooRealVar *>::iterator target_it =
+        by_name.find(target_name);
+    std::map<std::string, RooRealVar *>::iterator source_it =
+        by_name.find(source_name);
+    if (target_it == by_name.end() || source_it == by_name.end())
+      continue;
+    RooRealVar *target_mu = target_it->second;
+    RooRealVar *source_mu = source_it->second;
+    Bool_t target_has_own_line = (names_in_file.count(target_name) > 0);
+    Bool_t source_was_loaded = (loaded_from_file.count(source_mu) > 0);
+    if (target_mu == source_mu || target_mu->isConstant() ||
+        target_has_own_line || !source_was_loaded)
+      continue;
+    target_mu->setVal(source_mu->getVal());
+    target_mu->setError(source_mu->getError());
+    mus_from_source += (mus_from_source.Length() > 0 ? ", " : "") +
+                       TString(target_name) + " <- " + TString(source_name);
+  }
+
   std::set<RooRealVar *> converted;
   if (!full_range_exp_tails) {
     for (size_t ci = 0; ci < sim_channels_.size(); ci++)
@@ -1222,6 +1253,10 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
   }
 
   std::cout << "Loaded sim interactive params from " << filename << std::endl;
+  if (mus_from_source.Length() > 0)
+    std::cout << "  (centroids saved while LinkPeakShape tied them start from "
+                 "their source peak's: "
+              << mus_from_source << ")" << std::endl;
   if (!converted.empty())
     std::cout << "  (exponential-tail amplitudes converted from in-window to "
                  "full-range ratios; a ratio linked between peaks matches the "
@@ -2288,8 +2323,7 @@ void RooFitUtils::LinkPeakShape(const TString &target_channel,
                                 Int_t source_peak) {
   TString t_suffix = TString::Format("%d", target_peak + 1);
   TString s_suffix = TString::Format("%d", source_peak + 1);
-  const char *shape_params[9] = {"Mu",
-                                 "Sigma",
+  const char *shape_params[8] = {"Sigma",
                                  "StepAmplitude",
                                  "LowExpTailAmplitude",
                                  "LowExpTailRatio",
@@ -2297,10 +2331,19 @@ void RooFitUtils::LinkPeakShape(const TString &target_channel,
                                  "LowLinTailSlope",
                                  "HighExpTailAmplitude",
                                  "HighExpTailRatio"};
-  for (Int_t i = 0; i < 9; i++) {
+  for (Int_t i = 0; i < 8; i++) {
     LinkParameter(target_channel + ":" + shape_params[i] + t_suffix,
                   source_channel + ":" + shape_params[i] + s_suffix);
   }
+
+  // States saved while this method also tied Mu hold only the source's;
+  // LoadSimInteractiveParams starts the target's from it.
+  RooFitParamLink mu_pair;
+  mu_pair.target_channel = target_channel;
+  mu_pair.target_param = "Mu" + t_suffix;
+  mu_pair.source_channel = source_channel;
+  mu_pair.source_param = "Mu" + s_suffix;
+  sim_shape_mu_pairs_.push_back(mu_pair);
 }
 
 void RooFitUtils::SeedChannel(const TString &channel_name,

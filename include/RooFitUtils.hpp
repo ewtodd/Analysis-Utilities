@@ -412,6 +412,9 @@ private:
 
   std::vector<RooFitChannelConfig> sim_channels_;
   std::vector<RooFitParamLink> sim_links_;
+  // The centroid pair of every LinkPeakShape call, which is not linked; see
+  // LoadSimInteractiveParams().
+  std::vector<RooFitParamLink> sim_shape_mu_pairs_;
   std::vector<RooFitSeparationConstraint> sim_sep_constraints_;
   RooArgSet sim_constraint_set_;
   std::map<TString, FitResult> sim_seeds_;
@@ -963,11 +966,20 @@ public:
   /**
    * @brief Tie a peak's whole shape to another peak's.
    *
-   * Links sigma and every tail and step shape parameter at once, leaving
-   * position and normalisation free.
+   * Links `Sigma`, `StepAmplitude`, `LowExpTailAmplitude`, `LowExpTailRatio`,
+   * `LowLinTailAmplitude`, `LowLinTailSlope`, `HighExpTailAmplitude` and
+   * `HighExpTailRatio` at once. The centroid `Mu` and the Gaussian yield stay
+   * free, so the same line in two runs can sit at different positions, as it
+   * does when the detector's reading moves with count rate. To tie the
+   * centroids as well, also call LinkParameter() on `Mu`.
    *
    * @note The same caveat as for LinkParameter() applies to the step and the
    *       linear tail, whose amplitudes are in-window ratios.
+   * @note Until this was corrected, this method linked `Mu` too, so
+   *       `.simroofits` states saved by such fits hold only the source peak's
+   *       centroid. When such a state is loaded, a target centroid with no
+   *       line of its own starts from its source peak's loaded value, which
+   *       it equalled, and a line saying so is printed.
    *
    * @param target_channel Channel holding the peak to tie.
    * @param target_peak    Index of that peak.

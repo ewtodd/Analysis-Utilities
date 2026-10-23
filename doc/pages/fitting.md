@@ -253,9 +253,14 @@ background) sharing a single observable with the others.
 - **`LinkParameter(target, source)`** /
   **`LinkPeakShape(target_channel, target_peak, source_channel, source_peak)`**
   — tie a parameter (or a peak's whole shape) in one channel to another so they
-  are fit as a single shared degree of freedom. Linked exponential tails are the
-  same physical tail wherever the peaks sit; see
-  @ref tail-amplitudes "Tail amplitudes".
+  are fit as a single shared degree of freedom. A peak's shape is its width and
+  every step and tail parameter; its centroid and Gaussian yield stay free, so
+  the same line can sit at a different position in each run (call
+  `LinkParameter()` on `Mu` to tie the centroids too). Linked exponential tails
+  are the same physical tail wherever the peaks sit; see
+  @ref tail-amplitudes "Tail amplitudes". `LinkPeakShape()` used to link `Mu`
+  as well; a `.simroofits` state saved then has no line for the target
+  centroid, which on load starts from its source's value.
 - **`SeedChannel(channel_name, result)`** — supply a prior single-channel
   `FitResult` as starting values for that channel.
 - **`FitSimultaneous(input_name, base_label)`** — builds the `RooSimultaneous`,
