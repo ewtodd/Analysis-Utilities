@@ -14,7 +14,9 @@
  * seen in semiconductor detectors: a step shelf from energy escaping the active
  * volume, low-energy tails from incomplete charge collection, and a high-energy
  * tail from pileup. They are combined with a Gaussian and a background into a
- * `RooAddPdf` by RooFitUtils.
+ * `RooAddPdf` by RooFitUtils. A fifth class, RooExpTailWindowFactor, is not a
+ * PDF but the scalar that turns an exponential tail's full-range yield ratio
+ * into its yield inside the fit window.
  *
  * Conventions shared by all four:
  *
@@ -380,6 +382,92 @@ protected:
   Double_t evaluate() const override;
 
   ClassDefOverride(RooHighExpTail, 1)
+};
+
+/**
+ * @brief Converts a full-range tail/Gaussian yield ratio into the window.
+ *
+ * Evaluates `f_T / f_G`, where `f_T` is the fraction of an exponential tail's
+ * integral over the whole line that falls inside the window
+ * `[window_low, window_high]`, and `f_G` is the same fraction for the Gaussian
+ * of the same peak. RooFitUtils normalises every component over the window and
+ * parametrises each exponential tail by its full-range yield ratio `R` (tail
+ * integral over the whole line divided by the Gaussian's), so the tail's yield
+ * inside the window is
+ *
+ *     GausAmplitude * R * f_T / f_G
+ *
+ * with `GausAmplitude` the Gaussian's yield inside the window. `R` depends only
+ * on the tail's shape, not on the window or on where the peak sits in it, so a
+ * `LinkParameter()` on it gives the linked peaks the same physical tail.
+ *
+ * With `y = x - mu` for the low-side tail, `y = mu - x` for the high-side one
+ * (RooHighExpTail is RooLowExpTail mirrored), `tau = tau_ratio * sigma` and
+ * `[y_lo, y_hi]` the window in `y`:
+ *
+ *     f_G = [erf((window_high - mu)/(sqrt2 sigma))
+ *            - erf((window_low - mu)/(sqrt2 sigma))] / 2
+ *     f_T = [A(y_hi) - A(y_lo)] / (2 tau exp(sigma^2 / (2 tau^2)))
+ *
+ * where `A` is the antiderivative of the tail shape
+ * `exp(y/tau) erfc(y/(sqrt2 sigma))` that the tails' analyticalIntegral() uses,
+ * and the denominator of `f_T` is that shape's integral over the whole line.
+ *
+ * @note A scalar of the peak's parameters, not of the observable. RooFit
+ *       evaluates it once per likelihood evaluation on the CPU, in CUDA fits
+ *       too, as it does the `RooFormulaVar` yields it feeds.
+ * @note The window edges are ordinary `RooAbsReal` servers, so the factor
+ *       follows a change of window only when they are changed. RooFitUtils
+ *       holds them as constant `RooRealVar`s and moves them with the range its
+ *       yields count events in; see RooFitPeakModel::SetWindow().
+ */
+class RooExpTailWindowFactor : public RooAbsReal {
+public:
+  /// @brief Default constructor for ROOT I/O; leaves proxies unbound.
+  RooExpTailWindowFactor() {}
+  /**
+   * @brief Construct the factor and bind its parameters.
+   * @param name        RooFit object name, unique within the workspace.
+   * @param title       Human-readable title.
+   * @param mu          Peak centroid, in the observable's units.
+   * @param sigma       Gaussian resolution; must be positive.
+   * @param tau_ratio   Tail decay constant in units of @p sigma, the same
+   *                    variable the tail PDF takes. Dimensionless and positive.
+   * @param window_low  Lower edge of the window, in the observable's units.
+   * @param window_high Upper edge of the window; above @p window_low.
+   * @param high_side   `kTRUE` for a RooHighExpTail, `kFALSE` for a
+   *                    RooLowExpTail.
+   */
+  RooExpTailWindowFactor(const char *name, const char *title, RooAbsReal &mu,
+                         RooAbsReal &sigma, RooAbsReal &tau_ratio,
+                         RooAbsReal &window_low, RooAbsReal &window_high,
+                         Bool_t high_side);
+  /// @brief Copy constructor used by RooFit when cloning a model.
+  /// @param other Instance to copy.
+  /// @param name  New object name, or null to keep @p other's.
+  RooExpTailWindowFactor(const RooExpTailWindowFactor &other,
+                         const char *name = nullptr);
+  /// @brief RooFit clone hook.
+  /// @param newname Name for the clone, or null to reuse this one's.
+  /// @return A heap-allocated copy; ownership passes to the caller.
+  TObject *clone(const char *newname = nullptr) const override {
+    return new RooExpTailWindowFactor(*this, newname);
+  }
+
+protected:
+  RooRealProxy mu_;
+  RooRealProxy sigma_;
+  RooRealProxy tau_ratio_;
+  RooRealProxy window_low_;
+  RooRealProxy window_high_;
+  Bool_t high_side_ = kFALSE;
+  /// @brief Evaluate `f_T / f_G` at the current parameter values.
+  /// @return The factor; zero if `sigma <= 0` or `tau_ratio <= 0`. `f_G` is
+  ///         floored at `1e-300` so a window that misses the Gaussian gives a
+  ///         large finite factor instead of a division by zero.
+  Double_t evaluate() const override;
+
+  ClassDefOverride(RooExpTailWindowFactor, 1)
 };
 
 #endif

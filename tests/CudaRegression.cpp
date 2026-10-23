@@ -3,7 +3,10 @@
 // Builds toy models from the library's PDFs, with 1M events per channel, in the
 // three configurations the library fits: a single channel, four channels with
 // SplitRange (RooFitUtils::FitSimultaneous) and four channels over one shared
-// range (the interactive simultaneous editor). For each it checks that:
+// range (the interactive simultaneous editor). As in the library, each
+// exponential tail's yield is the Gaussian yield times a full-range ratio times
+// a RooExpTailWindowFactor, a scalar node evaluated on the CPU in both
+// backends. For each configuration it checks that:
 //   1. the CPU and CUDA backends give the same NLL at many parameter points;
 //   2. RooFit's NLL equals the likelihood the model defines, computed directly
 //      from the components' values and integrals, up to a constant, at several
@@ -33,6 +36,7 @@
 #include <RooCategory.h>
 #include <RooDataSet.h>
 #include <RooFitResult.h>
+#include <RooFormulaVar.h>
 #include <RooGaussian.h>
 #include <RooGlobalFunc.h>
 #include <RooMinimizer.h>
@@ -78,17 +82,23 @@ const Double_t kMaxTimeRatio = 0.15;
 
 // CPU NLL at the start point, recorded with ROOT master e0e5723692 after the
 // direct-likelihood check passed. After a deliberate change to the model or
-// the PDFs, replace these with the values the check prints.
+// the PDFs, replace these with the values the check prints. The shared-range
+// value was re-recorded when the exponential tails moved to full-range ratios:
+// the start values of those ratios reproduce the old tail yields in each
+// channel's own window, so the other two did not change, but over the shared
+// range a fixed ratio puts more of each tail inside the window.
 const Double_t kReferenceSingleStartNll = -9903979.467281;
 const Double_t kReferenceSplitStartNll = -34073745.226293;
-const Double_t kReferenceSharedStartNll = -33516393.886244;
+const Double_t kReferenceSharedStartNll = -33521051.546687;
 
 struct ToyChannel {
   TString name;
   Double_t center;
   RooAddPdf *pdf;
   RooDataSet *data;
-  TString yieldRange; ///< The range this channel's yields count events in.
+  TString yieldRange;    ///< The range this channel's yields count events in.
+  RooRealVar *windowLow; ///< yieldRange's edges, for the window factors.
+  RooRealVar *windowHigh;
 };
 
 struct ToyModel {
@@ -100,12 +110,39 @@ struct ToyModel {
   Bool_t simultaneous;
 };
 
+// As RooFitUtils builds it: an exponential tail's yield is nGauss * R times a
+// RooExpTailWindowFactor, with R the full-range tail/Gaussian yield ratio and
+// the factor taking it into the channel's window. R starts at the value that
+// gives the tail startYield events, so the starting model is the one a plain
+// yield of startYield defines.
+RooAbsReal *ExpTailYield(const TString &prefix, ToyChannel &channel,
+                         RooRealVar &nGauss, RooRealVar &mu, RooRealVar &sigma,
+                         RooRealVar &tau, Bool_t highSide, Double_t startYield,
+                         RooArgList &floating) {
+  RooExpTailWindowFactor *factor = new RooExpTailWindowFactor(
+      "factor" + prefix + channel.name, "", mu, sigma, tau, *channel.windowLow,
+      *channel.windowHigh, highSide);
+  RooRealVar *ratio =
+      new RooRealVar("r" + prefix + channel.name, "",
+                     startYield / (nGauss.getVal() * factor->getVal()), 0.0,
+                     RooFitUtils::kExpTailAmplitudeMax);
+  floating.add(*ratio);
+  return new RooFormulaVar("n" + prefix + channel.name, "@0*@1*@2",
+                           RooArgList(nGauss, *ratio, *factor));
+}
+
 ToyChannel BuildChannel(Int_t index, Long64_t events, RooRealVar &x,
                         RooRealVar &lowTau, RooRealVar &highTau,
                         RooArgList &floating) {
   TString name = TString::Format("ch%d", index);
   Double_t center = 40.0 + 40.0 * index;
   x.setRange("fitrange_" + name, center - 20.0, center + 20.0);
+
+  ToyChannel channel;
+  channel.name = name;
+  channel.center = center;
+  channel.windowLow = new RooRealVar("windowLow_" + name, "", center - 20.0);
+  channel.windowHigh = new RooRealVar("windowHigh_" + name, "", center + 20.0);
 
   RooRealVar *mu = new RooRealVar("mu_" + name, "", center + 0.3, center - 5.0,
                                   center + 5.0);
@@ -129,19 +166,29 @@ ToyChannel BuildChannel(Int_t index, Long64_t events, RooRealVar &x,
   const Double_t fractions[6] = {0.60, 0.15, 0.10, 0.05, 0.05, 0.05};
   const char *yieldPrefixes[6] = {"nGauss_",  "nLowExp_",  "nShelf_",
                                   "nLowLin_", "nHighExp_", "nBkg_"};
+  RooRealVar *nGauss =
+      new RooRealVar(yieldPrefixes[0] + name, "", fractions[0] * events * 1.02,
+                     0.0, 3.0 * events);
+  floating.add(*nGauss);
   RooArgList yields;
-  for (Int_t k = 0; k < 6; ++k) {
-    RooRealVar *yield =
-        new RooRealVar(yieldPrefixes[k] + name, "",
-                       fractions[k] * events * 1.02, 0.0, 3.0 * events);
-    yields.add(*yield);
-    floating.add(*yield);
+  yields.add(*nGauss);
+  for (Int_t k = 1; k < 6; ++k) {
+    Double_t startYield = fractions[k] * events * 1.02;
+    if (k == 1) {
+      yields.add(*ExpTailYield("LowExp_", channel, *nGauss, *mu, *sigma, lowTau,
+                               kFALSE, startYield, floating));
+    } else if (k == 4) {
+      yields.add(*ExpTailYield("HighExp_", channel, *nGauss, *mu, *sigma,
+                               highTau, kTRUE, startYield, floating));
+    } else {
+      RooRealVar *yield = new RooRealVar(yieldPrefixes[k] + name, "",
+                                         startYield, 0.0, 3.0 * events);
+      yields.add(*yield);
+      floating.add(*yield);
+    }
   }
   floating.add(RooArgList(*mu, *sigma, *linSlope, *bkgSlope));
 
-  ToyChannel channel;
-  channel.name = name;
-  channel.center = center;
   channel.pdf = new RooAddPdf("model_" + name, "", components, yields);
 
   // Shapes roughly like the model's components, so the fit is well posed. The
@@ -238,6 +285,8 @@ ToyModel BuildFitModel(Int_t nChannels, Long64_t events) {
     Double_t low = channel.center - 20.0;
     Double_t high = channel.center + 20.0;
     model.x->setRange("fitrange_" + channel.name, low, high);
+    channel.windowLow = new RooRealVar("windowLow_" + channel.name, "", low);
+    channel.windowHigh = new RooRealVar("windowHigh_" + channel.name, "", high);
 
     RooRealVar *mu = new RooRealVar("mu_" + channel.name, "", channel.center,
                                     channel.center - 5.0, channel.center + 5.0);
@@ -254,14 +303,21 @@ ToyModel BuildFitModel(Int_t nChannels, Long64_t events) {
                                        *mu, *sigma, *highTau));
     components.add(*new RooPolynomial("bkg_" + channel.name, "", *model.x,
                                       RooArgList(*bkgSlope)));
+    RooRealVar *nGauss =
+        new RooRealVar(yieldPrefixes[0] + channel.name, "",
+                       fractions[0] * events, 0.0, 3.0 * events);
+    RooRealVar *nBkg = new RooRealVar(yieldPrefixes[3] + channel.name, "",
+                                      fractions[3] * events, 0.0, 3.0 * events);
+    model.floating.add(*nGauss);
     RooArgList yields;
-    for (Int_t k = 0; k < 4; ++k) {
-      RooRealVar *yield =
-          new RooRealVar(yieldPrefixes[k] + channel.name, "",
-                         fractions[k] * events, 0.0, 3.0 * events);
-      yields.add(*yield);
-      model.floating.add(*yield);
-    }
+    yields.add(*nGauss);
+    yields.add(*ExpTailYield("LowExp_", channel, *nGauss, *mu, *sigma, *lowTau,
+                             kFALSE, fractions[1] * events, model.floating));
+    yields.add(*ExpTailYield("HighExp_", channel, *nGauss, *mu, *sigma,
+                             *highTau, kTRUE, fractions[2] * events,
+                             model.floating));
+    yields.add(*nBkg);
+    model.floating.add(*nBkg);
     model.floating.add(RooArgList(*mu, *sigma, *bkgSlope));
     channel.pdf =
         new RooAddPdf("model_" + channel.name, "", components, yields);
@@ -293,13 +349,16 @@ ToyModel BuildFitModel(Int_t nChannels, Long64_t events) {
 }
 
 // As RooFitUtils::FixChannelCoefRanges(): each channel's own window for a
-// SplitRange fit, the shared "fitrange" otherwise.
+// SplitRange fit, the shared "fitrange" otherwise, with the window factors
+// moved to the same range.
 void SetYieldRanges(ToyModel &model, Bool_t splitRange) {
   for (size_t i = 0; i < model.channels.size(); ++i) {
     ToyChannel &channel = model.channels[i];
     channel.yieldRange =
         splitRange ? TString("fitrange_" + channel.name) : TString("fitrange");
     channel.pdf->fixCoefRange(channel.yieldRange);
+    channel.windowLow->setVal(model.x->getMin(channel.yieldRange));
+    channel.windowHigh->setVal(model.x->getMax(channel.yieldRange));
   }
 }
 
@@ -372,6 +431,8 @@ void MoveToPoint(RooArgList &floating, const std::vector<Double_t> &start,
         value -= 0.2;
       else if (name.BeginsWith("linSlope_"))
         value *= 1.2;
+      else if (name.BeginsWith("rLowExp_") || name.BeginsWith("rHighExp_"))
+        value *= 1.1;
     }
     parameter->setVal(value);
   }

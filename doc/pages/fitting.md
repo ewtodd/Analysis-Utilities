@@ -94,9 +94,11 @@ multi-peak fits use distinct line styles per peak.
   pruning). A static `LoadEventsFromTree` helper extracts events from a ROOT
   `TTree` branch. The fit itself never bins.
 - Amplitude/yield semantics: gaussian, step and tail "amplitude" fields in
-  `PeakFitResult` carry RooFit yields (event counts) rather than peak heights.
-  This is internally consistent for constrained fits because the ratio
-  `component_amplitude / gaus_amplitude` is the same quantity in both backends.
+  `PeakFitResult` carry RooFit yields (event counts) rather than peak heights,
+  and the ratio `component_amplitude / gaus_amplitude` is a yield ratio, not
+  the height ratio FittingUtils reports. See
+  @ref tail-amplitudes "Tail amplitudes" below for what each ratio means and how
+  to convert.
 - The low-energy linear tail factor `(1 + s·(x-μ))` is floored at zero to keep
   the PDF non-negative as required by RooFit normalization. The TF1 backend has
   no such constraint.
@@ -108,6 +110,64 @@ multi-peak fits use distinct line styles per peak.
   `BestAvailableBackend()` (in `RooFitUtils.hpp`) returns
   `RooFit::EvalBackend::Cuda()` instead, and all four custom PDFs report
   `canComputeBatchWithCuda() = true`. See @ref gpu for the nix-flake opt-in.
+
+### Tail amplitudes {#tail-amplitudes}
+
+Every component is normalised over the fit window, and its yield is the
+Gaussian yield `GausAmplitude` (Gaussian events inside the window) times a
+ratio parameter.
+
+The two exponential tails use the **full-range yield ratio** `R`
+(`LowExpTailAmplitude`, `HighExpTailAmplitude`): the tail's integral over the
+whole line divided by the Gaussian's. Their yield inside the window is
+
+    GausAmplitude * R * f_T / f_G
+
+where `f_G` and `f_T` are the fractions of the Gaussian and of the tail that
+fall inside the window for that peak's `mu`, `sigma` and `tau = rho * sigma`.
+`RooExpTailWindowFactor` computes `f_T / f_G`. For a tail
+`exp(y/tau) erfc(y/(sqrt2 sigma))` with height ratio `k` to its Gaussian,
+
+    R = k * 2 rho * exp(1 / (2 rho^2)) / sqrt(2 pi)
+
+which depends on the tail's shape only, not on the window or on where the peak
+sits in it. So sharing `R` and `rho` through `LinkParameter()` gives every
+linked peak the same physical tail, and a constrained fit or a `SeedChannel()`
+seed carries the tail over exactly even when the earlier fit used a different
+window. The bound on `R` is `RooFitUtils::kExpTailAmplitudeMax` (3); measured
+values are typically around 0.5, and a long tail can exceed 1. A wider bound
+makes HESSE less reliable in linked simultaneous fits; the constant's
+documentation has the numbers.
+
+The step and the linear tail (`StepAmplitude`, `LowLinTailAmplitude`) are still
+**in-window yield ratios**: their yield is `GausAmplitude * ratio`. Both shapes
+extend to `-infinity` without falling to zero, so they have no full-range
+integral to form an `R` from. Linking them between peaks at different positions
+in the window, or between windows of different width, ties their in-window
+yields rather than their shapes.
+
+In a `PeakFitResult` from RooFitUtils, `low_exp_tail_amplitude / gaus_amplitude`
+is `R`. To compare with FittingUtils, which reports heights, the height ratio is
+`k = R * sqrt(2 pi) / (2 rho exp(1 / (2 rho^2)))`. The tail's events inside the
+window are `gaus_amplitude * R * f_T / f_G`, not `low_exp_tail_amplitude`.
+
+Until this convention was introduced, the exponential-tail amplitudes were
+in-window ratios `r = R * f_T / f_G` as well. A single, unlinked peak fits to
+the same model either way; only the reported ratio changes. Where `r` was shared
+between peaks at different positions, it forced the peak with less of its tail
+inside the window to carry a taller tail.
+
+**Saved states.** `.roofits` and `.simroofits` files now carry a line
+`ExpTailAmplitudeConvention 1 0 1` after `RANGE`. A file without it is from
+before the change; on load, each exponential-tail amplitude is converted with
+`R = r * f_G / f_T` at the file's window and the loaded `mu`, `sigma` and
+`rho`, so an unlinked peak starts exactly where it was saved. A ratio linked
+between peaks is converted with the peak it belongs to (the link's source), and
+the peaks linked to it then start with the same physical tail, not the old
+in-window ratio, so their start differs from the saved fit; a refit
+(`SetRefitAfterLoad()` for simultaneous fits) recovers them. An older build of
+this library reading a new file warns that `ExpTailAmplitudeConvention` is not
+a model parameter and reads `R` as `r`.
 
 ## Interactive fitting
 
@@ -151,7 +211,9 @@ background) sharing a single observable with the others.
 - **`LinkParameter(target, source)`** /
   **`LinkPeakShape(target_channel, target_peak, source_channel, source_peak)`**
   — tie a parameter (or a peak's whole shape) in one channel to another so they
-  are fit as a single shared degree of freedom.
+  are fit as a single shared degree of freedom. Linked exponential tails are the
+  same physical tail wherever the peaks sit; see
+  @ref tail-amplitudes "Tail amplitudes".
 - **`SeedChannel(channel_name, result)`** — supply a prior single-channel
   `FitResult` as starting values for that channel.
 - **`FitSimultaneous(input_name, base_label)`** — builds the `RooSimultaneous`,

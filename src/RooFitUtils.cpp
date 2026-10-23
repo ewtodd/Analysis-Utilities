@@ -5,6 +5,16 @@
 
 #include <cmath>
 
+namespace {
+// Saved-state marker line, written as "<name> <value> 0 1" so that a reader
+// expecting "name value error fixed" lines (older builds of this library,
+// downstream parsers) reads it as one more unknown parameter instead of losing
+// its place in the file. A file without it predates the full-range convention
+// and stores in-window ratios for the exponential-tail amplitudes.
+const char *const kExpTailConventionName = "ExpTailAmplitudeConvention";
+const Int_t kExpTailConventionFullRange = 1;
+} // namespace
+
 RooAbsPdf *RooFitFunctions::MakeGaussian(const TString &name, RooRealVar &x,
                                          RooRealVar &mu, RooRealVar &sigma) {
   return new RooGaussian(name.Data(), name.Data(), x, mu, sigma);
@@ -57,6 +67,8 @@ void RooFitUtils::InitState() {
   fit_debug_ = kFALSE;
 
   x_ = nullptr;
+  window_low_ = nullptr;
+  window_high_ = nullptr;
   unbinned_data_ = nullptr;
   total_pdf_ = nullptr;
   num_peaks_ = 0;
@@ -325,9 +337,9 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
 
   p.ratio_step = new RooRealVar("StepAmplitude" + suffix,
                                 "StepAmplitude" + suffix, 0.0, 0.0, 0.5);
-  p.ratio_low_exp =
-      new RooRealVar("LowExpTailAmplitude" + suffix,
-                     "LowExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
+  p.ratio_low_exp = new RooRealVar("LowExpTailAmplitude" + suffix,
+                                   "LowExpTailAmplitude" + suffix, 0.0, 0.0,
+                                   kExpTailAmplitudeMax);
   p.tau_ratio_low_exp =
       new RooRealVar("LowExpTailRatio" + suffix, "LowExpTailRatio" + suffix,
                      1.5, 1.0, tail_ratio_max_);
@@ -336,9 +348,9 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
                      "LowLinTailAmplitude" + suffix, 0.0, 0.0, 0.5);
   p.slope_low_lin = new RooRealVar("LowLinTailSlope" + suffix,
                                    "LowLinTailSlope" + suffix, 0.0, -0.1, 0.1);
-  p.ratio_high_exp =
-      new RooRealVar("HighExpTailAmplitude" + suffix,
-                     "HighExpTailAmplitude" + suffix, 0.0, 0.0, 0.5);
+  p.ratio_high_exp = new RooRealVar("HighExpTailAmplitude" + suffix,
+                                    "HighExpTailAmplitude" + suffix, 0.0, 0.0,
+                                    kExpTailAmplitudeMax);
   p.tau_ratio_high_exp =
       new RooRealVar("HighExpTailRatio" + suffix, "HighExpTailRatio" + suffix,
                      1.5, 1.0, tail_ratio_max_);
@@ -373,22 +385,87 @@ void RooFitUtils::BuildPeak(Int_t peak_idx, Double_t mu_init,
 
   p.step_yield = new RooFormulaVar("step_yield" + suffix, "@0*@1",
                                    RooArgList(*p.gaus_yield, *p.ratio_step));
-  p.low_exp_yield =
-      new RooFormulaVar("low_exp_yield" + suffix, "@0*@1",
-                        RooArgList(*p.gaus_yield, *p.ratio_low_exp));
   p.low_lin_yield =
       new RooFormulaVar("low_lin_yield" + suffix, "@0*@1",
                         RooArgList(*p.gaus_yield, *p.ratio_low_lin));
-  p.high_exp_yield =
-      new RooFormulaVar("high_exp_yield" + suffix, "@0*@1",
-                        RooArgList(*p.gaus_yield, *p.ratio_high_exp));
-
   RegisterOwned(p.step_yield);
-  RegisterOwned(p.low_exp_yield);
   RegisterOwned(p.low_lin_yield);
-  RegisterOwned(p.high_exp_yield);
+
+  // The fit range is the range the yields count events in: RunFit fits over
+  // it, and x's default range is set to it once the data are built.
+  if (!window_low_) {
+    window_low_ = new RooRealVar("WindowLow", "WindowLow", fit_range_low_);
+    window_high_ = new RooRealVar("WindowHigh", "WindowHigh", fit_range_high_);
+    RegisterOwned(window_low_);
+    RegisterOwned(window_high_);
+  }
+  p.window_low = window_low_;
+  p.window_high = window_high_;
+  BuildExpTailYields(p, *p.sigma, suffix);
 
   peaks_.push_back(p);
+}
+
+void RooFitUtils::BuildExpTailYields(RooFitPeakModel &p, RooRealVar &sigma,
+                                     const TString &suffix) {
+  p.low_exp_window_factor = new RooExpTailWindowFactor(
+      ("low_exp_window_factor" + suffix).Data(), "", *p.mu, sigma,
+      *p.tau_ratio_low_exp, *p.window_low, *p.window_high, kFALSE);
+  p.high_exp_window_factor = new RooExpTailWindowFactor(
+      ("high_exp_window_factor" + suffix).Data(), "", *p.mu, sigma,
+      *p.tau_ratio_high_exp, *p.window_low, *p.window_high, kTRUE);
+  p.low_exp_yield = new RooFormulaVar(
+      ("low_exp_yield" + suffix).Data(), "@0*@1*@2",
+      RooArgList(*p.gaus_yield, *p.ratio_low_exp, *p.low_exp_window_factor));
+  p.high_exp_yield = new RooFormulaVar(
+      ("high_exp_yield" + suffix).Data(), "@0*@1*@2",
+      RooArgList(*p.gaus_yield, *p.ratio_high_exp, *p.high_exp_window_factor));
+  RegisterOwned(p.low_exp_window_factor);
+  RegisterOwned(p.high_exp_window_factor);
+  RegisterOwned(p.low_exp_yield);
+  RegisterOwned(p.high_exp_yield);
+}
+
+void RooFitUtils::SetPeakWindows(std::vector<RooFitPeakModel> &peaks,
+                                 Double_t low, Double_t high) {
+  for (size_t pi = 0; pi < peaks.size(); pi++)
+    peaks[pi].SetWindow(low, high);
+}
+
+// A saved state without the convention marker holds in-window ratios r for the
+// exponential-tail amplitudes. The full-range ratio describing the same tail is
+// R = r * f_G / f_T = r / factor, with the factor evaluated at the loaded mu,
+// sigma and tail ratio and the window set from the file's RANGE. A ratio shared
+// through LinkParameter is converted once, with the first peak that uses it,
+// which is the peak it was created for: links resolve to parameters built
+// earlier, and peaks are built and visited in the same order.
+void RooFitUtils::ConvertLegacyExpTailAmplitudes(
+    std::vector<RooFitPeakModel> &peaks,
+    const std::set<RooRealVar *> &loaded_from_file,
+    std::set<RooRealVar *> &converted) {
+  for (size_t pi = 0; pi < peaks.size(); pi++) {
+    RooFitPeakModel &p = peaks[pi];
+    RooRealVar *ratios[2] = {p.ratio_low_exp, p.ratio_high_exp};
+    RooAbsReal *factors[2] = {p.low_exp_window_factor,
+                              p.high_exp_window_factor};
+    for (Int_t k = 0; k < 2; k++) {
+      RooRealVar *ratio = ratios[k];
+      if (!ratio || !factors[k] || loaded_from_file.count(ratio) == 0 ||
+          converted.count(ratio) > 0)
+        continue;
+      converted.insert(ratio);
+      Double_t factor = factors[k]->getVal();
+      if (!(factor > 0))
+        continue;
+      Double_t full_range_ratio = ratio->getVal() / factor;
+      if (full_range_ratio > ratio->getMax())
+        std::cerr << "WARNING: converted " << ratio->GetName() << " = "
+                  << full_range_ratio << " exceeds its limit "
+                  << ratio->getMax() << "; clipped." << std::endl;
+      ratio->setVal(full_range_ratio);
+      ratio->setError(ratio->getError() / factor);
+    }
+  }
 }
 
 void RooFitUtils::BuildBackground(Double_t bkg_estimate, Double_t peak_height,
@@ -838,6 +915,8 @@ void RooFitUtils::SaveInteractiveParams(const TString &input_name,
   out << std::setprecision(17);
   out << "RANGE " << fit_range_low_ << " " << fit_range_high_;
   out << std::endl;
+  out << kExpTailConventionName << " " << kExpTailConventionFullRange << " 0 1";
+  out << std::endl;
   std::vector<RooRealVar *> all = CollectAllParams();
   for (size_t i = 0; i < all.size(); i++) {
     out << all[i]->GetName() << " " << all[i]->getVal() << " "
@@ -867,6 +946,7 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
     fit_range_high_ = rhi;
     x_->setRange(rlo, rhi);
     x_->setRange(kFitRangeName, rlo, rhi);
+    SetPeakWindows(peaks_, rlo, rhi);
     BuildDisplayHistogram();
   }
 
@@ -878,7 +958,13 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
   Double_t value, error;
   Int_t fixed;
   Int_t n_set = 0, n_skipped_fixed = 0, n_unknown = 0;
+  Bool_t full_range_exp_tails = kFALSE;
+  std::set<RooRealVar *> loaded_from_file;
   while (in >> token >> value >> error >> fixed) {
+    if (token == kExpTailConventionName) {
+      full_range_exp_tails = ((Int_t)value == kExpTailConventionFullRange);
+      continue;
+    }
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
     if (it == by_name.end()) {
       std::cerr << "WARNING: param " << token << " from " << filename
@@ -895,6 +981,7 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
     (void)fixed;
     it->second->setVal(value);
     it->second->setError(error);
+    loaded_from_file.insert(it->second);
     ++n_set;
   }
   in.close();
@@ -904,7 +991,15 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
     return kFALSE;
   }
 
+  std::set<RooRealVar *> converted;
+  if (!full_range_exp_tails)
+    ConvertLegacyExpTailAmplitudes(peaks_, loaded_from_file, converted);
+
   std::cout << "Loaded interactive params from " << filename << std::endl;
+  if (!converted.empty())
+    std::cout << "  (exponential-tail amplitudes converted from in-window to "
+                 "full-range ratios)"
+              << std::endl;
   if (n_skipped_fixed > 0)
     std::cout << "  (" << n_skipped_fixed
               << " saved params ignored: fixed by model configuration)"
@@ -930,6 +1025,8 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
   out << std::setprecision(17);
   out << "RANGE " << x_->getMin(kFitRangeName) << " "
       << x_->getMax(kFitRangeName);
+  out << std::endl;
+  out << kExpTailConventionName << " " << kExpTailConventionFullRange << " 0 1";
   out << std::endl;
 
   std::set<RooRealVar *> seen;
@@ -1010,12 +1107,22 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     in >> rlo >> rhi;
     x_->setRange(rlo, rhi);
     x_->setRange(kFitRangeName, rlo, rhi);
+    // Every channel's yields refer to this one range once loaded: the caller
+    // gives every channel these bounds.
+    for (size_t ci = 0; ci < sim_channels_.size(); ci++)
+      SetPeakWindows(sim_channel_peaks_[sim_channels_[ci].name], rlo, rhi);
   }
 
   Double_t value, error;
   Int_t fixed;
   Int_t n_set = 0, n_skipped_fixed = 0;
+  Bool_t full_range_exp_tails = kFALSE;
+  std::set<RooRealVar *> loaded_from_file;
   while (in >> token >> value >> error >> fixed) {
+    if (token == kExpTailConventionName) {
+      full_range_exp_tails = ((Int_t)value == kExpTailConventionFullRange);
+      continue;
+    }
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
     if (it == by_name.end()) {
       std::cerr << "WARNING: param " << token
@@ -1031,6 +1138,7 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     (void)fixed;
     it->second->setVal(value);
     it->second->setError(error);
+    loaded_from_file.insert(it->second);
     ++n_set;
   }
   in.close();
@@ -1040,7 +1148,19 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     return kFALSE;
   }
 
+  std::set<RooRealVar *> converted;
+  if (!full_range_exp_tails) {
+    for (size_t ci = 0; ci < sim_channels_.size(); ci++)
+      ConvertLegacyExpTailAmplitudes(sim_channel_peaks_[sim_channels_[ci].name],
+                                     loaded_from_file, converted);
+  }
+
   std::cout << "Loaded sim interactive params from " << filename << std::endl;
+  if (!converted.empty())
+    std::cout << "  (exponential-tail amplitudes converted from in-window to "
+                 "full-range ratios; a ratio linked between peaks matches the "
+                 "old tail on the peak it belongs to only)"
+              << std::endl;
   if (n_skipped_fixed > 0)
     std::cout << "  (" << n_skipped_fixed
               << " saved params ignored: fixed by model configuration)"
@@ -1449,6 +1569,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     RegisterOwned(p.low_exp_pdf);
     RegisterOwned(p.low_lin_pdf);
     RegisterOwned(p.high_exp_pdf);
+    // The window factors depend on sigma too, so they follow the shared width.
+    BuildExpTailYields(p, *s, "2_linked");
   }
 
   BuildBackground(bkg_estimate, peak_height, range_width);
@@ -2174,6 +2296,15 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
   x_->setRange(range_name.Data(), cfg.fit_range_low, cfg.fit_range_high);
   sim_channel_range_names_[cfg.name] = range_name;
 
+  // Starts as the channel's own range, which a SplitRange fit counts the yields
+  // in; FixChannelCoefRanges moves it if the yields are to count another range.
+  RooRealVar *channel_window_low =
+      new RooRealVar(("WindowLow_" + cfg.name).Data(), "", cfg.fit_range_low);
+  RooRealVar *channel_window_high =
+      new RooRealVar(("WindowHigh_" + cfg.name).Data(), "", cfg.fit_range_high);
+  RegisterOwned(channel_window_low);
+  RegisterOwned(channel_window_high);
+
   std::vector<RooFitPeakModel> peaks;
   for (Int_t pi = 0; pi < cfg.num_peaks; pi++) {
     RooFitPeakModel p;
@@ -2210,15 +2341,16 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     p.ratio_step = ResolveOrCreate(cfg.name, "StepAmplitude" + suffix, registry,
                                    0.0, 0.0, 0.5);
     p.ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailAmplitude" + suffix,
-                                      registry, 0.0, 0.0, 0.5);
+                                      registry, 0.0, 0.0, kExpTailAmplitudeMax);
     p.tau_ratio_low_exp = ResolveOrCreate(cfg.name, "LowExpTailRatio" + suffix,
                                           registry, 1.5, 1.0, tail_ratio_max_);
     p.ratio_low_lin = ResolveOrCreate(cfg.name, "LowLinTailAmplitude" + suffix,
                                       registry, 0.0, 0.0, 0.5);
     p.slope_low_lin = ResolveOrCreate(cfg.name, "LowLinTailSlope" + suffix,
                                       registry, 0.0, -0.1, 0.1);
-    p.ratio_high_exp = ResolveOrCreate(
-        cfg.name, "HighExpTailAmplitude" + suffix, registry, 0.0, 0.0, 0.5);
+    p.ratio_high_exp =
+        ResolveOrCreate(cfg.name, "HighExpTailAmplitude" + suffix, registry,
+                        0.0, 0.0, kExpTailAmplitudeMax);
     p.tau_ratio_high_exp =
         ResolveOrCreate(cfg.name, "HighExpTailRatio" + suffix, registry, 1.5,
                         1.0, tail_ratio_max_);
@@ -2285,19 +2417,14 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     p.step_yield =
         new RooFormulaVar(("step_yield" + pdf_suffix).Data(), "@0*@1",
                           RooArgList(*p.gaus_yield, *p.ratio_step));
-    p.low_exp_yield =
-        new RooFormulaVar(("low_exp_yield" + pdf_suffix).Data(), "@0*@1",
-                          RooArgList(*p.gaus_yield, *p.ratio_low_exp));
     p.low_lin_yield =
         new RooFormulaVar(("low_lin_yield" + pdf_suffix).Data(), "@0*@1",
                           RooArgList(*p.gaus_yield, *p.ratio_low_lin));
-    p.high_exp_yield =
-        new RooFormulaVar(("high_exp_yield" + pdf_suffix).Data(), "@0*@1",
-                          RooArgList(*p.gaus_yield, *p.ratio_high_exp));
     RegisterOwned(p.step_yield);
-    RegisterOwned(p.low_exp_yield);
     RegisterOwned(p.low_lin_yield);
-    RegisterOwned(p.high_exp_yield);
+    p.window_low = channel_window_low;
+    p.window_high = channel_window_high;
+    BuildExpTailYields(p, *p.sigma, pdf_suffix);
 
     Bool_t peak_use_step = cfg.use_step;
     if (pi < (Int_t)cfg.use_step_per_peak.size())
@@ -2890,10 +3017,12 @@ void RooFitUtils::FixChannelCoefRanges(Bool_t split_range) {
     RooAddPdf *sum = dynamic_cast<RooAddPdf *>(sim_channel_pdfs_[name]);
     if (!sum)
       continue;
-    if (split_range)
-      sum->fixCoefRange(sim_channel_range_names_[name].Data());
-    else
-      sum->fixCoefRange(kFitRangeName);
+    TString coef_range =
+        split_range ? sim_channel_range_names_[name] : TString(kFitRangeName);
+    sum->fixCoefRange(coef_range.Data());
+    // The exponential tails' window factors must refer to the same range.
+    SetPeakWindows(sim_channel_peaks_[name], x_->getMin(coef_range.Data()),
+                   x_->getMax(coef_range.Data()));
   }
 }
 

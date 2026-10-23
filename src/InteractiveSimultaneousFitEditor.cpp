@@ -818,6 +818,7 @@ void InteractiveSimultaneousFitEditor::OnRangeChanged() {
 
   x_->setRange(range_low_, range_high_);
   x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
+  SetPeakWindows(range_low_, range_high_);
   ApplyBackgroundSlopeBounds();
 
   for (size_t ci = 0; ci < channels_.size(); ci++) {
@@ -836,6 +837,15 @@ void InteractiveSimultaneousFitEditor::OnRangeChanged() {
   syncing_ = kFALSE;
 
   needs_redraw_ = kTRUE;
+}
+
+void InteractiveSimultaneousFitEditor::SetPeakWindows(Double_t low,
+                                                      Double_t high) {
+  for (size_t ci = 0; ci < channels_.size(); ci++) {
+    std::vector<RooFitPeakModel> &peaks = *channels_[ci].peaks;
+    for (size_t pi = 0; pi < peaks.size(); pi++)
+      peaks[pi].SetWindow(low, high);
+  }
 }
 
 void InteractiveSimultaneousFitEditor::DoRefit() {
@@ -903,6 +913,7 @@ void InteractiveSimultaneousFitEditor::DoCancel() {
   x_->setRange(original_range_low_, original_range_high_);
   x_->setRange(RooFitUtils::kFitRangeName, original_range_low_,
                original_range_high_);
+  SetPeakWindows(original_range_low_, original_range_high_);
   accepted_ = kFALSE;
   done_ = kTRUE;
 }
@@ -927,6 +938,7 @@ void InteractiveSimultaneousFitEditor::DoReset() {
   range_high_ = original_range_high_;
   x_->setRange(range_low_, range_high_);
   x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
+  SetPeakWindows(range_low_, range_high_);
   ApplyBackgroundSlopeBounds();
   for (size_t ci = 0; ci < channels_.size(); ci++) {
     channels_[ci].hist_draw->GetXaxis()->SetRangeUser(0.9 * range_low_,
@@ -1171,11 +1183,14 @@ void InteractiveSimultaneousFitEditor::GetDefaultBounds(Int_t ch_idx,
     hi = peak_height * range_width * 10.0;
     break;
   case 3:
-  case 4:
   case 6:
-  case 8:
     lo = 0;
     hi = 0.5;
+    break;
+  case 4:
+  case 8:
+    lo = 0;
+    hi = RooFitUtils::kExpTailAmplitudeMax;
     break;
   case 5:
   case 9:

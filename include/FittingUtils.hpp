@@ -141,29 +141,60 @@ Double_t TriplePeakFunction(Double_t *x, Double_t *par);
  * Every field defaults to `-1`, which is also what a failed fit leaves behind —
  * check FitResult::valid rather than testing individual members.
  *
- * @warning Amplitude semantics differ between the two backends, and nothing in
- *          the type says which you are holding. FittingUtils fills these with
- *          peak heights in counts; RooFitUtils fills them with RooFit yields
- *          (event counts). Mixing them up produces numbers that look plausible
- *          and are wrong by the normalisation. The ratio
- *          `component_amplitude / gaus_amplitude` is the one quantity that
- *          means the same thing in both, which is what makes constrained fits
- *          portable between them.
+ * What the amplitudes hold depends on the backend that filled them:
+ *
+ * | Field | FittingUtils | RooFitUtils |
+ * |---|---|---|
+ * | `gaus_amplitude` | Gaussian peak height | Gaussian events inside the fit
+ * window | | `low_exp_tail_amplitude`, `high_exp_tail_amplitude` | tail height
+ * at `x = mu` | `gaus_amplitude * R` | | `step_amplitude` | shelf height |
+ * `gaus_amplitude * r` | | `low_lin_tail_amplitude` | tail height at `x = mu` |
+ * `gaus_amplitude * r` |
+ *
+ * In RooFitUtils, `R = amplitude / gaus_amplitude` for an exponential tail is
+ * its full-range yield ratio: the tail's integral over the whole line divided
+ * by the Gaussian's. It depends only on the tail's shape, not on the fit window
+ * or on where the peak sits in it, so the same tail gives the same `R` on any
+ * peak. For the step and the linear tail, `r` is the ratio of their yields
+ * inside the fit window, which depends on both; those shapes have no finite
+ * integral over the whole line.
+ *
+ * With `rho` the tail's decay ratio (`low_exp_tail_ratio` or
+ * `high_exp_tail_ratio`):
+ *
+ * - The FittingUtils height ratio of the same tail is
+ *   `k = R * sqrt(2 pi) / (2 rho exp(1 / (2 rho^2)))`.
+ * - The tail's events inside the fit window are
+ *   `gaus_amplitude * R * f_T / f_G`, with `f_T / f_G` the factor
+ *   RooExpTailWindowFactor computes. They are not the amplitude field.
+ *
+ * RooFitUtils used to report an in-window ratio for the exponential tails as
+ * well, `r = R * f_T / f_G`. Saved `.roofits` and `.simroofits` states written
+ * then are converted when loaded.
+ *
+ * @warning Nothing in the type says which backend filled it. Moving a result
+ *          between backends gives numbers that look plausible and are wrong;
+ *          convert with the relations above.
  */
 struct PeakFitResult {
   Float_t mu = -1, mu_error = -1; ///< Centroid, in the histogram's x units.
   Float_t sigma = -1, sigma_error = -1; ///< Gaussian resolution.
   Float_t gaus_amplitude = -1, gaus_amplitude_error = -1; ///< Gaussian scale.
-  Float_t step_amplitude = -1, step_amplitude_error = -1; ///< Step shelf scale.
-  /// Low-energy exponential tail scale.
+  /// Step shelf scale. In RooFitUtils, `gaus_amplitude` times the in-window
+  /// yield ratio.
+  Float_t step_amplitude = -1, step_amplitude_error = -1;
+  /// Low-energy exponential tail scale. In RooFitUtils, `gaus_amplitude` times
+  /// the full-range yield ratio `R`; see the table above.
   Float_t low_exp_tail_amplitude = -1, low_exp_tail_amplitude_error = -1;
   /// Low-energy exponential decay constant, in units of #sigma.
   Float_t low_exp_tail_ratio = -1, low_exp_tail_ratio_error = -1;
-  /// Low-energy linear tail scale.
+  /// Low-energy linear tail scale. In RooFitUtils, `gaus_amplitude` times the
+  /// in-window yield ratio.
   Float_t low_lin_tail_amplitude = -1, low_lin_tail_amplitude_error = -1;
   /// Slope of the linear tail factor.
   Float_t low_lin_tail_slope = -1, low_lin_tail_slope_error = -1;
-  /// High-energy exponential tail scale.
+  /// High-energy exponential tail scale. In RooFitUtils, `gaus_amplitude` times
+  /// the full-range yield ratio `R`; see the table above.
   Float_t high_exp_tail_amplitude = -1, high_exp_tail_amplitude_error = -1;
   /// High-energy exponential decay constant, in units of #sigma.
   Float_t high_exp_tail_ratio = -1, high_exp_tail_ratio_error = -1;

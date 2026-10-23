@@ -170,9 +170,23 @@ RooAbsPdf *MakeLinearBackground(const TString &name, RooRealVar &x,
  * @brief Every RooFit object making up one peak.
  *
  * Held so a fit can reach in and fix, free or inspect an individual parameter.
- * Component amplitudes are `RooFormulaVar` yields expressed as ratios of the
- * Gaussian yield, which is what lets a constrained fit carry a shape between
- * peaks whose scales differ.
+ * Every component is normalised over the window the channel's yields count
+ * events in, and its yield is the Gaussian yield times a ratio parameter, which
+ * is what lets a constrained fit carry a shape between peaks whose scales
+ * differ. The ratios do not all mean the same thing:
+ *
+ * - The two exponential tails (`ratio_low_exp`, `ratio_high_exp`) are
+ *   full-range yield ratios `R`: the tail's integral over the whole line
+ *   divided by the Gaussian's. Their yield is
+ *   `gaus_yield * R * low_exp_window_factor` (or the high-side factor), with
+ *   the factor from RooExpTailWindowFactor. `R` does not depend on the window
+ *   or on where the peak sits in it, so the same `R` and tail ratio describe
+ *   the same physical tail on every peak.
+ * - The step and the linear tail (`ratio_step`, `ratio_low_lin`) are in-window
+ *   yield ratios: their yield is `gaus_yield * ratio`. Both shapes extend to
+ *   `-infinity` without falling to zero, so they have no full-range integral
+ *   to form an `R` from, and the same ratio means a different shape height
+ *   for a peak elsewhere in the window or in another window.
  *
  * @note Non-owning pointers. The RooFitUtils instance that built them owns
  *       them and destroys them with itself.
@@ -199,6 +213,36 @@ struct RooFitPeakModel {
   RooFormulaVar *low_exp_yield = nullptr;
   RooFormulaVar *low_lin_yield = nullptr;
   RooFormulaVar *high_exp_yield = nullptr;
+
+  /// Lower edge of the window this peak's yields count events in. A constant
+  /// shared by every peak of a channel; move it with SetWindow().
+  RooRealVar *window_low = nullptr;
+  /// Upper edge of that window; see #window_low.
+  RooRealVar *window_high = nullptr;
+  /// RooExpTailWindowFactor scaling `ratio_low_exp` into the window.
+  RooAbsReal *low_exp_window_factor = nullptr;
+  /// RooExpTailWindowFactor scaling `ratio_high_exp` into the window.
+  RooAbsReal *high_exp_window_factor = nullptr;
+
+  /**
+   * @brief Move the window the exponential-tail yields are computed for.
+   *
+   * The window must be the range the channel's `RooAddPdf` counts its yields
+   * in: the fit range for a single-channel fit, the channel's own range for a
+   * `SplitRange` simultaneous fit, the shared range in the simultaneous
+   * editor. Every place that changes that range calls this for every peak of
+   * the channel; otherwise the exponential tails are scaled into the old
+   * window.
+   *
+   * @param low  New lower edge, in the observable's units.
+   * @param high New upper edge; above @p low.
+   */
+  void SetWindow(Double_t low, Double_t high) {
+    if (window_low)
+      window_low->setVal(low);
+    if (window_high)
+      window_high->setVal(high);
+  }
 };
 
 /**
@@ -300,9 +344,11 @@ struct RooFitSeparationConstraint {
  * @warning Yields, not heights. The amplitude fields of PeakFitResult carry
  *          RooFit event counts here, where FittingUtils puts peak heights.
  *          Nothing in the type distinguishes them, so a result moved between
- *          backends is silently wrong by the normalisation. Only the ratio
- *          `component_amplitude / gaus_amplitude` is the same quantity in
- *          both.
+ *          backends is silently wrong. The ratio
+ *          `component_amplitude / gaus_amplitude` differs too: FittingUtils
+ *          gives a height ratio, this class a full-range yield ratio for the
+ *          exponential tails and an in-window yield ratio for the step and
+ *          the linear tail. See PeakFitResult for the conversions.
  *
  * @note `RooRealVar::enableSilentClipping()` is on, so observable values
  *       outside the current range are clipped rather than throwing.
@@ -339,6 +385,11 @@ private:
   std::vector<Double_t> manual_params_;
 
   RooRealVar *x_;
+  // Single-channel mode's window, shared by every peak; see
+  // RooFitPeakModel::SetWindow(). Simultaneous mode builds one pair per
+  // channel.
+  RooRealVar *window_low_;
+  RooRealVar *window_high_;
   RooDataSet *unbinned_data_;
   RooAddPdf *total_pdf_;
   Int_t num_peaks_;
@@ -372,6 +423,14 @@ private:
                               Double_t init_val, Double_t lo, Double_t hi);
   Bool_t BuildChannelModel(const RooFitChannelConfig &cfg,
                            std::map<TString, RooRealVar *> &registry);
+  void BuildExpTailYields(RooFitPeakModel &p, RooRealVar &sigma,
+                          const TString &suffix);
+  static void SetPeakWindows(std::vector<RooFitPeakModel> &peaks, Double_t low,
+                             Double_t high);
+  static void
+  ConvertLegacyExpTailAmplitudes(std::vector<RooFitPeakModel> &peaks,
+                                 const std::set<RooRealVar *> &loaded_from_file,
+                                 std::set<RooRealVar *> &converted);
   void ApplySeedToChannel(const TString &channel);
   void ApplyChannelMuLocks();
   void ApplyChannelBkgLocks();
@@ -453,6 +512,26 @@ private:
 public:
   /// @brief Name of the RooFit range this class fits over.
   static constexpr const char *kFitRangeName = "fitrange";
+
+  /**
+   * @brief Upper limit of `LowExpTailAmplitude` and `HighExpTailAmplitude`.
+   *
+   * Those are full-range yield ratios `R` (see RooFitPeakModel), which exceed
+   * the in-window ratio they replaced by `f_G / f_T`, the inverse of the
+   * fraction of the tail that falls inside the window. The step and linear
+   * tail ratios keep their limit of 0.5. Measured values are around 0.5, and a
+   * long tail reaches about 1.6 (`k = 0.1`, `tau/sigma = 20`). A limit of 3
+   * keeps every old in-window ratio up to 0.5 reachable as long as a sixth of
+   * the tail lies inside the window.
+   *
+   * @note Not larger: Minuit maps a bounded parameter through a sine, which is
+   *       strongly curved near the bounds, so the wider the range, the more a
+   *       typical value of 0.5 sits in that curved region. In a linked
+   *       simultaneous fit that made HESSE return a covariance forced
+   *       positive-definite (`cov_qual` 2) more often: 7 of 40 testbeds with a
+   *       limit of 5, 3 of 40 with 3.
+   */
+  static constexpr Double_t kExpTailAmplitudeMax = 3.0;
 
   /**
    * @brief Construct in simultaneous mode.
@@ -806,6 +885,15 @@ public:
    * @brief Tie one parameter to another, fitting them as one degree of freedom.
    * @param target Parameter to tie, as `"<channel>:<parameter>"`.
    * @param source Parameter it follows, in the same form.
+   *
+   * @note Linking `LowExpTailAmplitude` (or `HighExpTailAmplitude`) together
+   *       with the matching `*TailRatio` gives the peaks the same physical
+   *       tail, the same height relative to their Gaussian, wherever they sit
+   *       in their windows: the amplitude is a full-range yield ratio (see
+   *       RooFitPeakModel). `StepAmplitude` and `LowLinTailAmplitude` are
+   *       in-window ratios, so linking them between peaks at different
+   *       positions, or in windows of different width, ties their in-window
+   *       yields rather than their shapes.
    */
   void LinkParameter(const TString &target, const TString &source);
   /**
@@ -830,6 +918,9 @@ public:
    *
    * Links sigma and every tail and step shape parameter at once, leaving
    * position and normalisation free.
+   *
+   * @note The same caveat as for LinkParameter() applies to the step and the
+   *       linear tail, whose amplitudes are in-window ratios.
    *
    * @param target_channel Channel holding the peak to tie.
    * @param target_peak    Index of that peak.

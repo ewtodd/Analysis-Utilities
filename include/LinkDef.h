@@ -8,5 +8,6 @@
 #pragma link C++ class RooLowExpTail + ;
 #pragma link C++ class RooLowLinTail + ;
 #pragma link C++ class RooHighExpTail + ;
+#pragma link C++ class RooExpTailWindowFactor + ;
 
 #endif

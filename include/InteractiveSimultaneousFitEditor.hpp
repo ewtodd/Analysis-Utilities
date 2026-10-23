@@ -174,6 +174,10 @@ private:
   void OnBoundsChanged(Int_t ch_idx, Int_t param_idx);
   void OnFixToggled(Int_t ch_idx, Int_t param_idx);
   void OnRangeChanged();
+  // Move every channel's exponential-tail windows to the shared fit range,
+  // which the editor counts every channel's yields in; see
+  // RooFitPeakModel::SetWindow().
+  void SetPeakWindows(Double_t low, Double_t high);
 
   void DoRefit();
   void DoAccept();

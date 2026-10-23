@@ -771,6 +771,7 @@ void InteractiveRooFitEditor::OnRangeChanged() {
 
   x_->setRange(range_low_, range_high_);
   x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
+  SetPeakWindows(range_low_, range_high_);
 
   if (events_) {
     RooFitUtils::RefillDisplayHistogram(
@@ -785,6 +786,11 @@ void InteractiveRooFitEditor::OnRangeChanged() {
   syncing_ = kFALSE;
 
   needs_redraw_ = kTRUE;
+}
+
+void InteractiveRooFitEditor::SetPeakWindows(Double_t low, Double_t high) {
+  for (Int_t pi = 0; pi < num_peaks_; pi++)
+    (*peaks_)[pi].SetWindow(low, high);
 }
 
 void InteractiveRooFitEditor::DoRefit() {
@@ -826,6 +832,7 @@ void InteractiveRooFitEditor::DoCancel() {
   x_->setRange(original_range_low_, original_range_high_);
   x_->setRange(RooFitUtils::kFitRangeName, original_range_low_,
                original_range_high_);
+  SetPeakWindows(original_range_low_, original_range_high_);
   accepted_ = kFALSE;
   done_ = kTRUE;
 }
@@ -847,6 +854,7 @@ void InteractiveRooFitEditor::DoReset() {
   range_high_ = original_range_high_;
   x_->setRange(range_low_, range_high_);
   x_->setRange(RooFitUtils::kFitRangeName, range_low_, range_high_);
+  SetPeakWindows(range_low_, range_high_);
   hist_draw_->GetXaxis()->SetRangeUser(0.9 * range_low_, 1.1 * range_high_);
   syncing_ = kTRUE;
   range_slider_->SetPosition(range_low_, range_high_);
@@ -982,11 +990,14 @@ void InteractiveRooFitEditor::GetDefaultBounds(Int_t param_idx, Double_t &lo,
     hi = peak_height * range_width * 10.0;
     break;
   case 3:
-  case 4:
   case 6:
-  case 8:
     lo = 0;
     hi = 0.5;
+    break;
+  case 4:
+  case 8:
+    lo = 0;
+    hi = RooFitUtils::kExpTailAmplitudeMax;
     break;
   case 5:
   case 9:

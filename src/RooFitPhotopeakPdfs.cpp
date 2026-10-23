@@ -29,6 +29,7 @@ ClassImp(RooStepShelf);
 ClassImp(RooLowExpTail);
 ClassImp(RooLowLinTail);
 ClassImp(RooHighExpTail);
+ClassImp(RooExpTailWindowFactor);
 
 namespace {
 
@@ -83,6 +84,32 @@ Double_t ExpTailAntideriv(Double_t y, Double_t sigma, Double_t tau) {
   Double_t gauss_corr = std::exp(sigma * sigma / (2.0 * tau * tau));
   return tau * (ExpErfc(y / tau, y / sqrt2_sigma) +
                 gauss_corr * std::erf((y - offset) / sqrt2_sigma));
+}
+
+// Fraction of the tail's integral over the whole line that lies in
+// [y_lo, y_hi]. ExpTailAntideriv tends to +/- tau * gauss_corr at +/- infinity,
+// so the whole-line integral is twice that.
+Double_t ExpTailWindowFraction(Double_t y_lo, Double_t y_hi, Double_t sigma,
+                               Double_t tau) {
+  Double_t full_line_integral =
+      2.0 * tau * std::exp(sigma * sigma / (2.0 * tau * tau));
+  return (ExpTailAntideriv(y_hi, sigma, tau) -
+          ExpTailAntideriv(y_lo, sigma, tau)) /
+         full_line_integral;
+}
+
+// Fraction of a Gaussian centred at y = 0 that lies in [y_lo, y_hi]. When both
+// edges are on one side of the centroid the difference is taken between erfc
+// values, which keeps it accurate far from the peak, where 1 - erf loses
+// every digit.
+Double_t GaussWindowFraction(Double_t y_lo, Double_t y_hi, Double_t sigma) {
+  Double_t a = y_lo / (std::sqrt(2.0) * sigma);
+  Double_t b = y_hi / (std::sqrt(2.0) * sigma);
+  if (a >= 0.0)
+    return 0.5 * (std::erfc(a) - std::erfc(b));
+  if (b <= 0.0)
+    return 0.5 * (std::erfc(-b) - std::erfc(-a));
+  return 0.5 * (std::erf(b) - std::erf(a));
 }
 
 Double_t LowLinDensity(Double_t y, Double_t sigma, Double_t slope) {
@@ -451,4 +478,52 @@ Double_t RooHighExpTail::analyticalIntegral(Int_t code,
   if (!std::isfinite(val) || val < 1e-300)
     return 1e-300;
   return val;
+}
+
+RooExpTailWindowFactor::RooExpTailWindowFactor(
+    const char *name, const char *title, RooAbsReal &mu, RooAbsReal &sigma,
+    RooAbsReal &tau_ratio, RooAbsReal &window_low, RooAbsReal &window_high,
+    Bool_t high_side)
+    : RooAbsReal(name, title), mu_("mu", "mu", this, mu),
+      sigma_("sigma", "sigma", this, sigma),
+      tau_ratio_("tau_ratio", "tau_ratio", this, tau_ratio),
+      window_low_("window_low", "window_low", this, window_low),
+      window_high_("window_high", "window_high", this, window_high),
+      high_side_(high_side) {}
+
+RooExpTailWindowFactor::RooExpTailWindowFactor(
+    const RooExpTailWindowFactor &other, const char *name)
+    : RooAbsReal(other, name), mu_("mu", this, other.mu_),
+      sigma_("sigma", this, other.sigma_),
+      tau_ratio_("tau_ratio", this, other.tau_ratio_),
+      window_low_("window_low", this, other.window_low_),
+      window_high_("window_high", this, other.window_high_),
+      high_side_(other.high_side_) {}
+
+Double_t RooExpTailWindowFactor::evaluate() const {
+  Double_t sigma = (Double_t)sigma_;
+  Double_t tau_ratio = (Double_t)tau_ratio_;
+  if (sigma <= 0 || tau_ratio <= 0)
+    return 0.0;
+  Double_t tau = tau_ratio * sigma;
+  Double_t mu = (Double_t)mu_;
+  Double_t x_lo = (Double_t)window_low_;
+  Double_t x_hi = (Double_t)window_high_;
+
+  // The same mirroring as RooHighExpTail::analyticalIntegral.
+  Double_t y_lo = x_lo - mu;
+  Double_t y_hi = x_hi - mu;
+  if (high_side_) {
+    y_lo = mu - x_hi;
+    y_hi = mu - x_lo;
+  }
+  Double_t tail_fraction = ExpTailWindowFraction(y_lo, y_hi, sigma, tau);
+  Double_t gauss_fraction = GaussWindowFraction(x_lo - mu, x_hi - mu, sigma);
+  if (!(gauss_fraction > kDensityFloor))
+    gauss_fraction = kDensityFloor;
+  Double_t factor = tail_fraction / gauss_fraction;
+  // A tail entirely outside the window can round to a tiny negative fraction.
+  if (!(factor > 0.0))
+    return 0.0;
+  return factor;
 }

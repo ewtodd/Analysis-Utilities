@@ -135,6 +135,9 @@ private:
   void OnBoundsChanged(Int_t param_idx);
   void OnFixToggled(Int_t param_idx);
   void OnRangeChanged();
+  // Move every peak's exponential-tail window to the fit range; see
+  // RooFitPeakModel::SetWindow().
+  void SetPeakWindows(Double_t low, Double_t high);
 
   void DoRefit();
   void DoAccept();
