@@ -415,12 +415,14 @@ void RooFitUtils::BuildExpTailYields(RooFitPeakModel &p, RooRealVar &sigma,
   p.high_exp_window_factor = new RooExpTailWindowFactor(
       ("high_exp_window_factor" + suffix).Data(), "", *p.mu, sigma,
       *p.tau_ratio_high_exp, *p.window_low, *p.window_high, kTRUE);
-  p.low_exp_yield = new RooFormulaVar(
-      ("low_exp_yield" + suffix).Data(), "@0*@1*@2",
-      RooArgList(*p.gaus_yield, *p.ratio_low_exp, *p.low_exp_window_factor));
-  p.high_exp_yield = new RooFormulaVar(
-      ("high_exp_yield" + suffix).Data(), "@0*@1*@2",
-      RooArgList(*p.gaus_yield, *p.ratio_high_exp, *p.high_exp_window_factor));
+  p.low_exp_yield =
+      new RooFormulaVar(("low_exp_yield" + suffix).Data(), "@0*@1*@2",
+                        RooArgList(p.GausYieldCoefficient(), *p.ratio_low_exp,
+                                   *p.low_exp_window_factor));
+  p.high_exp_yield =
+      new RooFormulaVar(("high_exp_yield" + suffix).Data(), "@0*@1*@2",
+                        RooArgList(p.GausYieldCoefficient(), *p.ratio_high_exp,
+                                   *p.high_exp_window_factor));
   RegisterOwned(p.low_exp_window_factor);
   RegisterOwned(p.high_exp_window_factor);
   RegisterOwned(p.low_exp_yield);
@@ -499,7 +501,7 @@ void RooFitUtils::BuildTotalModel() {
   RooArgList coef_list;
   for (size_t pi = 0; pi < peaks_.size(); pi++) {
     pdf_list.add(*peaks_[pi].gauss_pdf);
-    coef_list.add(*peaks_[pi].gaus_yield);
+    coef_list.add(peaks_[pi].GausYieldCoefficient());
     pdf_list.add(*peaks_[pi].step_pdf);
     coef_list.add(*peaks_[pi].step_yield);
     pdf_list.add(*peaks_[pi].low_exp_pdf);
@@ -557,6 +559,36 @@ void RooFitUtils::LinkSecondPeakToFirst(Bool_t link_sigma, Bool_t link_tails) {
   // The window factors take this peak's own mu with the width and tail ratios
   // it now uses, so a shared R still scales into the window at its centroid.
   BuildExpTailYields(p, *p.sigma, "2_linked");
+}
+
+// Fixes the first peak's Gaussian yield at ratio times the second's. The first
+// peak's struct points at GausAmplitude2 with gaus_yield_ratio set, and its
+// Gaussian coefficient and every component yield are rebuilt on
+// ratio * GausAmplitude2. GausAmplitude1 stays owned but is in no PDF of the
+// model; the loader skips it by name.
+void RooFitUtils::TieFirstGausYieldToSecond(Double_t ratio) {
+  RooFitPeakModel &p = peaks_[0];
+  RooFitPeakModel &source = peaks_[1];
+  linked_param_names_.insert(p.gaus_yield->GetName());
+  RooRealVar *ratio_var =
+      new RooRealVar("GausAmplitudeRatio", "GausAmplitudeRatio", ratio);
+  RegisterOwned(ratio_var);
+
+  p.gaus_yield = source.gaus_yield;
+  p.gaus_yield_ratio = ratio;
+  p.gaus_yield_scaled = new RooFormulaVar(
+      "gaus_yield1_tied", "@0*@1", RooArgList(*source.gaus_yield, *ratio_var));
+  RegisterOwned(p.gaus_yield_scaled);
+
+  p.step_yield =
+      new RooFormulaVar("step_yield1_tied", "@0*@1",
+                        RooArgList(*p.gaus_yield_scaled, *p.ratio_step));
+  p.low_lin_yield =
+      new RooFormulaVar("low_lin_yield1_tied", "@0*@1",
+                        RooArgList(*p.gaus_yield_scaled, *p.ratio_low_lin));
+  RegisterOwned(p.step_yield);
+  RegisterOwned(p.low_lin_yield);
+  BuildExpTailYields(p, *p.sigma, "1_tied");
 }
 
 void RooFitUtils::ConfigureComponentFlagsForPeak(Int_t peak_idx) {
@@ -910,8 +942,8 @@ PeakFitResult RooFitUtils::ExtractPeakResult(Int_t peak_idx) {
   result.mu_error = p.mu->getError();
   result.sigma = p.sigma->getVal();
   result.sigma_error = p.sigma->getError();
-  result.gaus_amplitude = p.gaus_yield->getVal();
-  result.gaus_amplitude_error = p.gaus_yield->getError();
+  result.gaus_amplitude = p.GausYield();
+  result.gaus_amplitude_error = p.GausYieldError();
 
   Double_t ga = result.gaus_amplitude;
   result.step_amplitude = p.ratio_step->getVal() * ga;
@@ -1110,7 +1142,7 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
               << std::endl;
   if (n_skipped_linked > 0)
     std::cout << "  (" << n_skipped_linked
-              << " saved params ignored: linked to the first peak's)"
+              << " saved params ignored: linked to the other peak's)"
               << std::endl;
   if (n_unknown > 0)
     std::cout << "  (" << n_unknown << " saved params not in model)"
@@ -1321,7 +1353,7 @@ void RooFitUtils::AppendPeakGraphs(std::vector<TGraph *> &components,
   RooArgSet nset(*x_);
 
   TGraph *peak_graph = new TGraph(npts);
-  Double_t gy = p.gaus_yield->getVal();
+  Double_t gy = p.GausYield();
   for (Int_t i = 0; i < npts; i++) {
     Double_t xv = fit_range_low_ + i * x_step;
     x_->setVal(xv);
@@ -1661,7 +1693,8 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
 FitResult RooFitUtils::FitDoublePeak(const TString input_name,
                                      const TString peak_name, Double_t mu1_init,
                                      Double_t mu2_init, Bool_t link_sigma,
-                                     Bool_t link_tails) {
+                                     Bool_t link_tails,
+                                     Double_t gaus_yield_ratio) {
   FitResult results;
   results.peaks.emplace_back();
   results.peaks.emplace_back();
@@ -1693,6 +1726,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   BuildPeak(1, mu2_init, sigma_init, peak_height, range_width);
   if (link_sigma || link_tails)
     LinkSecondPeakToFirst(link_sigma, link_tails);
+  if (gaus_yield_ratio > 0)
+    TieFirstGausYieldToSecond(gaus_yield_ratio);
 
   BuildBackground(bkg_estimate, peak_height, range_width);
   BuildTotalModel();
@@ -2859,8 +2894,8 @@ PeakFitResult RooFitUtils::ExtractPeakResultFor(const RooFitPeakModel &p) {
   r.mu_error = p.mu->getError();
   r.sigma = p.sigma->getVal();
   r.sigma_error = p.sigma->getError();
-  r.gaus_amplitude = p.gaus_yield->getVal();
-  r.gaus_amplitude_error = p.gaus_yield->getError();
+  r.gaus_amplitude = p.GausYield();
+  r.gaus_amplitude_error = p.GausYieldError();
   Double_t ga = r.gaus_amplitude;
   r.step_amplitude = p.ratio_step->getVal() * ga;
   r.step_amplitude_error = p.ratio_step->getError() * ga;

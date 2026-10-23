@@ -190,8 +190,8 @@ a model parameter and reads `R` as `r`.
 ### Linked doublets {#linked-doublets}
 
 `FitDoublePeak(input_name, peak_name, mu1_init, mu2_init, link_sigma,
-link_tails)` can make the two peaks share parameters, the single-channel
-counterpart of `LinkParameter()`:
+link_tails, gaus_yield_ratio)` can make the two peaks share parameters, the
+single-channel counterpart of `LinkParameter()`:
 
 - **`link_sigma`** — the second peak uses `Sigma1` as its Gaussian width.
 - **`link_tails`** — the second peak uses `LowExpTailAmplitude1`,
@@ -205,13 +205,27 @@ counterpart of `LinkParameter()`:
   lines seen in one detector that should carry the same tail. The step and the
   linear tail are not shared: their amplitudes are in-window ratios, so sharing
   them would tie yields rather than shapes.
+- **`gaus_yield_ratio`** — when positive, the first peak's Gaussian yield is
+  fixed at that multiple of the second's, `GausAmplitude1 = gaus_yield_ratio *
+  GausAmplitude2`, and only `GausAmplitude2` is fitted. The peaks are in
+  centroid order, so it is the lower line's yield over the higher line's: for
+  Ba-133, 79.61 / 80.998 keV = 2.65 / 32.9 = 0.0805. It is a ratio of Gaussian
+  yields, equal to the intensity ratio times the efficiency ratio when both
+  lines carry the same tail (`link_tails`) and the same window fraction. With a
+  known branching ratio it removes the remaining trade-off between the weak
+  line's amplitude and the shared tail. Start it from a state with a realistic
+  tail, such as a saved `link_tails` fit: from a tail much too short, the weak
+  line can settle in the tail region instead (a local minimum with reduced
+  chi-squared around 10), because its yield can no longer adjust.
 
-Both default to off, and with both off the fit is unchanged. A linked
+All three default to off, and with all three off the fit is unchanged. A linked
 parameter is reported with the value and error of the parameter it follows:
 with `link_sigma` both peaks' `sigma` and `sigma_error` are `Sigma1`'s, and with
 `link_tails` both report the shared tail ratio, with
 `low_exp_tail_amplitude = R * gaus_amplitude` for each peak's own
-`gaus_amplitude`.
+`gaus_amplitude`. With `gaus_yield_ratio` the first peak's `gaus_amplitude` and
+its error are the ratio times the second's. In the editor, the first peak's
+yield row then edits `GausAmplitude2` and is labelled with the ratio.
 
 In the automatic component search the shared low-side tail is tested in the
 first peak's low-side group and the shared high-side tail as the second peak's
@@ -219,8 +233,9 @@ high tail; the inter-peak group then tests only the second peak's step and
 linear tail. In the interactive editor both peaks' tabs show the shared
 parameter, and editing either row changes it.
 
-A saved `.roofits` state writes a linked parameter once, under the first peak's
-name. On load, lines naming the second peak's linked parameters are ignored.
+A saved `.roofits` state writes a linked parameter once, under the name of the
+peak it belongs to: the first peak's for a width or tail, `GausAmplitude2` for
+a tied yield. On load, lines naming the replaced parameters are ignored.
 States written before this behaviour carry a `Sigma2` line for a `link_sigma`
 fit holding its unused starting value, marked as fixed; it is ignored too, and
 the loader never takes a parameter's fixed flag from a file in any case. A state

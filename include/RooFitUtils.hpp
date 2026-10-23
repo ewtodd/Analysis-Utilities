@@ -197,6 +197,12 @@ RooAbsPdf *MakeLinearBackground(const TString &name, RooRealVar &x,
  * that walks the parameters of several peaks has to de-duplicate by pointer
  * before counting or writing them.
  *
+ * FitDoublePeak()'s `gaus_yield_ratio` makes the first peak's `gaus_yield` the
+ * second peak's variable and sets #gaus_yield_ratio, so the first peak's
+ * Gaussian yield is that multiple of the second's. Read a peak's yield with
+ * GausYield() and build on GausYieldCoefficient(), not on `gaus_yield`
+ * directly.
+ *
  * @note Non-owning pointers. The RooFitUtils instance that built them owns
  *       them and destroys them with itself.
  */
@@ -232,6 +238,27 @@ struct RooFitPeakModel {
   RooAbsReal *low_exp_window_factor = nullptr;
   /// RooExpTailWindowFactor scaling `ratio_high_exp` into the window.
   RooAbsReal *high_exp_window_factor = nullptr;
+
+  /// Multiplier on `gaus_yield` that gives this peak's Gaussian yield: 1,
+  /// except for the first peak of a FitDoublePeak() with `gaus_yield_ratio`.
+  Double_t gaus_yield_ratio = 1.0;
+  /// `gaus_yield_ratio * gaus_yield` as a RooFit object when the multiplier
+  /// is set, null otherwise; see GausYieldCoefficient().
+  RooAbsReal *gaus_yield_scaled = nullptr;
+
+  /// @brief The Gaussian's coefficient in the `RooAddPdf`, on which every
+  /// component yield of the peak is built: `gaus_yield`, or
+  /// #gaus_yield_scaled when the multiplier is set.
+  RooAbsReal &GausYieldCoefficient() const {
+    return gaus_yield_scaled ? *gaus_yield_scaled : *gaus_yield;
+  }
+  /// @brief This peak's Gaussian yield, in events inside the window.
+  Double_t GausYield() const { return gaus_yield->getVal() * gaus_yield_ratio; }
+  /// @brief Uncertainty of GausYield(): `gaus_yield`'s error times the
+  /// multiplier, which is fixed.
+  Double_t GausYieldError() const {
+    return gaus_yield->getError() * gaus_yield_ratio;
+  }
 
   /**
    * @brief Move the window the exponential-tail yields are computed for.
@@ -414,8 +441,9 @@ private:
   std::vector<RooFitPeakModel> peaks_;
   RooFitBackgroundModel bkg_;
   std::vector<RooAbsArg *> owned_args_;
-  // Names of the second peak's own parameters that a linked FitDoublePeak
-  // replaced with the first peak's; see LinkSecondPeakToFirst().
+  // Names of a peak's own parameters that a linked FitDoublePeak replaced with
+  // the other peak's; see LinkSecondPeakToFirst() and
+  // TieFirstGausYieldToSecond().
   std::set<std::string> linked_param_names_;
 
   std::vector<RooFitChannelConfig> sim_channels_;
@@ -483,6 +511,7 @@ private:
                        Double_t range_width);
   void BuildTotalModel();
   void LinkSecondPeakToFirst(Bool_t link_sigma, Bool_t link_tails);
+  void TieFirstGausYieldToSecond(Double_t ratio);
   void ConfigureComponentFlagsForPeak(Int_t peak_idx);
 
   void FixComponent(Int_t peak_idx, const TString &component);
@@ -862,12 +891,31 @@ public:
    *                   amplitudes are in-window ratios, so sharing them would
    *                   tie yields rather than shapes. Default `kFALSE`, which
    *                   leaves the fit exactly as it was before this option.
+   * @param gaus_yield_ratio When positive, fixes the first peak's Gaussian
+   *                   yield at this multiple of the second's:
+   *                   `GausAmplitude1 = gaus_yield_ratio * GausAmplitude2`.
+   *                   The peaks are in centroid order (the two starting
+   *                   centroids are swapped first if needed), so this is the
+   *                   lower line's yield over the higher line's, for example
+   *                   Ba-133 79.61 / 80.998 keV = 2.65 / 32.9 = 0.0805. Only
+   *                   `GausAmplitude2` is fitted. The ratio is of Gaussian
+   *                   yields, which equals the ratio of line intensities times
+   *                   efficiencies when both peaks carry the same tail
+   *                   (@p link_tails) and the same window fraction. Zero or
+   *                   negative (the default) leaves both yields free. Start
+   *                   such a fit from a state with a realistic tail, such as
+   *                   a converged @p link_tails fit: from a tail much too
+   *                   short, the first peak, whose yield can no longer adjust,
+   *                   can settle in the tail region instead, a local minimum
+   *                   with a reduced chi-squared around 10.
    * @return The fitted result, with peaks sorted by centroid. A linked
    *         parameter is reported with the value and error of the parameter
    *         it is linked to: with @p link_sigma, `sigma` and `sigma_error` of
    *         both peaks are `Sigma1`'s; with @p link_tails, both peaks report
    *         the shared tail ratios, and each tail amplitude is the shared `R`
-   *         times that peak's own `gaus_amplitude`.
+   *         times that peak's own `gaus_amplitude`. With @p gaus_yield_ratio,
+   *         the first peak's `gaus_amplitude` and its error are the ratio
+   *         times the second's.
    *
    * @note In the automatic component search, the shared low-side tail is
    *       tested in the first peak's low-side group and the shared high-side
@@ -877,12 +925,14 @@ public:
    *       first peak's name. On load, lines naming the second peak's linked
    *       parameters are ignored, among them the `Sigma2` line that files
    *       written before this behaviour carry, which held its unused starting
-   *       value marked as fixed.
+   *       value marked as fixed. With @p gaus_yield_ratio, the state has no
+   *       `GausAmplitude1` line, and one in an older file is ignored.
    */
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,
                           Double_t mu1_init, Double_t mu2_init,
                           Bool_t link_sigma = kFALSE,
-                          Bool_t link_tails = kFALSE);
+                          Bool_t link_tails = kFALSE,
+                          Double_t gaus_yield_ratio = 0.0);
   /**
    * @brief Fit two peaks with the first constrained by an earlier fit.
    * @param input_name       Input identifier.

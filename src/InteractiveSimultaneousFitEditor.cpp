@@ -552,7 +552,7 @@ void InteractiveSimultaneousFitEditor::UpdateChannelGraphs(
 
   for (Int_t pi = 0; pi < cv.num_peaks; pi++) {
     RooFitPeakModel &p = (*cv.peaks)[pi];
-    Double_t gy = p.gaus_yield->getVal();
+    Double_t gy = p.GausYield();
     Double_t sy = p.step_yield->getVal();
     Double_t lexp_y = p.low_exp_yield->getVal();
     Double_t llin_y = p.low_lin_yield->getVal();

@@ -254,7 +254,13 @@ void InteractiveRooFitEditor::BuildPeakTab(TGCompositeFrame *parent,
   parent->AddFrame(gaus_grp, new TGLayoutHints(kLHintsExpandX, 3, 3, 3, 1));
   AddParamRow(gaus_grp, offset + 0, "Mu");
   AddParamRow(gaus_grp, offset + 1, "Sigma");
-  AddParamRow(gaus_grp, offset + 2, "Yield");
+  // A yield tied to the other peak's: the row edits that peak's variable,
+  // which this peak's yield is a fixed multiple of.
+  const RooFitPeakModel &p = (*peaks_)[peak_idx];
+  TString yield_label = "Yield";
+  if (p.gaus_yield_ratio != 1.0)
+    yield_label = TString::Format("Yield x %.4g", p.gaus_yield_ratio);
+  AddParamRow(gaus_grp, offset + 2, yield_label.Data());
 
   TGGroupFrame *step_grp = new TGGroupFrame(parent, "Step", kVerticalFrame);
   parent->AddFrame(step_grp, new TGLayoutHints(kLHintsExpandX, 3, 3, 1, 1));
@@ -505,7 +511,7 @@ void InteractiveRooFitEditor::UpdateAllGraphs() {
 
   for (Int_t pi = 0; pi < num_peaks_; pi++) {
     RooFitPeakModel &p = (*peaks_)[pi];
-    Double_t gy = p.gaus_yield->getVal();
+    Double_t gy = p.GausYield();
     Double_t sy = p.step_yield->getVal();
     Double_t lexp_y = p.low_exp_yield->getVal();
     Double_t llin_y = p.low_lin_yield->getVal();
