@@ -361,6 +361,14 @@ struct RooFitSeparationConstraint {
  *
  * @note `RooRealVar::enableSilentClipping()` is on, so observable values
  *       outside the current range are clipped rather than throwing.
+ * @note A single-channel `Fit*` result carries the Minuit2 status, covariance
+ *       quality, EDM and per-parameter diagnostics of the fit it comes from
+ *       (FitResult::has_fit_diagnostics). A minimisation without a valid
+ *       minimum (kFirstInvalidMinimumStatus) is retried once after a Strategy
+ *       1 pass; check FitResult::fit_status, which `valid` does not reflect for
+ *       a refit from a saved state. A retried fit (FitResult::fit_retried) can
+ *       converge to a local minimum other than the intended one, so check its
+ *       reduced chi-squared too.
  */
 class RooFitUtils {
 private:
@@ -487,7 +495,13 @@ private:
   std::vector<RooRealVar *> CollectAllParams();
   static std::vector<RooRealVar *>
   DistinctParams(const std::vector<RooRealVar *> &params);
+  RooFitResult *Minimize(Int_t strategy, Int_t print_level);
+  // Strategy 2, retried after a Strategy 1 pass when that leaves no valid
+  // minimum (kFirstInvalidMinimumStatus).
   RooFitResult *RunFit(Bool_t quiet);
+  // Whether the last RunFit needed its retry; StoreFitDiagnostics records it.
+  Bool_t last_fit_retried_;
+  void StoreFitDiagnostics(const RooFitResult *fit, FitResult &results);
   Double_t ComputeReducedChi2(RooFitResult *fit_result, Int_t &ndof);
 
   void SnapshotParams(std::vector<Double_t> &vals, std::vector<Double_t> &errs,
@@ -552,6 +566,18 @@ public:
    *       limit of 5, 3 of 40 with 3.
    */
   static constexpr Double_t kExpTailAmplitudeMax = 3.0;
+
+  /**
+   * @brief Lowest Minuit2 status that means the fit found no valid minimum.
+   *
+   * Minuit2 reports `3` when the EDM is above its maximum (the fit did not
+   * converge, which includes stopping at its starting point), `4` when it
+   * reached the call limit and `5` for any other failure. `1` (covariance
+   * forced positive definite) and `2` (HESSE failed) still come with a valid
+   * minimum. Compare FitResult::fit_status against this to tell a result that
+   * may be the starting values from a converged one.
+   */
+  static constexpr Int_t kFirstInvalidMinimumStatus = 3;
 
   /**
    * @brief Construct in simultaneous mode.

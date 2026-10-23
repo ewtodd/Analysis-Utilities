@@ -207,7 +207,8 @@ struct PeakFitResult {
  * somewhere it does not want to go, so the near-limit flags are worth checking
  * before trusting a converged fit.
  *
- * @note For now, only populated by RooFitUtils simultaneous fits.
+ * @note Populated by RooFitUtils fits, simultaneous and single-channel; see
+ *       FitResult::parameter_diagnostics.
  */
 struct FitParameterDiagnostic {
   std::string name;            ///< Parameter name as RooFit knows it.
@@ -239,8 +240,8 @@ struct FitParameterCorrelation {
  * @brief Result of one fit: peaks, background, quality, and diagnostics.
  *
  * Returned by both backends. The diagnostic fields below the background are
- * only populated by RooFitUtils simultaneous fits; everything else leaves them
- * at their sentinel defaults, flagged by #has_fit_diagnostics.
+ * populated by RooFitUtils; FittingUtils leaves them at their sentinel
+ * defaults, flagged by #has_fit_diagnostics.
  */
 struct FitResult {
   std::vector<PeakFitResult> peaks; ///< One entry per peak; 1 to 3 supported.
@@ -252,11 +253,22 @@ struct FitResult {
   Bool_t valid = kFALSE; ///< Whether the fit succeeded. Check this first.
 
   /// @name Minuit and RooFit diagnostics
-  /// Populated only by RooFitUtils simultaneous fits, so that downstream code
-  /// can tell a true minimum from a local or failed one. Every other fit leaves
-  /// these at their sentinel defaults.
+  /// Populated by RooFitUtils, so that downstream code can tell a true minimum
+  /// from a local or failed one. A simultaneous fit fills all of them. A
+  /// single-channel fit fills all but #n_invalid_nll and
+  /// #parameter_correlations, from the minimisation the result comes from: the
+  /// refit of a saved state, or the final fit of the automatic search (the
+  /// initial fit when that fails and ends the search). A result accepted in
+  /// the interactive editor, and every FittingUtils result, leaves them at
+  /// their sentinel defaults.
   /// @{
-  Int_t fit_status = -999; ///< Minuit migrad status; `0` means success.
+  /**
+   * Minuit2 status; `0` means success. From
+   * RooFitUtils::kFirstInvalidMinimumStatus (3) up the fit found no valid
+   * minimum, and its parameters may be the starting values; `1` and `2` are
+   * a valid minimum with a forced or failed covariance.
+   */
+  Int_t fit_status = -999;
   /// Covariance quality: `0` Exact, `1` NotPositiveDefinite, `2` Approximate,
   /// `3` External. Anything but `0` means the errors are unreliable.
   Int_t cov_qual = -999;
@@ -272,6 +284,15 @@ struct FitResult {
   /// Whether a `RooFitResult` was available, and hence whether the fields in
   /// this group mean anything.
   Bool_t has_fit_diagnostics = kFALSE;
+  /**
+   * Whether the minimisation behind a single-channel RooFitUtils result needed
+   * the retry: its Strategy 2 fit found no valid minimum, so a Strategy 1 pass
+   * ran first and the Strategy 2 fit again. A retried fit usually recovers
+   * from a stalled start, but the Strategy 1 pass can also reach a different
+   * local minimum, which #fit_status does not show; check #reduced_chi2.
+   * Always `kFALSE` for simultaneous and FittingUtils fits.
+   */
+  Bool_t fit_retried = kFALSE;
   Int_t n_invalid_nll = -1; ///< Invalid NLL evaluations; `-1` if unknown.
   /// One entry per fitted `RooRealVar`, peak and background alike.
   std::vector<FitParameterDiagnostic> parameter_diagnostics;

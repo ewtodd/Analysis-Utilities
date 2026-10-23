@@ -65,11 +65,13 @@ All fits produce structured results (`FitResult` containing `PeakFitResult`
 entries) with parameter values, errors, and reduced chi-squared. Failed fits
 return -1 for all parameters.
 
-`FitSimultaneous` additionally populates Minuit2 / `RooFitResult` diagnostics on
-each returned `FitResult` so downstream code can distinguish a true minimum from
-a local or failed solution:
+RooFitUtils additionally populates Minuit2 / `RooFitResult` diagnostics on each
+returned `FitResult` so downstream code can distinguish a true minimum from a
+local or failed solution:
 
-- `fit_status` (Minuit migrad status, 0 = success) and `cov_qual` (0 = Exact,
+- `fit_status` (Minuit2 status, 0 = success; from
+  `RooFitUtils::kFirstInvalidMinimumStatus`, 3, up there is no valid minimum and
+  the parameters may still be the starting values) and `cov_qual` (0 = Exact,
   1 = NotPositiveDefinite, 2 = Approximate, 3 = External)
 - `edm` (estimated distance to minimum) and `min_nll` (minimized negative
   log-likelihood), with `has_fit_diagnostics` flagging whether they are
@@ -82,8 +84,24 @@ a local or failed solution:
   `RooRealVar` carrying the value, error, limits, and near-limit flags (set when
   a parameter sits within a small margin of its bound)
 
-Single-channel fits (both backends) leave these fields at their sentinel
-defaults. Reduced chi-squared is displayed on fit plots by default. Individual
+`FitSimultaneous` fills all of these, plus `parameter_correlations`. A
+single-channel RooFitUtils fit fills them from the minimisation its result comes
+from: the refit of a saved state, or the final fit of the automatic search (the
+initial fit, when that fails and ends the search). A result accepted in the
+interactive editor has none, and FittingUtils leaves every field at its sentinel
+default.
+
+A single-channel minimisation that ends without a valid minimum is retried once:
+a Strategy 1 pass, then the Strategy 2 fit again. Strategy 2 seeds MIGRAD with
+the full Hessian at the starting point, and far from the minimum that matrix can
+be indefinite; the fit then stops where it started, which a saved-state refit
+used to return as its result without comment. A fit still without a valid
+minimum after the retry prints a warning, and its `fit_status` says so. A
+retried fit sets `fit_retried`: the Strategy 1 pass usually recovers the stall,
+but from a poor start it can also reach a different local minimum with status
+0, which only the reduced chi-squared shows.
+
+Reduced chi-squared is displayed on fit plots by default. Individual
 peak components are plotted summed with the background for readability, and
 multi-peak fits use distinct line styles per peak.
 

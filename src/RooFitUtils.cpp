@@ -65,6 +65,7 @@ void RooFitUtils::InitState() {
   use_manual_init_ = kFALSE;
   interactive_ = kFALSE;
   fit_debug_ = kFALSE;
+  last_fit_retried_ = kFALSE;
 
   x_ = nullptr;
   window_low_ = nullptr;
@@ -693,20 +694,61 @@ std::vector<RooRealVar *> RooFitUtils::CollectFloatingParams() {
   return out;
 }
 
-RooFitResult *RooFitUtils::RunFit(Bool_t quiet) {
-  Int_t print_level = quiet ? -1 : 0;
+RooFitResult *RooFitUtils::Minimize(Int_t strategy, Int_t print_level) {
   // Offset("initial") subtracts the NLL at the starting point from every
   // evaluation. An extended NLL over millions of events is of order 1e7, and
   // Minuit2's EDM floor scales with the function value, so without it fits
   // stop at EDM ~1 ("machine accuracy limit") with status 3. The constant
   // moves neither the minimum nor the errors.
-  RooFitResult *result = total_pdf_->fitTo(
+  return total_pdf_->fitTo(
       *unbinned_data_, RooFit::Save(kTRUE), RooFit::Extended(kTRUE),
       RooFit::Range(kFitRangeName), RooFit::SumW2Error(kFALSE),
       RooFit::PrintLevel(print_level), RooFit::PrintEvalErrors(-1),
-      RooFit::Strategy(2), RooFit::Offset("initial"),
+      RooFit::Strategy(strategy), RooFit::Offset("initial"),
       RooFit::Minimizer("Minuit2", "migrad"), BestAvailableBackend());
-  return result;
+}
+
+RooFitResult *RooFitUtils::RunFit(Bool_t quiet) {
+  Int_t print_level = quiet ? -1 : 0;
+  last_fit_retried_ = kFALSE;
+  RooFitResult *result = Minimize(2, print_level);
+  if (result && result->status() < kFirstInvalidMinimumStatus)
+    return result;
+  // Strategy 2 seeds MIGRAD with the full Hessian at the starting point. Far
+  // from the minimum that matrix can be indefinite, and the diagonal shift
+  // Minuit2 adds then gives a step no line search recovers from: the fit ends
+  // where it started, with status 3. A Strategy 1 pass seeds from the
+  // diagonal of the numerical gradient instead and gets close enough for the
+  // Strategy 2 fit to finish.
+  std::cout << "WARNING: fit ended with status "
+            << (result ? result->status() : -1)
+            << " (no valid minimum); retrying after a Strategy 1 pass"
+            << std::endl;
+  delete result;
+  last_fit_retried_ = kTRUE;
+  RooFitResult *first_pass = Minimize(1, print_level);
+  delete first_pass;
+  return Minimize(2, print_level);
+}
+
+void RooFitUtils::StoreFitDiagnostics(const RooFitResult *fit,
+                                      FitResult &results) {
+  if (!fit)
+    return;
+  results.has_fit_diagnostics = kTRUE;
+  results.fit_status = fit->status();
+  results.cov_qual = fit->covQual();
+  results.edm = fit->edm();
+  results.min_nll = fit->minNll();
+  results.fit_retried = last_fit_retried_;
+  results.parameter_diagnostics = ExtractParameterDiagnosticsSingle();
+  if (fit->status() >= kFirstInvalidMinimumStatus)
+    std::cout << "WARNING: the fit behind this result has no valid minimum "
+                 "(status "
+              << fit->status() << ", EDM " << fit->edm()
+              << "); its parameters may still be the starting values. "
+                 "FitResult::fit_status carries it."
+              << std::endl;
 }
 
 Double_t RooFitUtils::ComputeReducedChi2(RooFitResult *fit_result,
@@ -1528,6 +1570,7 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
   if (interactive_) {
     if (LoadInteractiveParams(input_name, peak_name)) {
       RooFitResult *refit = RunFit(kTRUE);
+      StoreFitDiagnostics(refit, results);
       final_chi2 = ComputeReducedChi2(refit, final_ndof);
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
                 << std::endl;
@@ -1567,6 +1610,7 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
     RooFitResult *initial_fit = RunFit(kTRUE);
     if (!initial_fit || initial_fit->status() != 0) {
       std::cout << "ERROR: Initial fit failed" << std::endl;
+      StoreFitDiagnostics(initial_fit, results);
       delete initial_fit;
       return results;
     }
@@ -1587,6 +1631,7 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
     RooFitResult *final_fit = RunFit(kFALSE);
+    StoreFitDiagnostics(final_fit, results);
     if (final_fit && final_fit->status() == 0) {
       final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
       fit_valid = kTRUE;
@@ -1669,6 +1714,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   if (interactive_) {
     if (LoadInteractiveParams(input_name, peak_name)) {
       RooFitResult *refit = RunFit(kTRUE);
+      StoreFitDiagnostics(refit, results);
       final_chi2 = ComputeReducedChi2(refit, final_ndof);
       std::cout << "Refit from saved params chi2/ndf = " << final_chi2
                 << std::endl;
@@ -1704,6 +1750,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     RooFitResult *initial_fit = RunFit(kTRUE);
     if (!initial_fit || initial_fit->status() != 0) {
       std::cout << "ERROR: Initial double peak fit failed" << std::endl;
+      StoreFitDiagnostics(initial_fit, results);
       delete initial_fit;
       return results;
     }
@@ -1799,6 +1846,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
     RooFitResult *final_fit = RunFit(kFALSE);
+    StoreFitDiagnostics(final_fit, results);
     if (final_fit && final_fit->status() == 0) {
       final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
       fit_valid = kTRUE;
@@ -1900,6 +1948,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   if (interactive_) {
     if (LoadInteractiveParams(input_name, peak_name)) {
       RooFitResult *refit = RunFit(kTRUE);
+      StoreFitDiagnostics(refit, results);
       final_chi2 = ComputeReducedChi2(refit, final_ndof);
       fit_valid = kTRUE;
       delete refit;
@@ -1929,6 +1978,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     if (!initial_fit || initial_fit->status() != 0) {
       std::cout << "ERROR: Initial constrained double peak fit failed"
                 << std::endl;
+      StoreFitDiagnostics(initial_fit, results);
       delete initial_fit;
       return results;
     }
@@ -1949,6 +1999,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
     RooFitResult *final_fit = RunFit(kFALSE);
+    StoreFitDiagnostics(final_fit, results);
     if (final_fit && final_fit->status() == 0) {
       final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
       fit_valid = kTRUE;
@@ -2049,6 +2100,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
   if (interactive_) {
     if (LoadInteractiveParams(input_name, peak_name)) {
       RooFitResult *refit = RunFit(kTRUE);
+      StoreFitDiagnostics(refit, results);
       final_chi2 = ComputeReducedChi2(refit, final_ndof);
       fit_valid = kTRUE;
       delete refit;
@@ -2077,6 +2129,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     RooFitResult *initial_fit = RunFit(kTRUE);
     if (!initial_fit || initial_fit->status() != 0) {
       std::cout << "ERROR: Initial triple peak fit failed" << std::endl;
+      StoreFitDiagnostics(initial_fit, results);
       delete initial_fit;
       return results;
     }
@@ -2097,6 +2150,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
     RooFitResult *final_fit = RunFit(kFALSE);
+    StoreFitDiagnostics(final_fit, results);
     if (final_fit && final_fit->status() == 0) {
       final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
       fit_valid = kTRUE;
@@ -2924,35 +2978,11 @@ RooFitUtils::ExtractParameterDiagnostics(const TString &channel) {
 std::vector<FitParameterDiagnostic>
 RooFitUtils::ExtractParameterDiagnosticsSingle() {
   std::vector<FitParameterDiagnostic> diags;
-
-  for (size_t pi = 0; pi < peaks_.size(); pi++) {
-    TString suffix = TString::Format("%d", pi + 1);
-    RooFitExtractParamDiagnostic(peaks_[pi].mu, ("Mu" + suffix).Data(), diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].sigma, ("Sigma" + suffix).Data(),
-                                 diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].gaus_yield,
-                                 ("GausAmplitude" + suffix).Data(), diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].ratio_step,
-                                 ("StepAmplitude" + suffix).Data(), diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].ratio_low_exp,
-                                 ("LowExpTailAmplitude" + suffix).Data(),
-                                 diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].tau_ratio_low_exp,
-                                 ("LowExpTailRatio" + suffix).Data(), diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].ratio_low_lin,
-                                 ("LowLinTailAmplitude" + suffix).Data(),
-                                 diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].slope_low_lin,
-                                 ("LowLinTailSlope" + suffix).Data(), diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].ratio_high_exp,
-                                 ("HighExpTailAmplitude" + suffix).Data(),
-                                 diags);
-    RooFitExtractParamDiagnostic(peaks_[pi].tau_ratio_high_exp,
-                                 ("HighExpTailRatio" + suffix).Data(), diags);
-  }
-  RooFitExtractParamDiagnostic(bkg_.bkg_yield, "BkgConstant", diags);
-  RooFitExtractParamDiagnostic(bkg_.bkg_slope, "BkgSlope", diags);
-
+  // Each variable once, under its own name: a linked one appears in every
+  // peak that uses it, and SortPeaksByMu can leave peaks_[0] holding Mu2.
+  std::vector<RooRealVar *> params = DistinctParams(CollectAllParams());
+  for (size_t i = 0; i < params.size(); i++)
+    RooFitExtractParamDiagnostic(params[i], params[i]->GetName(), diags);
   return diags;
 }
 
