@@ -515,6 +515,49 @@ void RooFitUtils::BuildTotalModel() {
   RegisterOwned(total_pdf_);
 }
 
+// Links the second peak to the first the way a simultaneous fit resolves a
+// LinkParameter target: its struct points at the first peak's variables, and
+// its PDFs and exponential-tail yields are rebuilt on them. Its own variables
+// of those names stay owned but are in no PDF of the model, so they are not fit
+// parameters; the loader skips them by name.
+void RooFitUtils::LinkSecondPeakToFirst(Bool_t link_sigma, Bool_t link_tails) {
+  RooFitPeakModel &source = peaks_[0];
+  RooFitPeakModel &p = peaks_[1];
+  if (link_sigma) {
+    linked_param_names_.insert(p.sigma->GetName());
+    p.sigma = source.sigma;
+  }
+  if (link_tails) {
+    linked_param_names_.insert(p.ratio_low_exp->GetName());
+    linked_param_names_.insert(p.tau_ratio_low_exp->GetName());
+    linked_param_names_.insert(p.ratio_high_exp->GetName());
+    linked_param_names_.insert(p.tau_ratio_high_exp->GetName());
+    p.ratio_low_exp = source.ratio_low_exp;
+    p.tau_ratio_low_exp = source.tau_ratio_low_exp;
+    p.ratio_high_exp = source.ratio_high_exp;
+    p.tau_ratio_high_exp = source.tau_ratio_high_exp;
+  }
+
+  p.gauss_pdf =
+      RooFitFunctions::MakeGaussian("gauss_pdf2_linked", *x_, *p.mu, *p.sigma);
+  p.step_pdf =
+      RooFitFunctions::MakeStepShelf("step_pdf2_linked", *x_, *p.mu, *p.sigma);
+  p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
+      "low_exp_pdf2_linked", *x_, *p.mu, *p.sigma, *p.tau_ratio_low_exp);
+  p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
+      "low_lin_pdf2_linked", *x_, *p.mu, *p.sigma, *p.slope_low_lin);
+  p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
+      "high_exp_pdf2_linked", *x_, *p.mu, *p.sigma, *p.tau_ratio_high_exp);
+  RegisterOwned(p.gauss_pdf);
+  RegisterOwned(p.step_pdf);
+  RegisterOwned(p.low_exp_pdf);
+  RegisterOwned(p.low_lin_pdf);
+  RegisterOwned(p.high_exp_pdf);
+  // The window factors take this peak's own mu with the width and tail ratios
+  // it now uses, so a shared R still scales into the window at its centroid.
+  BuildExpTailYields(p, *p.sigma, "2_linked");
+}
+
 void RooFitUtils::ConfigureComponentFlagsForPeak(Int_t peak_idx) {
   RooFitPeakModel &p = peaks_[peak_idx];
 
@@ -628,8 +671,19 @@ std::vector<RooRealVar *> RooFitUtils::CollectAllParams() {
   return out;
 }
 
+std::vector<RooRealVar *>
+RooFitUtils::DistinctParams(const std::vector<RooRealVar *> &params) {
+  std::set<RooRealVar *> seen;
+  std::vector<RooRealVar *> out;
+  for (size_t i = 0; i < params.size(); i++) {
+    if (seen.insert(params[i]).second)
+      out.push_back(params[i]);
+  }
+  return out;
+}
+
 std::vector<RooRealVar *> RooFitUtils::CollectFloatingParams() {
-  std::vector<RooRealVar *> all = CollectAllParams();
+  std::vector<RooRealVar *> all = DistinctParams(CollectAllParams());
   std::vector<RooRealVar *> out;
   for (size_t i = 0; i < all.size(); i++) {
     if (!all[i]->isConstant()) {
@@ -917,7 +971,8 @@ void RooFitUtils::SaveInteractiveParams(const TString &input_name,
   out << std::endl;
   out << kExpTailConventionName << " " << kExpTailConventionFullRange << " 0 1";
   out << std::endl;
-  std::vector<RooRealVar *> all = CollectAllParams();
+  // A linked parameter is written once, under the first peak's name.
+  std::vector<RooRealVar *> all = DistinctParams(CollectAllParams());
   for (size_t i = 0; i < all.size(); i++) {
     out << all[i]->GetName() << " " << all[i]->getVal() << " "
         << all[i]->getError() << " " << (all[i]->isConstant() ? 1 : 0);
@@ -957,12 +1012,19 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
 
   Double_t value, error;
   Int_t fixed;
-  Int_t n_set = 0, n_skipped_fixed = 0, n_unknown = 0;
+  Int_t n_set = 0, n_skipped_fixed = 0, n_skipped_linked = 0, n_unknown = 0;
   Bool_t full_range_exp_tails = kFALSE;
   std::set<RooRealVar *> loaded_from_file;
   while (in >> token >> value >> error >> fixed) {
     if (token == kExpTailConventionName) {
       full_range_exp_tails = ((Int_t)value == kExpTailConventionFullRange);
+      continue;
+    }
+    // The second peak's own parameter, which a linked FitDoublePeak replaces
+    // with the first peak's. Older files wrote Sigma2 here with its unused
+    // starting value; the first peak's line carries the fitted one.
+    if (linked_param_names_.count(token) > 0) {
+      ++n_skipped_linked;
       continue;
     }
     std::map<std::string, RooRealVar *>::iterator it = by_name.find(token);
@@ -1003,6 +1065,10 @@ Bool_t RooFitUtils::LoadInteractiveParams(const TString &input_name,
   if (n_skipped_fixed > 0)
     std::cout << "  (" << n_skipped_fixed
               << " saved params ignored: fixed by model configuration)"
+              << std::endl;
+  if (n_skipped_linked > 0)
+    std::cout << "  (" << n_skipped_linked
+              << " saved params ignored: linked to the first peak's)"
               << std::endl;
   if (n_unknown > 0)
     std::cout << "  (" << n_unknown << " saved params not in model)"
@@ -1514,7 +1580,8 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
 
 FitResult RooFitUtils::FitDoublePeak(const TString input_name,
                                      const TString peak_name, Double_t mu1_init,
-                                     Double_t mu2_init, Bool_t link_sigma) {
+                                     Double_t mu2_init, Bool_t link_sigma,
+                                     Bool_t link_tails) {
   FitResult results;
   results.peaks.emplace_back();
   results.peaks.emplace_back();
@@ -1544,34 +1611,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
 
   BuildPeak(0, mu1_init, sigma_init, peak_height, range_width);
   BuildPeak(1, mu2_init, sigma_init, peak_height, range_width);
-
-  // Share one Gaussian width across the doublet: rebuild peak 2's PDFs to use
-  // peak 1's sigma var, then freeze Sigma2 so it neither floats nor is saved as
-  // an independent width. Sigma2 stays in the peak struct (param count, save/
-  // load, and CollectAllParams contracts unchanged) but is inert.
-  if (link_sigma) {
-    RooRealVar *s = peaks_[0].sigma;
-    RooFitPeakModel &p = peaks_[1];
-    p.sigma->setVal(s->getVal());
-    p.sigma->setConstant(kTRUE);
-    p.gauss_pdf =
-        RooFitFunctions::MakeGaussian("gauss_pdf2_linked", *x_, *p.mu, *s);
-    p.step_pdf =
-        RooFitFunctions::MakeStepShelf("step_pdf2_linked", *x_, *p.mu, *s);
-    p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
-        "low_exp_pdf2_linked", *x_, *p.mu, *s, *p.tau_ratio_low_exp);
-    p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
-        "low_lin_pdf2_linked", *x_, *p.mu, *s, *p.slope_low_lin);
-    p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
-        "high_exp_pdf2_linked", *x_, *p.mu, *s, *p.tau_ratio_high_exp);
-    RegisterOwned(p.gauss_pdf);
-    RegisterOwned(p.step_pdf);
-    RegisterOwned(p.low_exp_pdf);
-    RegisterOwned(p.low_lin_pdf);
-    RegisterOwned(p.high_exp_pdf);
-    // The window factors depend on sigma too, so they follow the shared width.
-    BuildExpTailYields(p, *s, "2_linked");
-  }
+  if (link_sigma || link_tails)
+    LinkSecondPeakToFirst(link_sigma, link_tails);
 
   BuildBackground(bkg_estimate, peak_height, range_width);
   BuildTotalModel();
@@ -1649,11 +1690,16 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
       std::cout
           << "Testing inter-peak group (peak1 high tail + peak2 low-side)..."
           << std::endl;
-      if (use_high_exp_tail_)
+      // With link_tails, peak 1's high tail and peak 2's low exponential tail
+      // are the shared tails tested above, and releasing them here would
+      // restart them from their initial values.
+      Bool_t group_high_exp = use_high_exp_tail_ && !link_tails;
+      Bool_t group_low_exp = use_low_exp_tail_ && !link_tails;
+      if (group_high_exp)
         ReleaseComponent(0, "high_exp");
       if (use_step_)
         ReleaseComponent(1, "step");
-      if (use_low_exp_tail_)
+      if (group_low_exp)
         ReleaseComponent(1, "low_exp");
       if (use_low_lin_tail_)
         ReleaseComponent(1, "low_lin");
@@ -1675,9 +1721,9 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
           Bool_t enabled;
         };
         CompRef refs[4] = {
-            {0, "high_exp", use_high_exp_tail_},
+            {0, "high_exp", group_high_exp},
             {1, "step", use_step_},
-            {1, "low_exp", use_low_exp_tail_},
+            {1, "low_exp", group_low_exp},
             {1, "low_lin", use_low_lin_tail_},
         };
         for (Int_t ri = 0; ri < 4; ri++) {
@@ -1703,11 +1749,11 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
         }
       } else {
         std::cout << "Inter-peak group REJECTED" << std::endl;
-        if (use_high_exp_tail_)
+        if (group_high_exp)
           FixComponent(0, "high_exp");
         if (use_step_)
           FixComponent(1, "step");
-        if (use_low_exp_tail_)
+        if (group_low_exp)
           FixComponent(1, "low_exp");
         if (use_low_lin_tail_)
           FixComponent(1, "low_lin");

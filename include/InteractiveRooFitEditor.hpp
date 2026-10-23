@@ -129,6 +129,9 @@ private:
 
   void SyncAllWidgets();
   void SyncWidget(Int_t param_idx);
+  // Re-sync the other rows bound to the same RooRealVar as param_idx: a linked
+  // FitDoublePeak gives the second peak the first peak's parameters.
+  void SyncAliasedWidgets(Int_t param_idx);
 
   void OnSliderMoved(Int_t param_idx);
   void OnEntryChanged(Int_t param_idx);

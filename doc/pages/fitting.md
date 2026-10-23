@@ -169,6 +169,48 @@ in-window ratio, so their start differs from the saved fit; a refit
 this library reading a new file warns that `ExpTailAmplitudeConvention` is not
 a model parameter and reads `R` as `r`.
 
+### Linked doublets {#linked-doublets}
+
+`FitDoublePeak(input_name, peak_name, mu1_init, mu2_init, link_sigma,
+link_tails)` can make the two peaks share parameters, the single-channel
+counterpart of `LinkParameter()`:
+
+- **`link_sigma`** — the second peak uses `Sigma1` as its Gaussian width.
+- **`link_tails`** — the second peak uses `LowExpTailAmplitude1`,
+  `LowExpTailRatio1`, `HighExpTailAmplitude1` and `HighExpTailRatio1`. Because
+  the amplitude is the full-range ratio `R`, that is one physical tail: each
+  peak's tail is `R` times its own Gaussian yield, scaled into the window with
+  its own `mu` and its width. Use it when the lines overlap enough that two free
+  tails are degenerate, for example Ba-133 79.61 keV next to 80.998 keV
+  (1.4 keV apart at `sigma` around 0.8 keV), where the weak line's tail
+  otherwise runs to its limit and takes the region below both lines, or for two
+  lines seen in one detector that should carry the same tail. The step and the
+  linear tail are not shared: their amplitudes are in-window ratios, so sharing
+  them would tie yields rather than shapes.
+
+Both default to off, and with both off the fit is unchanged. A linked
+parameter is reported with the value and error of the parameter it follows:
+with `link_sigma` both peaks' `sigma` and `sigma_error` are `Sigma1`'s, and with
+`link_tails` both report the shared tail ratio, with
+`low_exp_tail_amplitude = R * gaus_amplitude` for each peak's own
+`gaus_amplitude`.
+
+In the automatic component search the shared low-side tail is tested in the
+first peak's low-side group and the shared high-side tail as the second peak's
+high tail; the inter-peak group then tests only the second peak's step and
+linear tail. In the interactive editor both peaks' tabs show the shared
+parameter, and editing either row changes it.
+
+A saved `.roofits` state writes a linked parameter once, under the first peak's
+name. On load, lines naming the second peak's linked parameters are ignored.
+States written before this behaviour carry a `Sigma2` line for a `link_sigma`
+fit holding its unused starting value, marked as fixed; it is ignored too, and
+the loader never takes a parameter's fixed flag from a file in any case. A state
+saved from a fit with separate tails starts the shared tail from the first
+peak's old tail; when the first peak is the weaker line, that tail is usually
+the poorly constrained one, so delete the state and refit, or copy the stronger
+line's `LowExpTailAmplitude2` and `LowExpTailRatio2` values into the `1` lines.
+
 ## Interactive fitting
 
 `SetInteractive()` enables a GUI editor that opens after the automated fit

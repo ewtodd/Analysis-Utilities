@@ -38,6 +38,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 /**
@@ -187,6 +188,14 @@ RooAbsPdf *MakeLinearBackground(const TString &name, RooRealVar &x,
  *   `-infinity` without falling to zero, so they have no full-range integral
  *   to form an `R` from, and the same ratio means a different shape height
  *   for a peak elsewhere in the window or in another window.
+ *
+ * Two peaks can hold the same parameter pointer. That is how a link is made:
+ * FitDoublePeak() points the second peak's `sigma` at the first peak's with
+ * `link_sigma`, and its four exponential-tail parameters with `link_tails`,
+ * and a simultaneous fit does the same for every LinkParameter() target.
+ * Reading a linked peak's parameter therefore reads the shared one, while code
+ * that walks the parameters of several peaks has to de-duplicate by pointer
+ * before counting or writing them.
  *
  * @note Non-owning pointers. The RooFitUtils instance that built them owns
  *       them and destroys them with itself.
@@ -397,6 +406,9 @@ private:
   std::vector<RooFitPeakModel> peaks_;
   RooFitBackgroundModel bkg_;
   std::vector<RooAbsArg *> owned_args_;
+  // Names of the second peak's own parameters that a linked FitDoublePeak
+  // replaced with the first peak's; see LinkSecondPeakToFirst().
+  std::set<std::string> linked_param_names_;
 
   std::vector<RooFitChannelConfig> sim_channels_;
   std::vector<RooFitParamLink> sim_links_;
@@ -459,6 +471,7 @@ private:
   void BuildBackground(Double_t bkg_estimate, Double_t peak_height,
                        Double_t range_width);
   void BuildTotalModel();
+  void LinkSecondPeakToFirst(Bool_t link_sigma, Bool_t link_tails);
   void ConfigureComponentFlagsForPeak(Int_t peak_idx);
 
   void FixComponent(Int_t peak_idx, const TString &component);
@@ -466,7 +479,11 @@ private:
   Bool_t ComponentIsActive(Int_t peak_idx, const TString &component);
 
   std::vector<RooRealVar *> CollectFloatingParams();
+  // Ten entries per peak, then the background; a linked parameter appears in
+  // every peak that uses it. See DistinctParams().
   std::vector<RooRealVar *> CollectAllParams();
+  static std::vector<RooRealVar *>
+  DistinctParams(const std::vector<RooRealVar *> &params);
   RooFitResult *RunFit(Bool_t quiet);
   Double_t ComputeReducedChi2(RooFitResult *fit_result, Int_t &ndof);
 
@@ -797,16 +814,46 @@ public:
    * @param mu1_init   Starting centroid for the first peak.
    * @param mu2_init   Starting centroid for the second.
    * @param link_sigma When `kTRUE`, ties both peaks to a single Gaussian width:
-   *                   the second peak's PDFs are rebuilt to reference the
-   *                   first's sigma and `Sigma2` is frozen. Right for close,
-   *                   same-detector lines such as the Pb K-beta group, where a
-   *                   free second width would otherwise trade against the
-   *                   background.
-   * @return The fitted result, with peaks sorted by centroid.
+   *                   the second peak uses the first's `Sigma1`, and `Sigma2`
+   *                   is not part of the fit. Right for close, same-detector
+   *                   lines such as the Pb K-beta group, where a free second
+   *                   width would otherwise trade against the background.
+   * @param link_tails When `kTRUE`, gives both peaks one physical exponential
+   *                   tail on each side: the second peak uses the first's
+   *                   `LowExpTailAmplitude1` and `LowExpTailRatio1`, and its
+   *                   `HighExpTailAmplitude1` and `HighExpTailRatio1`. The
+   *                   amplitudes are full-range yield ratios `R` (see
+   *                   RooFitPeakModel), so each peak's tail is still scaled by
+   *                   its own Gaussian yield, and its window factor uses its
+   *                   own centroid and width (the shared width with
+   *                   @p link_sigma). Right for overlapping lines whose
+   *                   separate tails are degenerate, such as Ba-133 79.6 and
+   *                   81.0 keV, or for one source line seen through another.
+   *                   The step and the linear tail stay per peak: their
+   *                   amplitudes are in-window ratios, so sharing them would
+   *                   tie yields rather than shapes. Default `kFALSE`, which
+   *                   leaves the fit exactly as it was before this option.
+   * @return The fitted result, with peaks sorted by centroid. A linked
+   *         parameter is reported with the value and error of the parameter
+   *         it is linked to: with @p link_sigma, `sigma` and `sigma_error` of
+   *         both peaks are `Sigma1`'s; with @p link_tails, both peaks report
+   *         the shared tail ratios, and each tail amplitude is the shared `R`
+   *         times that peak's own `gaus_amplitude`.
+   *
+   * @note In the automatic component search, the shared low-side tail is
+   *       tested in the first peak's low-side group and the shared high-side
+   *       tail as the second peak's high tail. The inter-peak group then tests
+   *       only the second peak's step and linear tail.
+   * @note A saved `.roofits` state writes a linked parameter once, under the
+   *       first peak's name. On load, lines naming the second peak's linked
+   *       parameters are ignored, among them the `Sigma2` line that files
+   *       written before this behaviour carry, which held its unused starting
+   *       value marked as fixed.
    */
   FitResult FitDoublePeak(const TString input_name, const TString peak_name,
                           Double_t mu1_init, Double_t mu2_init,
-                          Bool_t link_sigma = kFALSE);
+                          Bool_t link_sigma = kFALSE,
+                          Bool_t link_tails = kFALSE);
   /**
    * @brief Fit two peaks with the first constrained by an earlier fit.
    * @param input_name       Input identifier.

@@ -591,7 +591,15 @@ void InteractiveRooFitEditor::UpdateCanvas() {
   x_->setVal(saved);
   Int_t n_free = 0;
   for (Int_t i = 0; i < num_params_; i++) {
-    if (!IsFixed(i))
+    if (IsFixed(i))
+      continue;
+    // A parameter shared by two rows is one degree of freedom.
+    Bool_t counted_in_earlier_row = kFALSE;
+    for (Int_t j = 0; j < i; j++) {
+      if (params_[j] == params_[i] && !IsFixed(j))
+        counted_in_earlier_row = kTRUE;
+    }
+    if (!counted_in_earlier_row)
       n_free++;
   }
   Int_t ndf = ndf_bins - n_free;
@@ -656,6 +664,19 @@ void InteractiveRooFitEditor::SyncWidget(Int_t param_idx) {
   hi_bound_entries_[param_idx]->SetNumber(current_bounds_high_[param_idx]);
 }
 
+void InteractiveRooFitEditor::SyncAliasedWidgets(Int_t param_idx) {
+  Bool_t was_syncing = syncing_;
+  syncing_ = kTRUE;
+  for (Int_t i = 0; i < num_params_; i++) {
+    if (i == param_idx || params_[i] != params_[param_idx])
+      continue;
+    current_bounds_low_[i] = current_bounds_low_[param_idx];
+    current_bounds_high_[i] = current_bounds_high_[param_idx];
+    SyncWidget(i);
+  }
+  syncing_ = was_syncing;
+}
+
 void InteractiveRooFitEditor::OnSliderMoved(Int_t param_idx) {
   if (syncing_)
     return;
@@ -669,6 +690,7 @@ void InteractiveRooFitEditor::OnSliderMoved(Int_t param_idx) {
   syncing_ = kTRUE;
   value_entries_[param_idx]->SetNumber(val);
   syncing_ = kFALSE;
+  SyncAliasedWidgets(param_idx);
 
   needs_redraw_ = kTRUE;
 }
@@ -702,6 +724,7 @@ void InteractiveRooFitEditor::OnEntryChanged(Int_t param_idx) {
     hi_bound_entries_[param_idx]->SetNumber(current_bounds_high_[param_idx]);
   }
   syncing_ = kFALSE;
+  SyncAliasedWidgets(param_idx);
 
   needs_redraw_ = kTRUE;
 }
@@ -734,6 +757,7 @@ void InteractiveRooFitEditor::OnBoundsChanged(Int_t param_idx) {
   sliders_[param_idx]->SetPosition(ValToSlider(param_idx, val));
   value_entries_[param_idx]->SetNumber(val);
   syncing_ = kFALSE;
+  SyncAliasedWidgets(param_idx);
 
   needs_redraw_ = kTRUE;
 }
@@ -752,6 +776,7 @@ void InteractiveRooFitEditor::OnFixToggled(Int_t param_idx) {
     sliders_[param_idx]->SetEnabled(kTRUE);
     value_entries_[param_idx]->GetNumberEntry()->SetEnabled(kTRUE);
   }
+  SyncAliasedWidgets(param_idx);
 
   needs_redraw_ = kTRUE;
 }
