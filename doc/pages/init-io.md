@@ -48,7 +48,7 @@ absolute paths pass through untouched. All filesystem operations use `gSystem`
   thread safety (`ROOT::EnableThreadSafety()`) and route all file opens through
   a shared recursive mutex. Enabled by `InitUtils::SetROOTPreferences` (via
   `enable_mt`) and by the parallel file processing in
-  @ref waveform-processing "WaveformProcessingUtils".
+  @ref waveform-processing "WaveformProcessor".
 - `IO::ScopedRootLock` — RAII guard for code that opens `TFile`s directly
   instead of through `IO::OpenForReading` / `IO::OpenForWriting`; engages the
   same lock when thread-safe mode is on.

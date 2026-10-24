@@ -46,7 +46,7 @@ public:
    *                       `TH1::AddDirectory(kFALSE)`, so concurrent `TFile`
    *                       opens on other threads cannot race on a directory's
    *                       child list. Required for the parallel file processing
-   *                       in WaveformProcessingUtils.
+   *                       in WaveformProcessor::ProcessFilesParallel().
    *
    * @note Mutates process-wide ROOT state: `gStyle`, `gROOT` batch mode and
    *       forced style, and — with @p enable_mt — histogram directory

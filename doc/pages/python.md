@@ -56,7 +56,7 @@ c = ROOT.PlottingUtils.GetConfiguredCanvas(False)
 
 cfg = ROOT.FileProcessingConfig()
 cfg.polarity = -1
-processor = ROOT.WaveformProcessingUtils(cfg)
+processor = ROOT.PulseIntegralProcessor(cfg, ROOT.PulseIntegralSettings())
 processor.ProcessFile("run.root", "run_features")
 ```
 

@@ -45,7 +45,7 @@ TString GetRootFilesBaseDir();
  *
  * @note Enabled by InitUtils::SetROOTPreferences() (via its `enable_mt`
  *       argument) and by the parallel file processing in
- *       WaveformProcessingUtils.
+ *       WaveformProcessor::ProcessFilesParallel().
  */
 void SetThreadSafe(Bool_t enabled = kTRUE);
 

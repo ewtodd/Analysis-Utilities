@@ -47,8 +47,11 @@ def load_cpp_library():
 
     - ``ROOT.PlottingUtils``, ``ROOT.InitUtils``, ``ROOT.PlotSaveFormat``,
       ``ROOT.PlotSaveOptions``
-    - ``ROOT.WaveformProcessingUtils``, ``ROOT.FileProcessingConfig``,
-      ``ROOT.WaveformFeatures``, ``ROOT.ProcessingStats``, ``ROOT.InputFormat``
+    - ``ROOT.PulseIntegralProcessor``, ``ROOT.PulseHeightProcessor`` and
+      their base ``ROOT.WaveformProcessor``, with ``ROOT.FileProcessingConfig``,
+      ``ROOT.PulseIntegralSettings``, ``ROOT.PulseHeightSettings``,
+      ``ROOT.ProcessingStats``; the sources ``ROOT.CreateWaveformSource``,
+      ``ROOT.WaveformSource``, ``ROOT.WaveformRecord``, ``ROOT.InputFormat``
     - ``ROOT.FittingUtils``, ``ROOT.RooFitUtils``, and the photopeak PDFs
       ``ROOT.RooLowExpTail``, ``ROOT.RooHighExpTail``, ``ROOT.RooLowLinTail``,
       ``ROOT.RooStepShelf``

@@ -31,7 +31,7 @@ HEADER_SYMBOLS = (
     ("PlottingUtils.hpp", "PlottingUtils"),
     ("InitUtils.hpp", "InitUtils"),
     ("BinaryUtils.hpp", "CoMPASSReader"),
-    ("WaveformProcessingUtils.hpp", "WaveformProcessingUtils"),
+    ("WaveformProcessingUtils.hpp", "WaveformProcessor"),
     ("FittingUtils.hpp", "FittingUtils"),
     ("RooFitPhotopeakPdfs.hpp", "RooLowExpTail"),
     ("RooFitUtils.hpp", "RooFitUtils"),
@@ -96,6 +96,9 @@ def test_io_utils_is_reachable_as_a_namespace() -> None:
 
 def test_waveform_processing_types_resolve_together() -> None:
     """The processing entry points are useless without their companion types."""
-    for symbol in ("FileProcessingConfig", "WaveformFeatures",
-                   "ProcessingStats", "InputFormat"):
+    for symbol in ("FileProcessingConfig", "ProcessingStats", "InputFormat",
+                   "PulseIntegralProcessor", "PulseIntegralSettings",
+                   "PulseHeightProcessor", "PulseHeightSettings",
+                   "WaveformSource", "WaveformRecord",
+                   "CreateWaveformSource"):
         assert hasattr(ROOT, symbol), f"{symbol} is missing"
