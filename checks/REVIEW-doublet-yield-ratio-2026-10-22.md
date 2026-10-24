@@ -10,7 +10,8 @@ positive, `GausAmplitude1 = gaus_yield_ratio * GausAmplitude2` and only
 Gaussian coefficient and component yields are rebuilt on the product, so reporting,
 saving and the editor follow without a dead placeholder.
 <!---->
-Line numbers are from the working tree at the commit this checklist accompanies. No
+Line numbers are from `main` at `69098de`, where every open checklist points since the
+review branches went onto `main` on 2026-10-24. No
 code is reproduced here; open the file at the line and review. Checks indicate review
 by ewt.
 <!---->
@@ -30,13 +31,15 @@ line's yield over the higher line's, so 73mGe passes `2.65 / 32.9`.
       exponential-tail yields are rebuilt on it (suffix `1_tied`), the exponential
       ones with the first peak's own `mu`, `sigma` and tail ratio.
       Check: the direction (above) and that the second peak's yields are untouched.
-- [ ] `src/RooFitUtils.cpp:1697`, `:1729-1730` — `FitDoublePeak` calls it after the
-      `link_sigma` / `link_tails` links and before `BuildTotalModel`, for any
-      positive ratio.
+- [ ] `src/RooFitUtils.cpp:1734` — `FitDoublePeak`'s new `gaus_yield_ratio` parameter
+      (default 0, declared at `include/RooFitUtils.hpp:951`).
+- [ ] `src/RooFitUtils.cpp:1766-1767` — `FitDoublePeak` calls
+      `TieFirstGausYieldToSecond` after the `link_sigma` / `link_tails` links and
+      before `BuildTotalModel`, for any positive ratio.
 - [ ] `src/RooFitUtils.cpp:418-425`, `:504` — `BuildExpTailYields` and
       `BuildTotalModel` build on `GausYieldCoefficient()`, which is `gaus_yield`
       itself unless the multiplier is set, so every other model is the same graph.
-- [ ] `src/RooFitUtils.cpp:945-946`, `:2897-2898`, `:1356` — `ExtractPeakResult`,
+- [ ] `src/RooFitUtils.cpp:945-946`, `:3070-3071`, `:1356` — `ExtractPeakResult`,
       `ExtractPeakResultFor` and `AppendPeakGraphs` read `GausYield()` /
       `GausYieldError()`: `getVal()` and `getError()` times the multiplier, which is
       exactly 1.0 for every other peak.
@@ -51,9 +54,9 @@ line's yield over the higher line's, so 73mGe passes `2.65 / 32.9`.
 - [ ] `include/RooFitUtils.hpp:200-204`, `:242-261` — `RooFitPeakModel`: the
       multiplier, the scaled coefficient, `GausYieldCoefficient()`, `GausYield()`,
       `GausYieldError()`, and the rule to read yields through them.
-- [ ] `include/RooFitUtils.hpp:444-447`, `:514` — name-set comment; private
+- [ ] `include/RooFitUtils.hpp:449-452`, `:527` — name-set comment; private
       declaration.
-- [ ] `include/RooFitUtils.hpp:894-935` — `FitDoublePeak` documentation: the
+- [ ] `include/RooFitUtils.hpp:910-951` — `FitDoublePeak` documentation: the
       parameter, its direction with the Ba example, when it equals an intensity
       ratio, the start it needs, what is reported, the saved state.
 - [ ] `src/InteractiveRooFitEditor.cpp:257-263`, `:514`;

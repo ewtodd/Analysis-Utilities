@@ -9,7 +9,8 @@ links the eight shape parameters only. `.simroofits` states saved while `Mu` was
 hold only the source peak's centroid; on load, a target centroid with no line of its
 own starts from its source's loaded value.
 <!---->
-Line numbers are from the working tree at the commit this checklist accompanies. No
+Line numbers are from `main` at `69098de`, where every open checklist points since the
+review branches went onto `main` on 2026-10-24. No
 code is reproduced here; open the file at the line and review. Checks indicate review
 by ewt.
 <!---->
@@ -25,18 +26,18 @@ around it behind an opt-in switch with eight `LinkParameter` calls.
 <!---->
 ## Core analysis logic — review these lines
 <!---->
-- [ ] `src/RooFitUtils.cpp:2320-2347` — `LinkPeakShape`: the list is `Sigma`,
+- [ ] `src/RooFitUtils.cpp:2446-2473` — `LinkPeakShape`: the list is `Sigma`,
       `StepAmplitude`, `LowExpTailAmplitude`, `LowExpTailRatio`,
       `LowLinTailAmplitude`, `LowLinTailSlope`, `HighExpTailAmplitude`,
       `HighExpTailRatio`; `Mu` is gone. The target/source centroid pair is recorded
-      (`sim_shape_mu_pairs_`, `include/RooFitUtils.hpp:415-417`) for the loader and
+      (`sim_shape_mu_pairs_`, `include/RooFitUtils.hpp:456-458`) for the loader and
       not linked.
       Check: no caller in this repository relies on the tie (none calls
       `LinkPeakShape`; see "Checked and excluded"), and 73mGe's `RunBkgGeSim` is the
       fit you want to change result.
-- [ ] `src/RooFitUtils.cpp:1187`, `:1193` — `LoadSimInteractiveParams` records every
+- [ ] `src/RooFitUtils.cpp:1261`, `:1267` — `LoadSimInteractiveParams` records every
       parameter name the file has a line for, whether or not the line is used.
-- [ ] `src/RooFitUtils.cpp:1219-1246` — after the values are loaded and before the
+- [ ] `src/RooFitUtils.cpp:1293-1320` — after the values are loaded and before the
       legacy tail conversion: for each recorded pair, a target `Mu` that is its own
       variable, not constant (`mu_fixed` locks are applied before the load), and has
       no line, while its source's `Mu` was loaded, takes the source's value and
@@ -44,15 +45,15 @@ around it behind an opt-in switch with eight `LinkParameter` calls.
       source variable and is skipped.
       Check: copying the error along with the value is fine; it only seeds the
       refit.
-- [ ] `src/RooFitUtils.cpp:1256-1259` — one line, after "Loaded sim interactive
+- [ ] `src/RooFitUtils.cpp:1330-1333` — one line, after "Loaded sim interactive
       params", naming each centroid started this way.
 <!---->
 ## Tooling
 <!---->
-- [ ] `include/RooFitUtils.hpp:966-990` — `LinkPeakShape` documentation: which
+- [ ] `include/RooFitUtils.hpp:1058-1082` — `LinkPeakShape` documentation: which
       parameters are linked, that `Mu` and the Gaussian yield stay free, how to tie
       the centroids, and the old-state behaviour.
-- [ ] `doc/pages/fitting.md:253-263` — the simultaneous-fit list says what a peak's
+- [ ] `doc/pages/fitting.md:286-296` — the simultaneous-fit list says what a peak's
       shape is and how old states load.
 <!---->
 ## Test evidence

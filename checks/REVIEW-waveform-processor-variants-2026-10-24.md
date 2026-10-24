@@ -15,7 +15,8 @@ member that clones the processor. `PROMPT-waveform-processor-migration-2026-10-2
 is the brief for updating the repositories that use the old API. Publishing this needs
 a version bump: son-of-anton gates its runtime notes on the version.
 <!---->
-Line numbers are from the working tree at the commit this checklist accompanies. No
+Line numbers are from `main` at `69098de`, where every open checklist points since the
+review branches went onto `main` on 2026-10-24. No
 code is reproduced here; open the file at the line and review. Checks indicate review
 by ewt.
 <!---->

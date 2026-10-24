@@ -13,7 +13,8 @@ that shape through the fit and adds no free parameter. The lines are kept apart 
 the peaks: they enter the channel's `RooAddPdf` but not its results, saved states or
 editor rows.
 <!---->
-Line numbers are from the working tree at the commit this checklist accompanies. No
+Line numbers are from `main` at `69098de`, where every open checklist points since the
+review branches went onto `main` on 2026-10-24. No
 code is reproduced here; open the file at the line and review. Checks indicate review
 by ewt.
 <!---->

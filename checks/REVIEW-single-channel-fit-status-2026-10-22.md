@@ -10,7 +10,8 @@ that ends without a valid minimum, and every single-channel `FitResult` now carr
 the Minuit2 status, covariance quality, EDM, minimum NLL and per-parameter
 diagnostics of the fit it comes from, and whether that fit needed the retry.
 <!---->
-Line numbers are from the working tree at the commit this checklist accompanies. No
+Line numbers are from `main` at `69098de`, where every open checklist points since the
+review branches went onto `main` on 2026-10-24. No
 code is reproduced here; open the file at the line and review. Checks indicate review
 by ewt.
 <!---->
@@ -27,10 +28,10 @@ retried result so that its chi2/ndf gets looked at.
 <!---->
 ## Core analysis logic — review these lines
 <!---->
-- [ ] `src/RooFitUtils.cpp:697-709` — `Minimize`: the `fitTo` call `RunFit` made
+- [ ] `src/RooFitUtils.cpp:729-741` — `Minimize`: the `fitTo` call `RunFit` made
       before, with the strategy as an argument. Strategy 2 reproduces the old call
       argument for argument.
-- [ ] `src/RooFitUtils.cpp:711-732` — `RunFit`: Strategy 2 as before; if that ends
+- [ ] `src/RooFitUtils.cpp:743-764` — `RunFit`: Strategy 2 as before; if that ends
       with status `>= kFirstInvalidMinimumStatus` (3: EDM above maximum, which
       includes stopping at the start; 4: call limit; 5: other) or returns nothing, it
       prints a warning, runs a Strategy 1 pass from where it stopped, and runs the
@@ -40,30 +41,30 @@ retried result so that its chi2/ndf gets looked at.
       definite, or whose HESSE failed) are not retried.
       Check: the threshold. Retrying 1 and 2 as well would change many converged
       fits (150 of 200 separate-tail toys end with status 1) for little gain.
-- [ ] `src/RooFitUtils.cpp:734-752` — `StoreFitDiagnostics`: status, `covQual`, EDM,
+- [ ] `src/RooFitUtils.cpp:766-784` — `StoreFitDiagnostics`: status, `covQual`, EDM,
       `minNll`, whether the fit was retried, and `ExtractParameterDiagnosticsSingle`
       into the `FitResult`, and a warning when the status is still 3 or more. It is
       called right after the `RunFit` whose result it stores, so the retry flag is
       that fit's.
-- [ ] `src/RooFitUtils.cpp:1573`, `:1717`, `:1951`, `:2103` (saved-state refits),
-      `:1613`, `:1753`, `:1981`, `:2132` (initial fit failed, ending the search),
-      `:1634`, `:1849`, `:2002`, `:2153` (final fit) — the four `Fit*` methods store
+- [ ] `src/RooFitUtils.cpp:1642`, `:1789`, `:2023`, `:2175` (saved-state refits),
+      `:1682`, `:1825`, `:2053`, `:2204` (initial fit failed, ending the search),
+      `:1703`, `:1921`, `:2074`, `:2225` (final fit) — the four `Fit*` methods store
       the diagnostics of the minimisation their result comes from. `valid` is not
       changed: a saved-state refit is still `valid` whatever its status.
       Check: you want `valid` left as it is, with `fit_status` the indicator. Making
       a saved-state refit invalid from status 3 would also blank its result (every
       field -1) for any downstream that does not look.
-- [ ] `src/RooFitUtils.cpp:2978-2987` — `ExtractParameterDiagnosticsSingle`, which
+- [ ] `src/RooFitUtils.cpp:3186-3195` — `ExtractParameterDiagnosticsSingle`, which
       had no caller, now lists each variable once under its own name, so a linked
       parameter is not listed twice and the names survive `SortPeaksByMu`.
 <!---->
 ## Tooling
 <!---->
-- [ ] `include/RooFitUtils.hpp:570-580` — public `kFirstInvalidMinimumStatus` = 3,
+- [ ] `include/RooFitUtils.hpp:615-625` — public `kFirstInvalidMinimumStatus` = 3,
       for downstream macros to compare `fit_status` against.
-- [ ] `include/RooFitUtils.hpp:364-371` — class note: what a single-channel result
+- [ ] `include/RooFitUtils.hpp:396-403` — class note: what a single-channel result
       carries, the retry, and why a retried result's chi2/ndf needs a look.
-- [ ] `include/RooFitUtils.hpp:498-504` — private `Minimize`, `last_fit_retried_`,
+- [ ] `include/RooFitUtils.hpp:540-546` — private `Minimize`, `last_fit_retried_`,
       `StoreFitDiagnostics`.
 - [ ] `include/FittingUtils.hpp:210-211`, `:242-244`, `:256-271` — `FitResult` and
       `FitParameterDiagnostic` documentation: which fits fill which fields;
