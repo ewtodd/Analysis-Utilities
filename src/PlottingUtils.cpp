@@ -609,7 +609,7 @@ void PlottingUtils::PlotFitWithResiduals(
     Double_t fit_val = total_graph ? total_graph->Eval(x) : 0.0;
     Double_t error = hist->GetBinError(i);
 
-    if (error > 0 && data > 0) {
+    if (error > 0) {
       Double_t pull = (data - fit_val) / error;
       residuals->SetPoint(point_counter, x, pull);
       point_counter++;

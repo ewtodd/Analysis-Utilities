@@ -265,7 +265,9 @@ public:
    * Produces a two-pad figure: the histogram with the total fit and each
    * component overlaid on top (70% of the height), and a pull panel beneath
    * (30%) marked with dashed guide lines at ±3σ. The displayed x range is
-   * padded 10% either side of the fit range.
+   * padded 10% either side of the fit range. Every bin in the fit range with
+   * a positive error gets a pull, including the negative bins of a subtracted
+   * histogram; an empty bin of a counts histogram has no error and gets none.
    *
    * @param hist                Data histogram. Must not be null.
    * @param total_graph         Curve for the summed model.
