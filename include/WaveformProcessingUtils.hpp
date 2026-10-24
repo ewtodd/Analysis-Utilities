@@ -635,8 +635,8 @@ public:
    * @param step         Step, e.g. from Deconvolve().
    * @param rise_samples Rise time k, at least 1.
    * @param flat_samples Flat top m, at least 0.
-   * @return T, same length as @p step; samples whose window reaches before
-   *         the start are 0.
+   * @return T, same length as @p step. Samples before the start of @p step
+   *         count as zero, its baseline.
    */
   static TArrayF Trapezoid(const TArrayF &step, Int_t rise_samples,
                            Int_t flat_samples);

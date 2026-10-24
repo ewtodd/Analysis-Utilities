@@ -748,16 +748,16 @@ TArrayF PulseHeightProcessor::Trapezoid(const TArrayF &step, Int_t rise_samples,
     cumulative[i + 1] = cumulative[i] + step[i];
   const Int_t k = rise_samples;
   const Int_t delay = rise_samples + flat_samples;
+  // Samples before the start count as zero, the baseline, so a window that
+  // reaches before it sums only the samples it has.
   for (Int_t i = 0; i < n; ++i) {
-    Int_t late_first = i - k + 1;
+    Int_t late_first = TMath::Max(i - k + 1, 0);
     Int_t early_last = i - delay;
-    Int_t early_first = early_last - k + 1;
-    if (early_first < 0) {
-      trapezoid[i] = 0;
-      continue;
-    }
+    Int_t early_first = TMath::Max(early_last - k + 1, 0);
     Double_t late = cumulative[i + 1] - cumulative[late_first];
-    Double_t early = cumulative[early_last + 1] - cumulative[early_first];
+    Double_t early = 0;
+    if (early_last >= 0)
+      early = cumulative[early_last + 1] - cumulative[early_first];
     trapezoid[i] = (late - early) / k;
   }
   return trapezoid;

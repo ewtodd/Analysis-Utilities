@@ -48,9 +48,12 @@ by ewt.
       leaves a 1/(2 tau) gain error and a slope on the plateau.
 - [ ] `src/WaveformProcessingUtils.cpp:741-764` — `Trapezoid`: `T[n]` = mean of `y`
       over the last `k` samples minus its mean over the `k` samples ending `k + m`
-      earlier, from prefix sums in double; 0 where the early window reaches before
-      the start. A step of height A gives a flat top of A from `s + k - 1` to
-      `s + k + m - 1`.
+      earlier, from prefix sums in double; samples before the crop count as zero
+      (the baseline), so the trapezoid of a pulse near the crop's start is drawn
+      whole. A step of height A gives a flat top of A from `s + k - 1` to
+      `s + k + m - 1`. Check: zero-padding is right for the figures and leaves
+      the height untouched, since `CheckSettings` keeps the peaking windows inside
+      the crop.
 - [ ] `src/WaveformProcessingUtils.cpp:766-770` — `PeakingStart`: the trigger (at
       `pre_samples` in the crop) plus `k - 1` plus `peaking_fraction x m`, rounded.
       Check: anchoring on the trigger (the `trigger_threshold` crossing) means a real
