@@ -294,6 +294,9 @@ background) sharing a single observable with the others.
   @ref tail-amplitudes "Tail amplitudes". `LinkPeakShape()` used to link `Mu`
   as well; a `.simroofits` state saved then has no line for the target
   centroid, which on load starts from its source's value.
+- **`AddFixedLines(channel, shape_peak, mus, gaus_yields)`** — add lines of
+  known position and yield to a channel, drawn with one of its peaks' shapes;
+  see @ref fixed-lines "Fixed lines".
 - **`SeedChannel(channel_name, result)`** — supply a prior single-channel
   `FitResult` as starting values for that channel.
 - **`FitSimultaneous(input_name, base_label)`** — builds the `RooSimultaneous`,
@@ -326,6 +329,41 @@ All optional, on `AddChannel`:
 - **`use_step_per_peak`** — per-peak `std::vector<Bool_t>` overriding the
   channel-level `use_step` for individual peaks (e.g. a step on some peaks but
   not on another peak sharing the channel).
+
+### Fixed lines {#fixed-lines}
+
+Some contributions to a window are known but cannot be fitted: the X-ray escape
+peaks of a line outside the window, for example, sit under or beside the fitted
+peaks with yields that follow from that line's yield. `AddFixedLines(channel,
+shape_peak, mus, gaus_yields)` adds them to a channel as lines at fixed
+centroids with fixed Gaussian yields, drawn with the shape of one of the
+channel's peaks:
+
+```cpp
+RooFitUtils sim;
+sim.AddChannel("run", events, 65, 80, 0.255, 2, pb_mus, kTRUE, kFALSE, kTRUE);
+// Two escapes of a 95.9 keV line seen with 12000 events in its Gaussian,
+// at 1.5% and 0.8% of it, with the shape of the Pb Ka1 peak (index 1).
+std::vector<Double_t> mus = {95.9 - 23.17, 95.9 - 26.09};
+std::vector<Double_t> yields = {0.015 * 12000, 0.008 * 12000};
+sim.AddFixedLines("run", 1, mus, yields);
+```
+
+- The lines take the shape peak's own `Sigma`, step and tail parameters,
+  through any links on them, so they follow its shape as the fit moves it and
+  add no free parameter.
+- Their yields are Gaussian yields over the whole line, not inside the window
+  as a fitted peak's `GausAmplitude` is; each line's in-window share follows
+  from its centroid, the shape peak's sigma and the window. The tails are
+  scaled as a fitted peak's are (see @ref tail-amplitudes "Tail amplitudes"),
+  and a component the shape peak has switched off is left out.
+- They are part of the channel's model, its chi-squared, its plots (one dashed
+  dark cyan curve on the background) and the simultaneous editor's total curve.
+  They are not peaks: they do not appear in the channel's `FitResult`, in saved
+  `.simroofits` states or in the editor's parameter rows, so states saved
+  without them load unchanged.
+- Call it once per channel, after `AddChannel()` and before
+  `FitSimultaneous()`; a second call for the same channel replaces the first.
 
 ## References
 

@@ -321,6 +321,11 @@ struct RooFitChannelConfig {
   Bool_t use_low_exp_tail;
   Bool_t use_low_lin_tail;
   Bool_t use_high_exp_tail;
+  // Lines of known position and yield drawn with one peak's shape; see
+  // RooFitUtils::AddFixedLines(). Empty when the channel has none.
+  Int_t fixed_line_shape_peak = -1;
+  std::vector<Double_t> fixed_line_mus;
+  std::vector<Double_t> fixed_line_gaus_yields;
 };
 
 /**
@@ -455,6 +460,11 @@ private:
   RooArgSet sim_constraint_set_;
   std::map<TString, FitResult> sim_seeds_;
   std::map<TString, std::vector<RooFitPeakModel>> sim_channel_peaks_;
+  // Each channel's AddFixedLines() lines, built like peaks but kept apart from
+  // them: they are not results, saved parameters or editor rows.
+  std::map<TString, std::vector<RooFitPeakModel>> sim_channel_fixed_lines_;
+  // The fixed lines of the channel being plotted; see PlotChannel().
+  std::vector<RooFitPeakModel> fixed_lines_;
   std::map<TString, RooFitBackgroundModel> sim_channel_bkg_;
   std::map<TString, RooAbsPdf *> sim_channel_pdfs_;
   std::map<TString, RooDataSet *> sim_channel_data_;
@@ -474,6 +484,9 @@ private:
                               Double_t init_val, Double_t lo, Double_t hi);
   Bool_t BuildChannelModel(const RooFitChannelConfig &cfg,
                            std::map<TString, RooRealVar *> &registry);
+  Bool_t BuildChannelFixedLines(const RooFitChannelConfig &cfg,
+                                const std::vector<RooFitPeakModel> &peaks,
+                                RooArgList &pdf_list, RooArgList &coef_list);
   void BuildExpTailYields(RooFitPeakModel &p, RooRealVar &sigma,
                           const TString &suffix);
   static void SetPeakWindows(std::vector<RooFitPeakModel> &peaks, Double_t low,
@@ -569,6 +582,9 @@ private:
                         Style_t line_style, RooAbsPdf *background_pdf,
                         Double_t bkg_yield_val, Int_t npts, Double_t x_step,
                         Double_t bin_width);
+  void AppendFixedLinesGraph(std::vector<TGraph *> &components,
+                             RooAbsPdf *background_pdf, Double_t bkg_yield_val,
+                             Int_t npts, Double_t x_step, Double_t bin_width);
 
   void RegisterOwned(RooAbsArg *arg);
 
@@ -1064,6 +1080,46 @@ public:
    */
   void LinkPeakShape(const TString &target_channel, Int_t target_peak,
                      const TString &source_channel, Int_t source_peak);
+  /**
+   * @brief Add lines of known position and yield to a channel, drawn with the
+   *        shape of one of its peaks.
+   *
+   * Each line is a Gaussian at a fixed centroid with a fixed yield, plus the
+   * step and tails of peak @p shape_peak of the same channel. The lines borrow
+   * that peak's `Sigma` and step and tail parameters themselves, including any
+   * links on them, so they follow its shape through the fit and add no free
+   * parameter. Use them for a known contribution the fit cannot separate from
+   * its peaks, such as the X-ray escapes of a line outside the window, whose
+   * yields follow from that line's.
+   *
+   * A line's tails and step are scaled exactly as a fitted peak's: the
+   * exponential tails by their full-range yield ratios, the step and the
+   * linear tail as in-window ratios of its Gaussian yield inside the window.
+   * A component the shape peak has switched off (a ratio held at zero when the
+   * channel is built) is left out of the lines.
+   *
+   * @param channel     Channel to add the lines to; AddChannel() must have
+   *                    registered it.
+   * @param shape_peak  Index of the channel's peak whose shape the lines take,
+   *                    from 0 in @p mu_inits order of AddChannel().
+   * @param mus         Centroid of each line, in the observable's units.
+   * @param gaus_yields Gaussian yield of each line, in events over the whole
+   *                    line, not only inside the window: a fitted peak's
+   *                    `GausAmplitude` counts events inside the window, and a
+   *                    line's in-window share follows from its centroid, the
+   *                    shape peak's sigma and the window. One entry per entry
+   *                    of @p mus, each non-negative.
+   *
+   * @note The lines enter each channel's total model, its chi-squared, its
+   *       plots (one combined component curve) and the simultaneous editor's
+   *       total curve. They are not reported in FitResult::peaks, not saved in
+   *       `.simroofits` states and not listed in the editor.
+   * @note Simultaneous mode only. Call it once per channel, before
+   *       FitSimultaneous(); a second call replaces the first.
+   */
+  void AddFixedLines(const TString &channel, Int_t shape_peak,
+                     const std::vector<Double_t> &mus,
+                     const std::vector<Double_t> &gaus_yields);
   /**
    * @brief Use a prior single-channel fit as starting values for a channel.
    * @param channel_name Channel to seed.

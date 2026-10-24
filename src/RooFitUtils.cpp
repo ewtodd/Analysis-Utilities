@@ -1421,6 +1421,37 @@ void RooFitUtils::AppendPeakGraphs(std::vector<TGraph *> &components,
   }
 }
 
+// All of the plotted channel's fixed lines as one curve on the background.
+void RooFitUtils::AppendFixedLinesGraph(std::vector<TGraph *> &components,
+                                        RooAbsPdf *background_pdf,
+                                        Double_t bkg_yield_val, Int_t npts,
+                                        Double_t x_step, Double_t bin_width) {
+  if (fixed_lines_.empty())
+    return;
+  RooArgSet nset(*x_);
+  TGraph *lines_graph = new TGraph(npts);
+  for (Int_t i = 0; i < npts; i++) {
+    Double_t xv = fit_range_low_ + i * x_step;
+    x_->setVal(xv);
+    Double_t y = bkg_yield_val * background_pdf->getVal(&nset) * bin_width;
+    for (size_t li = 0; li < fixed_lines_.size(); li++) {
+      const RooFitPeakModel &p = fixed_lines_[li];
+      y += p.GausYieldCoefficient().getVal() * p.gauss_pdf->getVal(&nset) *
+           bin_width;
+      y += p.step_yield->getVal() * p.step_pdf->getVal(&nset) * bin_width;
+      y += p.low_exp_yield->getVal() * p.low_exp_pdf->getVal(&nset) * bin_width;
+      y += p.low_lin_yield->getVal() * p.low_lin_pdf->getVal(&nset) * bin_width;
+      y += p.high_exp_yield->getVal() * p.high_exp_pdf->getVal(&nset) *
+           bin_width;
+    }
+    lines_graph->SetPoint(i, xv, y);
+  }
+  lines_graph->SetLineColor(kCyan + 2);
+  lines_graph->SetLineStyle(2);
+  lines_graph->SetLineWidth(PlottingUtils::GetLineWidth());
+  components.push_back(lines_graph);
+}
+
 void RooFitUtils::PlotFitSinglePeak(const TString input_name,
                                     const TString peak_name,
                                     const TString label) {
@@ -1456,6 +1487,8 @@ void RooFitUtils::PlotFitSinglePeak(const TString input_name,
   components.push_back(background_graph);
   AppendPeakGraphs(components, 0, 1, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
                    bin_width);
+  AppendFixedLinesGraph(components, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
+                        bin_width);
 
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
@@ -1504,6 +1537,8 @@ void RooFitUtils::PlotFitDoublePeak(const TString input_name,
                    bin_width);
   AppendPeakGraphs(components, 1, 3, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
                    bin_width);
+  AppendFixedLinesGraph(components, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
+                        bin_width);
 
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
@@ -1554,6 +1589,8 @@ void RooFitUtils::PlotFitTriplePeak(const TString input_name,
                    bin_width);
   AppendPeakGraphs(components, 2, 4, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
                    bin_width);
+  AppendFixedLinesGraph(components, bkg_.bkg_pdf, bkg_yield_val, npts, x_step,
+                        bin_width);
 
   PlottingUtils::PlotFitWithResiduals(
       working_hist_, total_graph, components, fit_range_low_, fit_range_high_,
@@ -2435,6 +2472,45 @@ void RooFitUtils::LinkPeakShape(const TString &target_channel,
   sim_shape_mu_pairs_.push_back(mu_pair);
 }
 
+void RooFitUtils::AddFixedLines(const TString &channel, Int_t shape_peak,
+                                const std::vector<Double_t> &mus,
+                                const std::vector<Double_t> &gaus_yields) {
+  RooFitChannelConfig *cfg = nullptr;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    if (sim_channels_[i].name == channel) {
+      cfg = &sim_channels_[i];
+      break;
+    }
+  }
+  if (!cfg) {
+    std::cerr << "ERROR: AddFixedLines: no channel '" << channel
+              << "'; call AddChannel first." << std::endl;
+    return;
+  }
+  if (shape_peak < 0 || shape_peak >= cfg->num_peaks) {
+    std::cerr << "ERROR: AddFixedLines: channel '" << channel << "' has "
+              << cfg->num_peaks << " peaks; shape_peak " << shape_peak
+              << " is not one of them." << std::endl;
+    return;
+  }
+  if (mus.size() != gaus_yields.size()) {
+    std::cerr << "ERROR: AddFixedLines: " << mus.size() << " centroids but "
+              << gaus_yields.size() << " yields." << std::endl;
+    return;
+  }
+  for (size_t i = 0; i < gaus_yields.size(); i++) {
+    if (!(gaus_yields[i] >= 0)) {
+      std::cerr << "ERROR: AddFixedLines: line " << i << " has yield "
+                << gaus_yields[i] << "; yields must be non-negative."
+                << std::endl;
+      return;
+    }
+  }
+  cfg->fixed_line_shape_peak = shape_peak;
+  cfg->fixed_line_mus = mus;
+  cfg->fixed_line_gaus_yields = gaus_yields;
+}
+
 void RooFitUtils::SeedChannel(const TString &channel_name,
                               const FitResult &result) {
   sim_seeds_[channel_name] = result;
@@ -2702,6 +2778,8 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     pdf_list.add(*peaks[pi].high_exp_pdf);
     coef_list.add(*peaks[pi].high_exp_yield);
   }
+  if (!BuildChannelFixedLines(cfg, peaks, pdf_list, coef_list))
+    return kFALSE;
   pdf_list.add(*bkg.bkg_pdf);
   coef_list.add(*bkg.bkg_yield);
 
@@ -2726,6 +2804,101 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     ds->add(vars);
   }
   sim_channel_data_[cfg.name] = ds;
+  return kTRUE;
+}
+
+// Each line is a RooFitPeakModel that owns only its centroid and yield, both
+// constant, and holds the shape peak's own shape variables and the channel's
+// window. gaus_yield is the whole-line yield; the Gaussian's coefficient is
+// that times the Gaussian's share inside the window, which is what a fitted
+// peak's GausAmplitude counts, so every component yield built on
+// GausYieldCoefficient() comes out as it does for a fitted peak.
+Bool_t RooFitUtils::BuildChannelFixedLines(
+    const RooFitChannelConfig &cfg, const std::vector<RooFitPeakModel> &peaks,
+    RooArgList &pdf_list, RooArgList &coef_list) {
+  std::vector<RooFitPeakModel> lines;
+  sim_channel_fixed_lines_[cfg.name] = lines;
+  if (cfg.fixed_line_mus.empty())
+    return kTRUE;
+  if (cfg.fixed_line_shape_peak < 0 ||
+      cfg.fixed_line_shape_peak >= (Int_t)peaks.size()) {
+    std::cerr << "ERROR: channel '" << cfg.name << "': fixed-line shape peak "
+              << cfg.fixed_line_shape_peak << " does not exist." << std::endl;
+    return kFALSE;
+  }
+  const RooFitPeakModel &shape = peaks[cfg.fixed_line_shape_peak];
+  for (size_t li = 0; li < cfg.fixed_line_mus.size(); li++) {
+    RooFitPeakModel p = shape;
+    TString suffix =
+        TString::Format("_%s_fixed%d", cfg.name.Data(), (Int_t)li + 1);
+    p.mu = new RooRealVar(("FixedLineMu" + suffix).Data(), "",
+                          cfg.fixed_line_mus[li]);
+    p.mu->setConstant(kTRUE);
+    p.gaus_yield = new RooRealVar(("FixedLineYield" + suffix).Data(), "",
+                                  cfg.fixed_line_gaus_yields[li]);
+    p.gaus_yield->setConstant(kTRUE);
+    p.gaus_yield_ratio = 1.0;
+    p.gaus_yield_scaled =
+        new RooFormulaVar(("fixed_line_window_yield" + suffix).Data(),
+                          "@0*0.5*(TMath::Erf((@4-@1)/(sqrt(2.0)*@2))"
+                          "-TMath::Erf((@3-@1)/(sqrt(2.0)*@2)))",
+                          RooArgList(*p.gaus_yield, *p.mu, *p.sigma,
+                                     *p.window_low, *p.window_high));
+    RegisterOwned(p.mu);
+    RegisterOwned(p.gaus_yield);
+    RegisterOwned(p.gaus_yield_scaled);
+
+    TString pdf_suffix =
+        "_" + cfg.name + "_fixed" + TString::Format("%d", (Int_t)li + 1);
+    p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + pdf_suffix, *x_,
+                                                *p.mu, *p.sigma);
+    p.step_pdf = RooFitFunctions::MakeStepShelf("step_pdf" + pdf_suffix, *x_,
+                                                *p.mu, *p.sigma);
+    p.low_exp_pdf = RooFitFunctions::MakeLowExpTail(
+        "low_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.tau_ratio_low_exp);
+    p.low_lin_pdf = RooFitFunctions::MakeLowLinTail(
+        "low_lin_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma, *p.slope_low_lin);
+    p.high_exp_pdf = RooFitFunctions::MakeHighExpTail(
+        "high_exp_pdf" + pdf_suffix, *x_, *p.mu, *p.sigma,
+        *p.tau_ratio_high_exp);
+    RegisterOwned(p.gauss_pdf);
+    RegisterOwned(p.step_pdf);
+    RegisterOwned(p.low_exp_pdf);
+    RegisterOwned(p.low_lin_pdf);
+    RegisterOwned(p.high_exp_pdf);
+
+    p.step_yield =
+        new RooFormulaVar(("step_yield" + pdf_suffix).Data(), "@0*@1",
+                          RooArgList(p.GausYieldCoefficient(), *p.ratio_step));
+    p.low_lin_yield = new RooFormulaVar(
+        ("low_lin_yield" + pdf_suffix).Data(), "@0*@1",
+        RooArgList(p.GausYieldCoefficient(), *p.ratio_low_lin));
+    RegisterOwned(p.step_yield);
+    RegisterOwned(p.low_lin_yield);
+    BuildExpTailYields(p, *p.sigma, pdf_suffix);
+
+    pdf_list.add(*p.gauss_pdf);
+    coef_list.add(p.GausYieldCoefficient());
+    RooAbsPdf *optional_pdfs[4] = {p.step_pdf, p.low_exp_pdf, p.low_lin_pdf,
+                                   p.high_exp_pdf};
+    RooAbsReal *optional_yields[4] = {p.step_yield, p.low_exp_yield,
+                                      p.low_lin_yield, p.high_exp_yield};
+    RooRealVar *optional_ratios[4] = {p.ratio_step, p.ratio_low_exp,
+                                      p.ratio_low_lin, p.ratio_high_exp};
+    for (Int_t k = 0; k < 4; k++) {
+      Bool_t switched_off = optional_ratios[k]->isConstant() &&
+                            optional_ratios[k]->getVal() == 0.0;
+      if (switched_off)
+        continue;
+      pdf_list.add(*optional_pdfs[k]);
+      coef_list.add(*optional_yields[k]);
+    }
+    lines.push_back(p);
+  }
+  sim_channel_fixed_lines_[cfg.name] = lines;
+  std::cout << "Channel '" << cfg.name << "': " << lines.size()
+            << " fixed lines with the shape of peak "
+            << cfg.fixed_line_shape_peak + 1 << std::endl;
   return kTRUE;
 }
 
@@ -3049,6 +3222,7 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
   fit_range_low_ = cfg->fit_range_low;
   fit_range_high_ = cfg->fit_range_high;
   peaks_ = peaks;
+  fixed_lines_ = sim_channel_fixed_lines_[channel];
   bkg_ = bkg;
   num_peaks_ = num_peaks;
   total_pdf_ = static_cast<RooAddPdf *>(sim_channel_pdfs_[channel]);
@@ -3065,6 +3239,7 @@ void RooFitUtils::PlotChannel(const TString &channel, Int_t num_peaks,
   fit_range_low_ = saved_lo;
   fit_range_high_ = saved_hi;
   peaks_ = saved_peaks;
+  fixed_lines_.clear();
   bkg_ = saved_bkg;
   num_peaks_ = saved_np;
   total_pdf_ = saved_total;
