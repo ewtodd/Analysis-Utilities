@@ -1,6 +1,7 @@
 # Fixed lines in simultaneous fits — review checklist, 2026-10-23
 <!---->
-Branch `review/simultaneous-fixed-lines`, on top of `5d7032b`. **Not pushed.**
+Branch `review/simultaneous-fixed-lines`, on top of `5d7032b`. **Merged into `main` on
+2026-10-24 before ewt's review**, which is in progress; the boxes below are still open.
 73mGe needs the K X-ray escapes of the 95.902 keV 113Cd(n,g) line in its in-situ
 fit: eight lines at 64-73 keV whose positions and yields follow from that line, which
 lies outside the 65-80 keV window. They sit under Pb Ka2 and beside and under Ge, so

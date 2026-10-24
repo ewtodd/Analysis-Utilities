@@ -1,9 +1,9 @@
 # Prompt: move the repositories onto the waveform processor variants
 <!---->
 For an agent updating the code that uses Analysis-Utilities' old
-`WaveformProcessingUtils` class. Hand it this file once
-`review/waveform-processor-variants` has been reviewed, pushed and given a version
-bump.
+`WaveformProcessingUtils` class. Hand it this file once the waveform processor
+variants (on `main` since 2026-10-24, f97de2c and 69098de) have been reviewed, pushed
+and given a version bump.
 <!---->
 ---
 <!---->

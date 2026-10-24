@@ -1,7 +1,8 @@
 # Waveform processor variants — review checklist, 2026-10-24
 <!---->
 Branch `review/waveform-processor-variants`, on top of `review/simultaneous-fixed-lines`
-(`6ceba20`). **Not pushed.** `WaveformProcessingUtils` was one class for
+(`6ceba20`). **Merged into `main` on 2026-10-24 before ewt's review**, which is in
+progress; the boxes below are still open. `WaveformProcessingUtils` was one class for
 scintillator pulses read from CoMPASS-style ROOT trees. 73mGe's PSI CdTe and Si
 detectors and MUSIC's SOLARIS traces are charge-sensitive preamplifier signals, which
 need pole-zero deconvolution, a trapezoid and a rise time, and MUSIC's come as `.sol`
