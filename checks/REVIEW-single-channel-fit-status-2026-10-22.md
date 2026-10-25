@@ -10,8 +10,8 @@ that ends without a valid minimum, and every single-channel `FitResult` now carr
 the Minuit2 status, covariance quality, EDM, minimum NLL and per-parameter
 diagnostics of the fit it comes from, and whether that fit needed the retry.
 <!---->
-Line numbers are from `main` at `69098de`, where every open checklist points since the
-review branches went onto `main` on 2026-10-24. No
+Line numbers are from `main` at `5b82845` (the code as at `69098de`, where every open
+checklist pointed since the review branches went onto `main` on 2026-10-24). No
 code is reproduced here; open the file at the line and review. Checks indicate review
 by ewt.
 <!---->
@@ -73,7 +73,7 @@ retried result so that its chi2/ndf gets looked at.
       `kFALSE`, never set by simultaneous or FittingUtils fits.
       Check: adding a field to `FitResult` is fine for downstream code (it is a
       plain struct; 73mGe rebuilds against each library version).
-- [ ] `doc/pages/fitting.md:68-102` — "Results and diagnostics": what each fit fills,
+- [ ] `doc/pages/fitting.md:74-108` — "Results and diagnostics": what each fit fills,
       the retry, and `fit_retried`.
 <!---->
 ## Test evidence
