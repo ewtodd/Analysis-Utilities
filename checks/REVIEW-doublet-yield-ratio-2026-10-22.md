@@ -19,63 +19,67 @@ by ewt.
 <!---->
 The request says "fix peak 2's Gaussian yield as a ratio of peak 1's" and gives
 "Ba 79.61/80.998 = 2.65/32.9 = 0.0805", which is peak 1 over peak 2 in
-`FitDoublePeak`'s centroid order. The parameter follows the example: it is the lower
+`FitDoublePeak`'s centroid order.
+The parameter follows the example: it is the lower
 line's yield over the higher line's, so 73mGe passes `2.65 / 32.9`.
 <!---->
 ## Core analysis logic — review these lines
 <!---->
-- [ ] `src/RooFitUtils.cpp:564-592` — `TieFirstGausYieldToSecond`: records
+- [x] `src/RooFitUtils.cpp:564-592` — `TieFirstGausYieldToSecond`: records
       `GausAmplitude1` for the loader; a constant `GausAmplitudeRatio`; the first
       peak's `gaus_yield` becomes `GausAmplitude2` with `gaus_yield_ratio` set;
       `gaus_yield_scaled` = `GausAmplitude2 * ratio`; the step, linear-tail and both
       exponential-tail yields are rebuilt on it (suffix `1_tied`), the exponential
       ones with the first peak's own `mu`, `sigma` and tail ratio.
       Check: the direction (above) and that the second peak's yields are untouched.
-- [ ] `src/RooFitUtils.cpp:1734` — `FitDoublePeak`'s new `gaus_yield_ratio` parameter
-      (default 0, declared at `include/RooFitUtils.hpp:951`).
-- [ ] `src/RooFitUtils.cpp:1766-1767` — `FitDoublePeak` calls
+- [x] `src/RooFitUtils.cpp:1734` — `FitDoublePeak`'s new `gaus_yield_ratio` parameter
+      (default 0 ewt: technically 0.0!!, declared at `include/RooFitUtils.hpp:951`).
+- [x] `src/RooFitUtils.cpp:1766-1767` — `FitDoublePeak` calls
       `TieFirstGausYieldToSecond` after the `link_sigma` / `link_tails` links and
       before `BuildTotalModel`, for any positive ratio.
-- [ ] `src/RooFitUtils.cpp:418-425`, `:504` — `BuildExpTailYields` and
+- [x] `src/RooFitUtils.cpp:418-425`, `:504` — `BuildExpTailYields` and
       `BuildTotalModel` build on `GausYieldCoefficient()`, which is `gaus_yield`
       itself unless the multiplier is set, so every other model is the same graph.
-- [ ] `src/RooFitUtils.cpp:945-946`, `:3070-3071`, `:1356` — `ExtractPeakResult`,
+- [x] `src/RooFitUtils.cpp:945-946`, `:3070-3071`, `:1356` — `ExtractPeakResult`,
       `ExtractPeakResultFor` and `AppendPeakGraphs` read `GausYield()` /
       `GausYieldError()`: `getVal()` and `getError()` times the multiplier, which is
       exactly 1.0 for every other peak.
       Check: the first peak's reported error is the second's error times the ratio,
       the right propagation for a fixed ratio.
-- [ ] `src/RooFitUtils.cpp:1145` — the loader's "ignored" line now says "linked to
+      ewt: probably should've mentioned the line number for declaration of GausYield in header. but it's all good since i can read.
+      it does indeed use the multiplier.
+- [x] `src/RooFitUtils.cpp:1145` — the loader's "ignored" line now says "linked to
       the other peak's", since a tied yield is the second peak's. An old state's
       `GausAmplitude1` line is skipped; its `GausAmplitude2` line seeds the fit.
 <!---->
 ## Tooling
 <!---->
-- [ ] `include/RooFitUtils.hpp:200-204`, `:242-261` — `RooFitPeakModel`: the
+- [x] `include/RooFitUtils.hpp:200-204`, `:242-261` — `RooFitPeakModel`: the
       multiplier, the scaled coefficient, `GausYieldCoefficient()`, `GausYield()`,
       `GausYieldError()`, and the rule to read yields through them.
-- [ ] `include/RooFitUtils.hpp:449-452`, `:527` — name-set comment; private
+- [x] `include/RooFitUtils.hpp:449-452`, `:527` — name-set comment; private
       declaration.
-- [ ] `include/RooFitUtils.hpp:910-951` — `FitDoublePeak` documentation: the
+- [x] `include/RooFitUtils.hpp:910-951` — `FitDoublePeak` documentation: the
       parameter, its direction with the Ba example, when it equals an intensity
       ratio, the start it needs, what is reported, the saved state.
-- [ ] `src/InteractiveRooFitEditor.cpp:257-263`, `:514`;
+      ewt: good
+- [x] `src/InteractiveRooFitEditor.cpp:257-263`, `:514`;
       `src/InteractiveSimultaneousFitEditor.cpp:555` — both editors draw the
       Gaussian curve from `GausYield()`; the single-channel editor labels the tied
       peak's yield row "Yield x <ratio>", since that row edits `GausAmplitude2`.
       Check: the label is clear enough; GUI code, compiled but not driven.
-- [ ] `doc/pages/fitting.md:190-246` — "Linked doublets": the third option, its
+- [x] `doc/pages/fitting.md:190-246` — "Linked doublets": the third option, its
       direction and start, reporting and saved states.
 <!---->
 ## Test evidence
 <!---->
-- [ ] `nix build` of `.#default`, `.#cuda` and `.#docs` succeeds; the docs warning
+- [x] `nix build` of `.#default`, `.#cuda` and `.#docs` succeeds; the docs warning
       log is empty; `clang-format` leaves every touched file unchanged.
-- [ ] Default calls unchanged: the regression program against the status change
+- [x] Default calls unchanged: the regression program against the status change
       (built at `3f39025`; `b5b0cf3` only adds the `fit_retried` field, which the
       program does not print) gives identical results to 17 digits in all 298 result
       and parameter lines.
-- [ ] Synthetic Ba-like toys (CUDA): one shared tail, Gaussian counts 13363 and
+- [x] Synthetic Ba-like toys (CUDA): one shared tail, Gaussian counts 13363 and
       166000 (true ratio 0.0805), fitted with `link_sigma` + `link_tails` +
       `gaus_yield_ratio` = 0.0805, against the free ratio on the same toys.
       - From a start with a realistic tail (`R` 0.55, `tau/sigma` 10), 100 toys: all
@@ -93,7 +97,7 @@ line's yield over the higher line's, so 73mGe passes `2.65 / 32.9`.
       Check: documenting the start requirement (realistic tail, for example a saved
       `link_tails` fit) is enough, with chi2/ndf flagging the wrong minimum, rather
       than constraining `mu1` or fitting the free ratio first inside `FitDoublePeak`.
-- [ ] 73mGe Ba-133 01/15 with `gaus_yield_ratio` = 2.65 / 32.9 (CUDA build):
+- [x] 73mGe Ba-133 01/15 with `gaus_yield_ratio` = 2.65 / 32.9 (CUDA build):
       - From the production state: `mu2` 81.269188 ± 0.0043 keV, `k` 0.0679,
         `tau/sigma` 10.99 ± 0.91, chi2/ndf 1.488 (1.503 with the ratio free), status 0,
         `cov_qual` 3. Against the free ratio, `mu2` moves −5.5 eV and its error halves
@@ -104,9 +108,10 @@ line's yield over the higher line's, so 73mGe passes `2.65 / 32.9`.
       Check: which `mu2` the binned comparison should be against: 81.2776 came from
       your shared-tail refit, and the request does not say whether the ratio was
       fixed there.
-- [ ] Reporting and saved states: the first peak's `gaus_amplitude` / `gaus_amplitude`
+- [x] Reporting and saved states: the first peak's `gaus_amplitude` / `gaus_amplitude`
       ratio is 0.080547 (= 2.65 / 32.9) and its error is exactly 0.0805 times the
-      second's (242.42 both ways). The saved state has a `GausAmplitude2` line and
+      second's (242.42 both ways).
+      The saved state has a `GausAmplitude2` line and
       no `GausAmplitude1`; loading the production state skips 6 lines as linked (5
       from `link_sigma` + `link_tails`, plus `GausAmplitude1`).
 <!---->
