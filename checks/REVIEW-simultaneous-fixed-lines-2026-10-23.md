@@ -21,14 +21,14 @@ by ewt.
 <!---->
 ## Core analysis logic — review these lines
 <!---->
-- [ ] `src/RooFitUtils.cpp:2475-2512` — `AddFixedLines`: refuses an unknown channel,
+- [x] `src/RooFitUtils.cpp:2475-2512` — `AddFixedLines`: refuses an unknown channel,
       a shape peak outside the channel's peaks, mismatched lengths and negative or NaN
       yields; stores the lines in the channel's config, replacing any earlier call's.
       Check: replacing rather than appending is what you want for a second call.
-- [ ] `src/RooFitUtils.cpp:2781-2782` — `BuildChannelModel` adds the lines after every
+- [x] `src/RooFitUtils.cpp:2781-2782` — `BuildChannelModel` adds the lines after every
       peak's components and before the background, so the existing coefficients keep
       their order.
-- [ ] `src/RooFitUtils.cpp:2810-2846` — `BuildChannelFixedLines`: each line starts as a
+- [x] `src/RooFitUtils.cpp:2810-2846` — `BuildChannelFixedLines`: each line starts as a
       copy of the shape peak's `RooFitPeakModel` (its resolved, possibly linked,
       `Sigma` and step and tail variables and the channel's window edges), then gets a
       constant `FixedLineMu` and `FixedLineYield`. `gaus_yield_scaled` is the yield
@@ -37,43 +37,44 @@ by ewt.
       edges, so a line near an edge is counted as a fitted peak's `GausAmplitude` is.
       Check: the conversion from the whole-line yield the caller gives to the in-window
       coefficient.
-- [ ] `src/RooFitUtils.cpp:2847-2878` — the five component PDFs on the line's own
+- [x] `src/RooFitUtils.cpp:2847-2878` — the five component PDFs on the line's own
       centroid; the step and linear-tail yields are the in-window coefficient times the
       shape peak's ratios (the fitted peaks' convention), and `BuildExpTailYields`
       builds both exponential tails on it with the line's own window factors, so a
       tail's in-window yield is the whole-line yield times `R` times `f_T`.
-- [ ] `src/RooFitUtils.cpp:2880-2895` — the Gaussian always enters the sum; each
+- [x] `src/RooFitUtils.cpp:2880-2895` — the Gaussian always enters the sum; each
       other component only when the shape peak's ratio is not held at zero when the
       channel is built, which saves two to four PDFs per line in the usual
       configurations. Check: a ratio held at zero at build time cannot be released
       later in simultaneous mode (configuration-fixed parameters are skipped by the
       state loader, and the shape locks only fix).
+      ewt: roofit code is so weird 
 <!---->
 ## Tooling
 <!---->
-- [ ] `include/RooFitUtils.hpp:323-328` — the channel config's three fields.
-- [ ] `include/RooFitUtils.hpp:463-467`, `:487-489`, `:585-587` — the per-channel line
+- [x] `include/RooFitUtils.hpp:323-328` — the channel config's three fields.
+- [x] `include/RooFitUtils.hpp:463-467`, `:487-489`, `:585-587` — the per-channel line
       store, the plotted channel's lines, and the private declarations.
-- [ ] `include/RooFitUtils.hpp:1083-1122` — `AddFixedLines` documentation: what a line
+- [x] `include/RooFitUtils.hpp:1083-1122` — `AddFixedLines` documentation: what a line
       borrows from the shape peak, the whole-line yield against `GausAmplitude`'s
       in-window one, switched-off components, where the lines appear and where not.
-- [ ] `src/RooFitUtils.cpp:1424-1453` — `AppendFixedLinesGraph`: all of the plotted
+- [x] `src/RooFitUtils.cpp:1424-1453` — `AppendFixedLinesGraph`: all of the plotted
       channel's lines as one dashed dark cyan curve on the background, every component
       on its in-window coefficient; nothing when there are none, so single-channel and
       line-free plots are unchanged.
-- [ ] `src/RooFitUtils.cpp:1490`, `:1540`, `:1592` — the three plot functions call it
+- [x] `src/RooFitUtils.cpp:1490`, `:1540`, `:1592` — the three plot functions call it
       after the peaks' components.
-- [ ] `src/RooFitUtils.cpp:3225`, `:3242` — `PlotChannel` hands the channel's lines to
+- [x] `src/RooFitUtils.cpp:3225`, `:3242` — `PlotChannel` hands the channel's lines to
       the plot functions and clears them afterwards.
-- [ ] `doc/pages/fitting.md:297-299`, `:333-366` — the method in the simultaneous-fit
+- [x] `doc/pages/fitting.md:297-299`, `:333-366` — the method in the simultaneous-fit
       list and a "Fixed lines" section with an example.
 <!---->
 ## Test evidence
 <!---->
-- [ ] `nix build` of `.#default`, `.#cuda` and `.#docs` succeeds; the docs warning log
+- [x] `nix build` of `.#default`, `.#cuda` and `.#docs` succeeds; the docs warning log
       is empty; `clang-format` (LLVM, `BreakStringLiterals: false`) leaves both touched
       sources unchanged.
-- [ ] Testbed (CUDA, 40 spectra, `/tmp/73mGe-escape/FixedLinesTestbed.C`): a Pb
+- [x] Testbed (CUDA, 40 spectra, `/tmp/73mGe-escape/FixedLinesTestbed.C`): a Pb
       Ka-like doublet at 72.80 / 74.97 keV (20000 / 34000 Gaussian events, sigma 0.80,
       one low tail with R 0.322 and tau/sigma 8, generated with the TF1 lineshape
       through `TailHeightRatio`'s relation) on a flat continuum, plus three lines of
@@ -84,11 +85,11 @@ by ewt.
       +7.6 ± 1.4 eV, R 0.368.
       Check: that recovering the yields and R with an edge line among the three is
       enough to settle the yield convention.
-- [ ] Default calls unchanged: 73mGe's production on this branch (CUDA) with its
+- [x] Default calls unchanged: 73mGe's production on this branch (CUDA) with its
       escapes switched off reproduces every row of its committed `tau20_sigpb` result,
       made on `5d7032b`, character for character (five Ge values, errors and chi2 to
       the file's six to seven digits).
-- [ ] 73mGe production with the escapes (CUDA, `tau20_sigpb_esc`): eight lines in
+- [x] 73mGe production with the escapes (CUDA, `tau20_sigpb_esc`): eight lines in
       each channel of the six in-situ fits, Gaussian yields 150-6000 events. Channel
       chi2/ndf as before or lower (Cu 01/13 signal 1.37 → 1.36, Cd 25% 1.51 → 1.47);
       Ge moves −11.7 eV (Cu, captures inside the crystal) and −0.7 / −0.8 eV (Cd
