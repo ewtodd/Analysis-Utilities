@@ -20,24 +20,27 @@ by ewt.
 shape between the background and the signal run, meaning to leave the signal run's
 Pb centroids free. In every production pair the two channels' raw Pb centroids are
 equal to 0.1 eV (01/13 Cu10: 73.1497 / 75.3414 in both), while independent fits of
-the same runs differ by −50 to +30 eV because the reading moves with count rate. The
-in-situ fit has been imposing one compromise centroid on both runs. 73mGe works
+the same runs differ by −50 to +30 eV because the reading moves with count rate.
+The
+in-situ fit has been imposing one compromise centroid on both runs.
+73mGe works
 around it behind an opt-in switch with eight `LinkParameter` calls.
 <!---->
 ## Core analysis logic — review these lines
 <!---->
-- [ ] `src/RooFitUtils.cpp:2446-2473` — `LinkPeakShape`: the list is `Sigma`,
+- [x] `src/RooFitUtils.cpp:2446-2473` — `LinkPeakShape`: the list is `Sigma`,
       `StepAmplitude`, `LowExpTailAmplitude`, `LowExpTailRatio`,
       `LowLinTailAmplitude`, `LowLinTailSlope`, `HighExpTailAmplitude`,
-      `HighExpTailRatio`; `Mu` is gone. The target/source centroid pair is recorded
+      `HighExpTailRatio`; `Mu` is gone.
+      The target/source centroid pair is recorded
       (`sim_shape_mu_pairs_`, `include/RooFitUtils.hpp:456-458`) for the loader and
       not linked.
       Check: no caller in this repository relies on the tie (none calls
       `LinkPeakShape`; see "Checked and excluded"), and 73mGe's `RunBkgGeSim` is the
       fit you want to change result.
-- [ ] `src/RooFitUtils.cpp:1261`, `:1267` — `LoadSimInteractiveParams` records every
+- [x] `src/RooFitUtils.cpp:1261`, `:1267` — `LoadSimInteractiveParams` records every
       parameter name the file has a line for, whether or not the line is used.
-- [ ] `src/RooFitUtils.cpp:1293-1320` — after the values are loaded and before the
+- [x] `src/RooFitUtils.cpp:1293-1320` — after the values are loaded and before the
       legacy tail conversion: for each recorded pair, a target `Mu` that is its own
       variable, not constant (`mu_fixed` locks are applied before the load), and has
       no line, while its source's `Mu` was loaded, takes the source's value and
@@ -45,42 +48,45 @@ around it behind an opt-in switch with eight `LinkParameter` calls.
       source variable and is skipped.
       Check: copying the error along with the value is fine; it only seeds the
       refit.
-- [ ] `src/RooFitUtils.cpp:1330-1333` — one line, after "Loaded sim interactive
+- [x] `src/RooFitUtils.cpp:1330-1333` — one line, after "Loaded sim interactive
       params", naming each centroid started this way.
 <!---->
 ## Tooling
 <!---->
-- [ ] `include/RooFitUtils.hpp:1058-1082` — `LinkPeakShape` documentation: which
+- [x] `include/RooFitUtils.hpp:1058-1082` — `LinkPeakShape` documentation: which
       parameters are linked, that `Mu` and the Gaussian yield stay free, how to tie
       the centroids, and the old-state behaviour.
-- [ ] `doc/pages/fitting.md:286-296` — the simultaneous-fit list says what a peak's
+- [x] `doc/pages/fitting.md:286-296` — the simultaneous-fit list says what a peak's
       shape is and how old states load.
 <!---->
 ## Test evidence
 <!---->
 The check programs are scratch code outside the repository.
 <!---->
-- [ ] `nix build .#default` and `.#docs` succeed; the docs warning log is empty.
-- [ ] Displacement test (requested item 4), CPU build: two channels with a Pb
+- [x] `nix build .#default` and `.#docs` succeed; the docs warning log is empty.
+- [x] Displacement test (requested item 4), CPU build: two channels with a Pb
       Ka2/Ka1-like doublet (72.80 and 75.00 keV, `sigma` 0.80, 120k and 200k Gaussian
       counts, one tail `R` 0.53, `tau/sigma` 11, 150k flat counts in 65-80 keV); the
       target channel's lines sit exactly 30 eV higher. Links as in `RunBkgGeSim`
       (one low tail tied to `bkg:` peak 1, the Ka widths linked, then
       `LinkPeakShape("sig", i, "bkg", i)`). Before the fix both channels' centroids
       are one variable and the fitted shift is 0 (5.5 and 9.1 standard errors from
-      30 eV). After it, over 20 toys, the fitted shifts are 27.3 ± 1.9 eV (Ka2) and
+      30 eV).
+      After it, over 20 toys, the fitted shifts are 27.3 ± 1.9 eV (Ka2) and
       29.3 ± 1.0 eV (Ka1), with spreads 8.4 and 4.3 eV against median HESSE errors
-      7.2 and 4.4 eV; 18 of 20 fits end with status 0. In the reference toy, every
+      7.2 and 4.4 eV; 18 of 20 fits end with status 0.
+      In the reference toy, every
       linked shape parameter of each target peak is the same `RooRealVar` pointer as
       its source's (`sigma`, `ratio_step`, both exponential tails' amplitude and ratio,
       the linear tail's amplitude and slope), while `mu` and `gaus_yield` are not;
       before the fix `mu` was shared as well.
-- [ ] Old state: a `.simroofits` written as the tied version wrote it (one centroid
+- [x] Old state: a `.simroofits` written as the tied version wrote it (one centroid
       line per Pb line, under `bkg:`), replayed without a refit, so the result is the
-      start. Both `sig:` centroids equal the `bkg:` values from the file (72.8123 and
+      start.
+      Both `sig:` centroids equal the `bkg:` values from the file (72.8123 and
       75.0123), and the loader prints "centroids saved while LinkPeakShape tied them
       start from their source peak's: sig:Mu1 <- bkg:Mu1, sig:Mu2 <- bkg:Mu2".
-- [ ] Every other fit path unchanged: the regression program from the linked-tails
+- [x] Every other fit path unchanged: the regression program from the linked-tails
       change (single, double, `link_sigma`, constrained double and triple,
       saved-state loads, 73mGe's production Ba fit), built against `13c67d8` and this
       tree, gives identical results to 17 digits, except its simultaneous case, which
