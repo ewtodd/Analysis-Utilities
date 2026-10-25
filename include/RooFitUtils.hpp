@@ -546,6 +546,25 @@ private:
   void StoreFitDiagnostics(const RooFitResult *fit, FitResult &results);
   Double_t ComputeReducedChi2(RooFitResult *fit_result, Int_t &ndof);
 
+  // The steps the single-channel Fit* methods share. Each stores the
+  // diagnostics of the minimisation it runs into results.
+  // In interactive mode: refit from the saved state if there is one, otherwise
+  // open the editor. Returns whether there is a result to report.
+  Bool_t RefitOrEditInteractively(const TString &input_name,
+                                  const TString &peak_name, FitResult &results,
+                                  Double_t &final_chi2, Int_t &final_ndof);
+  // The automatic search's first fit. On failure prints failure_message and
+  // returns kFALSE, which ends the search.
+  Bool_t RunInitialFit(const char *failure_message, FitResult &results,
+                       Double_t &initial_chi2);
+  // The automatic search's last fit, with the components it selected. Prints
+  // converged_message or failed_message when not null.
+  Bool_t RunFinalFit(const char *converged_message, const char *failed_message,
+                     FitResult &results, Double_t &final_chi2,
+                     Int_t &final_ndof);
+  // A reported fit's peaks, background and reduced chi-squared into results.
+  void FillFitResults(Int_t num_peaks, Double_t final_chi2, FitResult &results);
+
   void SnapshotParams(std::vector<Double_t> &vals, std::vector<Double_t> &errs,
                       std::vector<Bool_t> &consts);
   void RestoreParams(const std::vector<Double_t> &vals,
@@ -1142,7 +1161,7 @@ public:
    *         only results that carry the Minuit diagnostics — `fit_status`,
    *         `cov_qual`, `edm`, `min_nll` and `parameter_diagnostics`.
    *
-   * @note Check `fit_status == 0` and `cov_qual == 0` before trusting the
+   * @note Check `fit_status == 0` and `cov_qual == 3` before trusting the
    *       errors, and inspect `parameter_diagnostics` for parameters resting
    *       against a limit.
    */

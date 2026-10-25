@@ -692,18 +692,6 @@ Bool_t PulseIntegralProcessor::ExtractFeatures(const TArrayF &cropped) {
 
 // --------------------------------------------------------------- pulse height
 
-namespace {
-
-// Where the step crosses level between samples i - 1 and i, linearly
-// interpolated; i itself when sample i - 1 is already at or above it.
-Double_t CrossingTime(const TArrayF &step, Int_t i, Double_t level) {
-  if (step[i - 1] >= level || step[i] == step[i - 1])
-    return i;
-  return i - 1 + (level - step[i - 1]) / (step[i] - step[i - 1]);
-}
-
-} // namespace
-
 PulseHeightProcessor::PulseHeightProcessor(const FileProcessingConfig &config,
                                            const PulseHeightSettings &settings)
     : WaveformProcessor(config), settings_(settings), trapezoid_height_(0),
@@ -799,6 +787,13 @@ Bool_t PulseHeightProcessor::CheckSettings() const {
     return kFALSE;
   }
   return kTRUE;
+}
+
+Double_t PulseHeightProcessor::CrossingTime(const TArrayF &step, Int_t i,
+                                            Double_t level) {
+  if (step[i - 1] >= level || step[i] == step[i - 1])
+    return i;
+  return i - 1 + (level - step[i - 1]) / (step[i] - step[i - 1]);
 }
 
 Float_t PulseHeightProcessor::RiseTime(const TArrayF &step) const {

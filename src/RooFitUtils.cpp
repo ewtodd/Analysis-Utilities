@@ -783,6 +783,85 @@ void RooFitUtils::StoreFitDiagnostics(const RooFitResult *fit,
               << std::endl;
 }
 
+Bool_t RooFitUtils::RefitOrEditInteractively(const TString &input_name,
+                                             const TString &peak_name,
+                                             FitResult &results,
+                                             Double_t &final_chi2,
+                                             Int_t &final_ndof) {
+  if (LoadInteractiveParams(input_name, peak_name)) {
+    RooFitResult *refit = RunFit(kTRUE);
+    StoreFitDiagnostics(refit, results);
+    final_chi2 = ComputeReducedChi2(refit, final_ndof);
+    std::cout << "Refit from saved params chi2/ndf = " << final_chi2
+              << std::endl;
+    delete refit;
+    return kTRUE;
+  }
+  Bool_t edited = kFALSE;
+  Bool_t was_batch = gROOT->IsBatch();
+  gROOT->SetBatch(kFALSE);
+  if (LaunchInteractiveRooFitEditor(
+          working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
+          unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
+          peak_name + " / " + input_name)) {
+    fit_range_low_ = x_->getMin(kFitRangeName);
+    fit_range_high_ = x_->getMax(kFitRangeName);
+    BuildDisplayHistogram();
+    final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
+    std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
+    SaveInteractiveParams(input_name, peak_name);
+    edited = kTRUE;
+  }
+  gROOT->SetBatch(was_batch);
+  return edited;
+}
+
+Bool_t RooFitUtils::RunInitialFit(const char *failure_message,
+                                  FitResult &results, Double_t &initial_chi2) {
+  RooFitResult *initial_fit = RunFit(kTRUE);
+  if (!initial_fit || initial_fit->status() != 0) {
+    std::cout << failure_message << std::endl;
+    StoreFitDiagnostics(initial_fit, results);
+    delete initial_fit;
+    return kFALSE;
+  }
+  Int_t ndof = 0;
+  initial_chi2 = ComputeReducedChi2(initial_fit, ndof);
+  std::cout << "Initial chi2/ndf = " << initial_chi2 << std::endl;
+  delete initial_fit;
+  return kTRUE;
+}
+
+Bool_t RooFitUtils::RunFinalFit(const char *converged_message,
+                                const char *failed_message, FitResult &results,
+                                Double_t &final_chi2, Int_t &final_ndof) {
+  RooFitResult *final_fit = RunFit(kFALSE);
+  StoreFitDiagnostics(final_fit, results);
+  Bool_t converged = final_fit && final_fit->status() == 0;
+  if (converged) {
+    final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
+    if (converged_message)
+      std::cout << converged_message << std::endl;
+    std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
+  } else if (failed_message) {
+    std::cout << failed_message << std::endl;
+  }
+  delete final_fit;
+  return converged;
+}
+
+void RooFitUtils::FillFitResults(Int_t num_peaks, Double_t final_chi2,
+                                 FitResult &results) {
+  for (Int_t i = 0; i < num_peaks; i++)
+    results.peaks[i] = ExtractPeakResult(i);
+  results.bkg_constant = bkg_.bkg_yield->getVal();
+  results.bkg_constant_error = bkg_.bkg_yield->getError();
+  results.lin_bkg_slope = bkg_.bkg_slope->getVal();
+  results.lin_bkg_slope_error = bkg_.bkg_slope->getError();
+  results.reduced_chi2 = final_chi2;
+  results.valid = kTRUE;
+}
+
 Double_t RooFitUtils::ComputeReducedChi2(RooFitResult *fit_result,
                                          Int_t &ndof) {
   RooArgSet nset(*x_);
@@ -1637,31 +1716,8 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
   Int_t final_ndof = 0;
 
   if (interactive_) {
-    if (LoadInteractiveParams(input_name, peak_name)) {
-      RooFitResult *refit = RunFit(kTRUE);
-      StoreFitDiagnostics(refit, results);
-      final_chi2 = ComputeReducedChi2(refit, final_ndof);
-      std::cout << "Refit from saved params chi2/ndf = " << final_chi2
-                << std::endl;
-      fit_valid = kTRUE;
-      delete refit;
-    } else {
-      Bool_t was_batch = gROOT->IsBatch();
-      gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(
-              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
-              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
-              peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin(kFitRangeName);
-        fit_range_high_ = x_->getMax(kFitRangeName);
-        BuildDisplayHistogram();
-        final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
-        std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
-        SaveInteractiveParams(input_name, peak_name);
-        fit_valid = kTRUE;
-      }
-      gROOT->SetBatch(was_batch);
-    }
+    fit_valid = RefitOrEditInteractively(input_name, peak_name, results,
+                                         final_chi2, final_ndof);
   } else {
     FixComponent(0, "step");
     FixComponent(0, "low_exp");
@@ -1676,18 +1732,9 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
       }
     }
 
-    RooFitResult *initial_fit = RunFit(kTRUE);
-    if (!initial_fit || initial_fit->status() != 0) {
-      std::cout << "ERROR: Initial fit failed" << std::endl;
-      StoreFitDiagnostics(initial_fit, results);
-      delete initial_fit;
+    Double_t best_chi2 = 0;
+    if (!RunInitialFit("ERROR: Initial fit failed", results, best_chi2))
       return results;
-    }
-
-    Int_t tmp_ndof = 0;
-    Double_t best_chi2 = ComputeReducedChi2(initial_fit, tmp_ndof);
-    std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
-    delete initial_fit;
 
     std::vector<Double_t> best_vals;
     std::vector<Double_t> best_errs;
@@ -1699,27 +1746,14 @@ FitResult RooFitUtils::FitSinglePeak(const TString input_name,
 
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
-    RooFitResult *final_fit = RunFit(kFALSE);
-    StoreFitDiagnostics(final_fit, results);
-    if (final_fit && final_fit->status() == 0) {
-      final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
-      fit_valid = kTRUE;
-      std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
-    }
-    delete final_fit;
+    fit_valid = RunFinalFit(nullptr, nullptr, results, final_chi2, final_ndof);
   }
 
   if (fit_valid) {
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitSinglePeak(input_name, peak_name, chi2label);
 
-    results.peaks[0] = ExtractPeakResult(0);
-    results.bkg_constant = bkg_.bkg_yield->getVal();
-    results.bkg_constant_error = bkg_.bkg_yield->getError();
-    results.lin_bkg_slope = bkg_.bkg_slope->getVal();
-    results.lin_bkg_slope_error = bkg_.bkg_slope->getError();
-    results.reduced_chi2 = final_chi2;
-    results.valid = kTRUE;
+    FillFitResults(1, final_chi2, results);
   } else {
     std::cout << "ERROR: Fit did not converge" << std::endl;
   }
@@ -1784,31 +1818,8 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   Int_t final_ndof = 0;
 
   if (interactive_) {
-    if (LoadInteractiveParams(input_name, peak_name)) {
-      RooFitResult *refit = RunFit(kTRUE);
-      StoreFitDiagnostics(refit, results);
-      final_chi2 = ComputeReducedChi2(refit, final_ndof);
-      std::cout << "Refit from saved params chi2/ndf = " << final_chi2
-                << std::endl;
-      fit_valid = kTRUE;
-      delete refit;
-    } else {
-      Bool_t was_batch = gROOT->IsBatch();
-      gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(
-              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
-              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
-              peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin(kFitRangeName);
-        fit_range_high_ = x_->getMax(kFitRangeName);
-        BuildDisplayHistogram();
-        final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
-        std::cout << "Interactive chi2/ndf = " << final_chi2 << std::endl;
-        SaveInteractiveParams(input_name, peak_name);
-        fit_valid = kTRUE;
-      }
-      gROOT->SetBatch(was_batch);
-    }
+    fit_valid = RefitOrEditInteractively(input_name, peak_name, results,
+                                         final_chi2, final_ndof);
   } else {
     FixComponent(0, "step");
     FixComponent(0, "low_exp");
@@ -1819,18 +1830,10 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     FixComponent(1, "low_lin");
     FixComponent(1, "high_exp");
 
-    RooFitResult *initial_fit = RunFit(kTRUE);
-    if (!initial_fit || initial_fit->status() != 0) {
-      std::cout << "ERROR: Initial double peak fit failed" << std::endl;
-      StoreFitDiagnostics(initial_fit, results);
-      delete initial_fit;
+    Double_t best_chi2 = 0;
+    if (!RunInitialFit("ERROR: Initial double peak fit failed", results,
+                       best_chi2))
       return results;
-    }
-
-    Int_t tmp_ndof = 0;
-    Double_t best_chi2 = ComputeReducedChi2(initial_fit, tmp_ndof);
-    std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
-    delete initial_fit;
 
     std::vector<Double_t> best_vals;
     std::vector<Double_t> best_errs;
@@ -1917,17 +1920,9 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
 
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
-    RooFitResult *final_fit = RunFit(kFALSE);
-    StoreFitDiagnostics(final_fit, results);
-    if (final_fit && final_fit->status() == 0) {
-      final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
-      fit_valid = kTRUE;
-      std::cout << "Double peak fit converged successfully" << std::endl;
-      std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
-    } else {
-      std::cout << "ERROR: Double peak fit failed to converge" << std::endl;
-    }
-    delete final_fit;
+    fit_valid = RunFinalFit("Double peak fit converged successfully",
+                            "ERROR: Double peak fit failed to converge",
+                            results, final_chi2, final_ndof);
   }
 
   if (fit_valid) {
@@ -1935,14 +1930,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitDoublePeak(input_name, peak_name, chi2label);
 
-    results.peaks[0] = ExtractPeakResult(0);
-    results.peaks[1] = ExtractPeakResult(1);
-    results.bkg_constant = bkg_.bkg_yield->getVal();
-    results.bkg_constant_error = bkg_.bkg_yield->getError();
-    results.lin_bkg_slope = bkg_.bkg_slope->getVal();
-    results.lin_bkg_slope_error = bkg_.bkg_slope->getError();
-    results.reduced_chi2 = final_chi2;
-    results.valid = kTRUE;
+    FillFitResults(2, final_chi2, results);
   } else {
     std::cout << "ERROR: Double peak fit failed" << std::endl;
   }
@@ -2018,47 +2006,18 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
   Int_t final_ndof = 0;
 
   if (interactive_) {
-    if (LoadInteractiveParams(input_name, peak_name)) {
-      RooFitResult *refit = RunFit(kTRUE);
-      StoreFitDiagnostics(refit, results);
-      final_chi2 = ComputeReducedChi2(refit, final_ndof);
-      fit_valid = kTRUE;
-      delete refit;
-    } else {
-      Bool_t was_batch = gROOT->IsBatch();
-      gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(
-              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
-              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
-              peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin(kFitRangeName);
-        fit_range_high_ = x_->getMax(kFitRangeName);
-        BuildDisplayHistogram();
-        final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
-        SaveInteractiveParams(input_name, peak_name);
-        fit_valid = kTRUE;
-      }
-      gROOT->SetBatch(was_batch);
-    }
+    fit_valid = RefitOrEditInteractively(input_name, peak_name, results,
+                                         final_chi2, final_ndof);
   } else {
     FixComponent(1, "step");
     FixComponent(1, "low_exp");
     FixComponent(1, "low_lin");
     FixComponent(1, "high_exp");
 
-    RooFitResult *initial_fit = RunFit(kTRUE);
-    if (!initial_fit || initial_fit->status() != 0) {
-      std::cout << "ERROR: Initial constrained double peak fit failed"
-                << std::endl;
-      StoreFitDiagnostics(initial_fit, results);
-      delete initial_fit;
+    Double_t best_chi2 = 0;
+    if (!RunInitialFit("ERROR: Initial constrained double peak fit failed",
+                       results, best_chi2))
       return results;
-    }
-
-    Int_t tmp_ndof = 0;
-    Double_t best_chi2 = ComputeReducedChi2(initial_fit, tmp_ndof);
-    std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
-    delete initial_fit;
 
     std::vector<Double_t> best_vals;
     std::vector<Double_t> best_errs;
@@ -2070,16 +2029,9 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
 
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
-    RooFitResult *final_fit = RunFit(kFALSE);
-    StoreFitDiagnostics(final_fit, results);
-    if (final_fit && final_fit->status() == 0) {
-      final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
-      fit_valid = kTRUE;
-      std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
-    } else {
-      std::cout << "ERROR: Constrained double peak fit failed" << std::endl;
-    }
-    delete final_fit;
+    fit_valid =
+        RunFinalFit(nullptr, "ERROR: Constrained double peak fit failed",
+                    results, final_chi2, final_ndof);
   }
 
   if (fit_valid) {
@@ -2087,14 +2039,7 @@ FitResult RooFitUtils::FitDoublePeak(const TString input_name,
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitDoublePeak(input_name, peak_name, chi2label);
 
-    results.peaks[0] = ExtractPeakResult(0);
-    results.peaks[1] = ExtractPeakResult(1);
-    results.bkg_constant = bkg_.bkg_yield->getVal();
-    results.bkg_constant_error = bkg_.bkg_yield->getError();
-    results.lin_bkg_slope = bkg_.bkg_slope->getVal();
-    results.lin_bkg_slope_error = bkg_.bkg_slope->getError();
-    results.reduced_chi2 = final_chi2;
-    results.valid = kTRUE;
+    FillFitResults(2, final_chi2, results);
   }
 
   return results;
@@ -2170,46 +2115,18 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
   Int_t final_ndof = 0;
 
   if (interactive_) {
-    if (LoadInteractiveParams(input_name, peak_name)) {
-      RooFitResult *refit = RunFit(kTRUE);
-      StoreFitDiagnostics(refit, results);
-      final_chi2 = ComputeReducedChi2(refit, final_ndof);
-      fit_valid = kTRUE;
-      delete refit;
-    } else {
-      Bool_t was_batch = gROOT->IsBatch();
-      gROOT->SetBatch(kFALSE);
-      if (LaunchInteractiveRooFitEditor(
-              working_hist_, &events_, display_bin_width_kev_, total_pdf_, x_,
-              unbinned_data_, &peaks_, &bkg_, fit_range_low_, fit_range_high_,
-              peak_name + " / " + input_name)) {
-        fit_range_low_ = x_->getMin(kFitRangeName);
-        fit_range_high_ = x_->getMax(kFitRangeName);
-        BuildDisplayHistogram();
-        final_chi2 = ComputeReducedChi2(nullptr, final_ndof);
-        SaveInteractiveParams(input_name, peak_name);
-        fit_valid = kTRUE;
-      }
-      gROOT->SetBatch(was_batch);
-    }
+    fit_valid = RefitOrEditInteractively(input_name, peak_name, results,
+                                         final_chi2, final_ndof);
   } else {
     FixComponent(2, "step");
     FixComponent(2, "low_exp");
     FixComponent(2, "low_lin");
     FixComponent(2, "high_exp");
 
-    RooFitResult *initial_fit = RunFit(kTRUE);
-    if (!initial_fit || initial_fit->status() != 0) {
-      std::cout << "ERROR: Initial triple peak fit failed" << std::endl;
-      StoreFitDiagnostics(initial_fit, results);
-      delete initial_fit;
+    Double_t best_chi2 = 0;
+    if (!RunInitialFit("ERROR: Initial triple peak fit failed", results,
+                       best_chi2))
       return results;
-    }
-
-    Int_t tmp_ndof = 0;
-    Double_t best_chi2 = ComputeReducedChi2(initial_fit, tmp_ndof);
-    std::cout << "Initial chi2/ndf = " << best_chi2 << std::endl;
-    delete initial_fit;
 
     std::vector<Double_t> best_vals;
     std::vector<Double_t> best_errs;
@@ -2221,17 +2138,9 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
 
     std::cout << "Final fit with selected components..." << std::endl;
     RestoreParams(best_vals, best_errs, best_const);
-    RooFitResult *final_fit = RunFit(kFALSE);
-    StoreFitDiagnostics(final_fit, results);
-    if (final_fit && final_fit->status() == 0) {
-      final_chi2 = ComputeReducedChi2(final_fit, final_ndof);
-      fit_valid = kTRUE;
-      std::cout << "Triple peak fit converged successfully" << std::endl;
-      std::cout << "Final chi2/ndf = " << final_chi2 << std::endl;
-    } else {
-      std::cout << "ERROR: Triple peak fit failed to converge" << std::endl;
-    }
-    delete final_fit;
+    fit_valid = RunFinalFit("Triple peak fit converged successfully",
+                            "ERROR: Triple peak fit failed to converge",
+                            results, final_chi2, final_ndof);
   }
 
   if (fit_valid) {
@@ -2239,15 +2148,7 @@ FitResult RooFitUtils::FitTriplePeak(const TString input_name,
     TString chi2label = Form("#chi^{2}/ndf = %.3f", final_chi2);
     PlotFitTriplePeak(input_name, peak_name, chi2label);
 
-    results.peaks[0] = ExtractPeakResult(0);
-    results.peaks[1] = ExtractPeakResult(1);
-    results.peaks[2] = ExtractPeakResult(2);
-    results.bkg_constant = bkg_.bkg_yield->getVal();
-    results.bkg_constant_error = bkg_.bkg_yield->getError();
-    results.lin_bkg_slope = bkg_.bkg_slope->getVal();
-    results.lin_bkg_slope_error = bkg_.bkg_slope->getError();
-    results.reduced_chi2 = final_chi2;
-    results.valid = kTRUE;
+    FillFitResults(3, final_chi2, results);
   }
 
   return results;

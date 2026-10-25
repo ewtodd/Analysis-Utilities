@@ -269,8 +269,10 @@ struct FitResult {
    * a valid minimum with a forced or failed covariance.
    */
   Int_t fit_status = -999;
-  /// Covariance quality: `0` Exact, `1` NotPositiveDefinite, `2` Approximate,
-  /// `3` External. Anything but `0` means the errors are unreliable.
+  /// Covariance quality, on Minuit2's scale (`RooFitResult::covQual()`): `3`
+  /// full and accurate, `2` full but forced positive definite, `1` an
+  /// approximation only, `0` not positive definite, `-1` not available. Below
+  /// `3` the errors are less reliable.
   Int_t cov_qual = -999;
   Double_t edm = -1; ///< Estimated distance to the minimum.
   /**

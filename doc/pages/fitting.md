@@ -77,8 +77,9 @@ local or failed solution:
 <!---->
 - `fit_status` (Minuit2 status, 0 = success; from
   `RooFitUtils::kFirstInvalidMinimumStatus`, 3, up there is no valid minimum and
-  the parameters may still be the starting values) and `cov_qual` (0 = Exact,
-  1 = NotPositiveDefinite, 2 = Approximate, 3 = External)
+  the parameters may still be the starting values) and `cov_qual` (Minuit2's
+  scale: 3 = full and accurate, 2 = full but forced positive definite,
+  1 = approximation only, 0 = not positive definite, -1 = not available)
 - `edm` (estimated distance to minimum) and `min_nll` (minimized negative
   log-likelihood), with `has_fit_diagnostics` flagging whether they are
   meaningful. Every fit minimizes with `RooFit::Offset("initial")`: the NLL

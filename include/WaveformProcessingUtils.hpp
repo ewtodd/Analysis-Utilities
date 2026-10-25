@@ -659,6 +659,9 @@ private:
   Float_t rise_time_;
   Int_t PeakingStart() const;
   Float_t RiseTime(const TArrayF &step) const;
+  // Where the step crosses level between samples i - 1 and i, linearly
+  // interpolated; i itself when sample i - 1 is already at or above it.
+  static Double_t CrossingTime(const TArrayF &step, Int_t i, Double_t level);
 };
 
 #endif
