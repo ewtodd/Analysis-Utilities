@@ -18,6 +18,9 @@
 
 - Always use flakes and flake-based commands (`nix run`, `nix shell`, etc.).
   Never use the old `nix-shell` approach.
+- Build only with flake commands (`nix build`, `nix build .#docs`, …). Never
+  run `make`, even though a Makefile exists at the repository root: it is not
+  the supported build path for this repo.
 - If you are confused, stop and ask for help. This is especially critical in
   Nix.
 - Follow the existing style of the surrounding modules.
@@ -70,10 +73,10 @@
 - Document the declaration in the header, never the definition in `src/`.
   Comments inside `src/*.cpp` remain ordinary implementation notes and stay
   subject to the "only what is non-obvious" rule.
-- Build with `make docs` or `cmake --build build --target docs`. Output lands
-  in `docs/` (gitignored), warnings in `docs/doxygen-warnings.log`. That log is
-  currently empty and must stay that way — `nix build .#docs` fails outright if
-  it is not, and that derivation is what the live site is served from.
+- Build with `nix build .#docs`. Output lands in `docs/` (gitignored), warnings
+  in `docs/doxygen-warnings.log`. That log is currently empty and must stay
+  that way — the build fails outright if it is not, and that derivation is
+  what the live site is served from.
 
 ## Documentation layout
 
