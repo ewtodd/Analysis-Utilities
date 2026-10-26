@@ -330,6 +330,34 @@ public:
                             Double_t y1 = 0.7, Double_t y2 = 0.9);
 
   /**
+   * @brief Create, style and draw a legend in the side pad of
+   *        GetConfiguredCanvasWithSideLegend(), centred on a plot frame.
+   *
+   * The box spans the legend pad's width, less a small gap at each side, and
+   * is @p n_rows rows of 50 px tall, which spaces AddLegend()'s 30 px font
+   * evenly. Its middle sits at the middle of @p frame_pad's frame, so the
+   * legend lines up with the plot whatever its length. Size the legend pad
+   * with LegendWidthPx() from the same labels.
+   *
+   * @param frame_pad  The pad whose frame the legend centres on: the plot pad
+   *                   of GetConfiguredCanvasWithSideLegend(), or the upper
+   *                   pad of SplitPadForPanel() for a figure with a panel.
+   *                   Must not be null.
+   * @param legend_pad The legend pad of GetConfiguredCanvasWithSideLegend().
+   *                   Must not be null.
+   * @param n_rows     Rows in the legend: its entries, plus one for a header
+   *                   if it gets one.
+   *
+   * @return The drawn `TLegend`, so entries can be added to it. Owned by
+   *         @p legend_pad once drawn; null if either pad is null.
+   *
+   * @note Leaves @p frame_pad as the current pad (`gPad`), so drawing can
+   *       carry on there; entries added to the legend afterwards still show.
+   */
+  static TLegend *AddSideLegend(TPad *frame_pad, TPad *legend_pad,
+                                Int_t n_rows);
+
+  /**
    * @brief Rendered width of a text in a pixel-sized font.
    *
    * Measured by ROOT on a scratch canvas, so it is what the text will take on

@@ -363,6 +363,31 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   return leg;
 }
 
+TLegend *PlottingUtils::AddSideLegend(TPad *frame_pad, TPad *legend_pad,
+                                      Int_t n_rows) {
+  if (!frame_pad || !legend_pad) {
+    std::cerr << "PlottingUtils::AddSideLegend: null pad" << std::endl;
+    return nullptr;
+  }
+  const Double_t row_height_px = 50.0;
+  // The frame's middle in canvas coordinates, then in the legend pad's.
+  const Double_t frame_mid_in_pad =
+      0.5 * (frame_pad->GetBottomMargin() + 1.0 - frame_pad->GetTopMargin());
+  const Double_t frame_mid_in_canvas =
+      frame_pad->GetAbsYlowNDC() + frame_mid_in_pad * frame_pad->GetAbsHNDC();
+  const Double_t mid = (frame_mid_in_canvas - legend_pad->GetAbsYlowNDC()) /
+                       legend_pad->GetAbsHNDC();
+  const Double_t legend_pad_height_px =
+      legend_pad->GetWh() * legend_pad->GetAbsHNDC();
+  const Double_t half_height =
+      0.5 * n_rows * row_height_px / legend_pad_height_px;
+  legend_pad->cd();
+  TLegend *leg = AddLegend(0.02, 0.98, TMath::Max(mid - half_height, 0.0),
+                           TMath::Min(mid + half_height, 1.0));
+  frame_pad->cd();
+  return leg;
+}
+
 Double_t PlottingUtils::TextWidthPx(const TString &text, Double_t size_px,
                                     Int_t font) {
   if (text.Length() == 0)
