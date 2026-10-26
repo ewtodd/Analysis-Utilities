@@ -12,6 +12,7 @@ Bool_t PlottingUtils::preferences_set_ = kFALSE;
 Width_t PlottingUtils::line_width_ = 2;
 TString PlottingUtils::plots_base_dir_ = "plots";
 Bool_t PlottingUtils::batch_graphics_tainted_ = kFALSE;
+Bool_t PlottingUtils::residual_hist_plots_enabled_ = kTRUE;
 
 void PlottingUtils::NoteInteractiveEditorClosed() {
   batch_graphics_tainted_ = kTRUE;
@@ -42,6 +43,14 @@ void PlottingUtils::SetPlotsBaseDir(const TString &dir) {
 }
 
 TString PlottingUtils::GetPlotsBaseDir() { return plots_base_dir_; }
+
+void PlottingUtils::SetResidualHistPlotsEnabled(Bool_t enabled) {
+  residual_hist_plots_enabled_ = enabled;
+}
+
+Bool_t PlottingUtils::GetResidualHistPlotsEnabled() {
+  return residual_hist_plots_enabled_;
+}
 
 void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
   if (!preferences_set_)
@@ -682,6 +691,9 @@ void PlottingUtils::PlotFitWithResiduals(
 void PlottingUtils::PlotPullHistogram(TGraph *residuals,
                                       const TString &output_name,
                                       const TString &output_subdirectory) {
+  if (!residual_hist_plots_enabled_)
+    return;
+
   Int_t npoints = residuals->GetN();
   if (npoints == 0)
     return;

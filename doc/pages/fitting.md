@@ -110,7 +110,11 @@ but from a poor start it can also reach a different local minimum with status
 <!---->
 Reduced chi-squared is displayed on fit plots by default. Individual
 peak components are plotted summed with the background for readability, and
-multi-peak fits use distinct line styles per peak.
+multi-peak fits use distinct line styles per peak. Each fit figure is written
+together with a pull-histogram figure in a `residual_hists` subdirectory of
+the same directory;
+`PlottingUtils::SetResidualHistPlotsEnabled(kFALSE)` skips those when they
+are not wanted.
 <!---->
 ## Backend-specific notes for RooFitUtils
 <!---->

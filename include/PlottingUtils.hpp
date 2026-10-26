@@ -260,6 +260,24 @@ public:
   static TString GetPlotsBaseDir();
 
   /**
+   * @brief Enable or disable the pull-histogram figures the fit tools write.
+   *
+   * PlotFitWithResiduals() always saves its main fit figure, and by default
+   * saves a companion pull histogram under `residual_hists/` next to it.
+   * Everything that writes through this class — the FittingUtils, RooFitUtils
+   * and simultaneous fit plots — honours this switch.
+   *
+   * @param enabled `kTRUE` (the default) to write the pull-histogram figures,
+   *                `kFALSE` to skip them, leaving the fit figures alone.
+   */
+  static void SetResidualHistPlotsEnabled(Bool_t enabled = kTRUE);
+
+  /// @brief Whether pull-histogram figures are currently written.
+  /// @return `kTRUE` by default; `kFALSE` after
+  ///         SetResidualHistPlotsEnabled(kFALSE).
+  static Bool_t GetResidualHistPlotsEnabled();
+
+  /**
    * @brief Draw a fit over its data with a residual panel and save it.
    *
    * Produces a two-pad figure: the histogram with the total fit and each
@@ -283,7 +301,8 @@ public:
    *                            the upper pad.
    *
    * @note Saves through SaveFigure(), so the same base-directory and format
-   *       rules apply. A companion pull histogram is written alongside.
+   *       rules apply. A companion pull histogram is written alongside unless
+   *       disabled with SetResidualHistPlotsEnabled(kFALSE).
    */
   static void
   PlotFitWithResiduals(TH1 *hist, TGraph *total_graph,
@@ -561,6 +580,7 @@ private:
   static Width_t line_width_;
   static TString plots_base_dir_;
   static Bool_t batch_graphics_tainted_;
+  static Bool_t residual_hist_plots_enabled_;
   static void SetTurboPalette();
   static void WarnIfNotConfigured(const TString method_name);
   static TCanvas *CreateCanvas(const TString &name, Int_t width, Int_t height);

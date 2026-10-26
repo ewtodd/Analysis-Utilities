@@ -41,7 +41,7 @@
           };
         };
 
-        version = "26.10.24";
+        version = "26.10.26";
 
         # ROOT for both builds: nixpkgs' 6.40 derivation rebuilt from the
         # root-src master commit above. Released ROOT up to 6.40.04 computes a
@@ -332,7 +332,7 @@
             gnumake
             pkg-config
             clang-tools
-            # API docs: `make docs` / `cmake --build build --target docs`.
+            # API docs: `nix build .#docs`.
             doxygen
             graphviz
             (python3.withPackages (
@@ -361,7 +361,7 @@
               gnumake
               pkg-config
               clang-tools
-              # API docs: `make docs` / `cmake --build build --target docs`.
+              # API docs: `nix build .#docs`.
               doxygen
               graphviz
               (python3.withPackages (
