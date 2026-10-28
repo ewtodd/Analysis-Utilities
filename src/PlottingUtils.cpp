@@ -2,7 +2,9 @@
 #include <TAttLine.h>
 #include <TAttMarker.h>
 #include <TAxis.h>
+#include <THStack.h>
 #include <TList.h>
+#include <TMultiGraph.h>
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TText.h>
@@ -287,20 +289,6 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
   canvas->Modified();
   canvas->Update();
 
-  std::vector<TString> extensions;
-  std::vector<TString> print_options;
-  if (save_format_ != PlotSaveFormat::kPDF) {
-    extensions.push_back(".png");
-    print_options.push_back("png");
-  }
-  // Left to itself, ROOT prints a canvas at least as wide as it is tall onto
-  // a portrait page turned by 90 degrees, which LaTeX then places sideways or
-  // shrunk. "Portrait" gives an unrotated page with the canvas's own shape.
-  if (save_format_ != PlotSaveFormat::kPNG) {
-    extensions.push_back(".pdf");
-    print_options.push_back("pdf Portrait");
-  }
-
   TString base = GetPlotsBaseDir();
   TString full_dir =
       output_subdirectory == "" ? base : base + "/" + output_subdirectory;
@@ -312,8 +300,7 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
   TString prefix = full_dir + "/";
 
   if (save_options != PlotSaveOptions::kLOG)
-    for (size_t f = 0; f < extensions.size(); f++)
-      canvas->Print(prefix + output_name + extensions[f], print_options[f]);
+    PrintInFormats(canvas, prefix + output_name);
 
   if (save_options != PlotSaveOptions::kLINEAR) {
     TList *primitives = canvas->GetListOfPrimitives();
@@ -341,14 +328,91 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
-    for (size_t f = 0; f < extensions.size(); f++)
-      canvas->Print(prefix + "log_" + output_name + extensions[f],
-                    print_options[f]);
+    PrintInFormats(canvas, prefix + "log_" + output_name);
 
     canvas->SetLogy(kFALSE);
     canvas->Modified();
     canvas->Update();
   }
+}
+
+void PlottingUtils::PrintInFormats(TCanvas *canvas, const TString &path) {
+  if (save_format_ != PlotSaveFormat::kPDF)
+    canvas->Print(path + ".png", "png");
+  if (save_format_ == PlotSaveFormat::kPNG)
+    return;
+
+  // Left to itself, ROOT prints a canvas at least as wide as it is tall onto
+  // a portrait page turned by 90 degrees, which LaTeX then places sideways or
+  // shrunk. "Portrait" gives an unrotated page with the canvas's own shape.
+  if (save_format_ == PlotSaveFormat::kPDF) {
+    canvas->Print(path + ".pdf", "pdf Portrait");
+    return;
+  }
+
+  // The canvas was drawn for the PNG. The PDF takes half of every width, the
+  // style's too, since the axes and grid are built from it while printing.
+  std::vector<TAttLine *> lines;
+  CollectLineAttributes(canvas, lines);
+  std::vector<Width_t> png_widths;
+  for (size_t i = 0; i < lines.size(); i++) {
+    Width_t width = lines[i]->GetLineWidth();
+    png_widths.push_back(width);
+    if (width > 0)
+      lines[i]->SetLineWidth(Width_t(TMath::Max(1, TMath::Nint(0.5 * width))));
+  }
+  const Width_t style_line = gStyle->GetLineWidth();
+  const Width_t style_hist = gStyle->GetHistLineWidth();
+  const Width_t style_grid = gStyle->GetGridWidth();
+  gStyle->SetLineWidth(Width_t(TMath::Max(1, TMath::Nint(0.5 * style_line))));
+  gStyle->SetHistLineWidth(
+      Width_t(TMath::Max(1, TMath::Nint(0.5 * style_hist))));
+  gStyle->SetGridWidth(Width_t(TMath::Max(1, TMath::Nint(0.5 * style_grid))));
+  canvas->Modified();
+  canvas->Update();
+
+  canvas->Print(path + ".pdf", "pdf Portrait");
+
+  for (size_t i = 0; i < lines.size(); i++)
+    lines[i]->SetLineWidth(png_widths[i]);
+  gStyle->SetLineWidth(style_line);
+  gStyle->SetHistLineWidth(style_hist);
+  gStyle->SetGridWidth(style_grid);
+  canvas->Modified();
+  canvas->Update();
+}
+
+void PlottingUtils::CollectLineAttributes(TObject *object,
+                                          std::vector<TAttLine *> &lines) {
+  if (!object)
+    return;
+  TAttLine *line = dynamic_cast<TAttLine *>(object);
+  if (line) {
+    // An object drawn in two pads, or listed both as a primitive and as a
+    // function of a histogram, must be halved once.
+    for (size_t i = 0; i < lines.size(); i++)
+      if (lines[i] == line)
+        return;
+    lines.push_back(line);
+  }
+  TList *children = nullptr;
+  if (object->InheritsFrom(TVirtualPad::Class()))
+    children = static_cast<TVirtualPad *>(object)->GetListOfPrimitives();
+  else if (object->InheritsFrom(TH1::Class()))
+    children = static_cast<TH1 *>(object)->GetListOfFunctions();
+  else if (object->InheritsFrom(TGraph::Class()))
+    children = static_cast<TGraph *>(object)->GetListOfFunctions();
+  else if (object->InheritsFrom(TMultiGraph::Class()))
+    children = static_cast<TMultiGraph *>(object)->GetListOfGraphs();
+  else if (object->InheritsFrom(THStack::Class()))
+    children = static_cast<THStack *>(object)->GetHists();
+  else if (object->InheritsFrom(TLegend::Class()))
+    children = static_cast<TLegend *>(object)->GetListOfPrimitives();
+  if (!children)
+    return;
+  TIter next(children);
+  for (TObject *child = next(); child; child = next())
+    CollectLineAttributes(child, lines);
 }
 
 std::vector<Int_t> PlottingUtils::GetDefaultColors() {

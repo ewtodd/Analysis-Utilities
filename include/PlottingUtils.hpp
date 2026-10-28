@@ -30,7 +30,8 @@ enum class PlotSaveOptions {
 enum class PlotSaveFormat {
   kPNG,      ///< PNG raster output; line width 2.
   kPDF,      ///< PDF vector output; line width 1.
-  kPNGAndPDF ///< Both, as two files per figure; line width 2.
+  kPNGAndPDF ///< Both, as two files per figure; line width 2 in the PNG, and
+             ///< half of every width in the PDF.
 };
 
 /**
@@ -54,7 +55,7 @@ public:
    * sizes, 1.2 title offsets, grids on in a light grey dashed style, ticks on
    * both axes, and a 255-colour turbo palette for 2-D colour scales. Also fixes
    * the line width used by the Configure* methods — 2 for PNG and for PNG
-   * and PDF together, 1 for PDF alone.
+   * and PDF together (whose PDF is printed at half width), 1 for PDF alone.
    *
    * @param save_format Output format for SaveFigure(). Defaults to
    *                    PlotSaveFormat::kPNG.
@@ -218,7 +219,11 @@ public:
    * The file lands in `<plots_base>/` or `<plots_base>/<subdirectory>/`, with
    * the extension chosen by SetStylePreferences(); with
    * PlotSaveFormat::kPNGAndPDF each figure is written twice, as `.png` and
-   * `.pdf`. Missing directories are created. For PlotSaveOptions::kLOG and
+   * `.pdf`, the PDF with every line width in the canvas and the style's line,
+   * histogram and grid widths halved (to at least 1): the PNG style's 2
+   * becomes the PDF style's 1, and widths a caller chose for the PNG scale
+   * with it. The widths are restored afterwards. Missing directories are
+   * created. For PlotSaveOptions::kLOG and
    * PlotSaveOptions::kBOTH the log-y variant is written with a `log_`
    * filename prefix.
    *
@@ -619,6 +624,9 @@ private:
   static TCanvas *CreateCanvas(const TString &name, Int_t width, Int_t height);
   static void PlotPullHistogram(TGraph *residuals, const TString &output_name,
                                 const TString &output_subdirectory);
+  static void PrintInFormats(TCanvas *canvas, const TString &path);
+  static void CollectLineAttributes(TObject *object,
+                                    std::vector<TAttLine *> &lines);
 };
 
 #endif
