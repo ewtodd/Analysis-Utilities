@@ -61,7 +61,7 @@ void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
 void PlottingUtils::SetStylePreferences(PlotSaveFormat save_format) {
   save_format_ = save_format;
   preferences_set_ = kTRUE;
-  line_width_ = save_format_ == PlotSaveFormat::kPNG ? 2 : 1;
+  line_width_ = save_format_ == PlotSaveFormat::kPDF ? 1 : 2;
 
   gStyle->SetOptStat(0);
   gStyle->SetOptFit(0);
@@ -287,8 +287,19 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
   canvas->Modified();
   canvas->Update();
 
-  TString extension = (save_format_ == PlotSaveFormat::kPNG) ? ".png" : ".pdf";
-  TString output_filename = output_name + extension;
+  std::vector<TString> extensions;
+  std::vector<TString> print_options;
+  if (save_format_ != PlotSaveFormat::kPDF) {
+    extensions.push_back(".png");
+    print_options.push_back("png");
+  }
+  // Left to itself, ROOT prints a canvas at least as wide as it is tall onto
+  // a portrait page turned by 90 degrees, which LaTeX then places sideways or
+  // shrunk. "Portrait" gives an unrotated page with the canvas's own shape.
+  if (save_format_ != PlotSaveFormat::kPNG) {
+    extensions.push_back(".pdf");
+    print_options.push_back("pdf Portrait");
+  }
 
   TString base = GetPlotsBaseDir();
   TString full_dir =
@@ -300,14 +311,9 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
 
   TString prefix = full_dir + "/";
 
-  // Left to itself, ROOT prints a canvas at least as wide as it is tall onto
-  // a portrait page turned by 90 degrees, which LaTeX then places sideways or
-  // shrunk. "Portrait" gives an unrotated page with the canvas's own shape.
-  TString print_option =
-      (save_format_ == PlotSaveFormat::kPDF) ? "pdf Portrait" : "png";
-
   if (save_options != PlotSaveOptions::kLOG)
-    canvas->Print(prefix + output_filename, print_option);
+    for (size_t f = 0; f < extensions.size(); f++)
+      canvas->Print(prefix + output_name + extensions[f], print_options[f]);
 
   if (save_options != PlotSaveOptions::kLINEAR) {
     TList *primitives = canvas->GetListOfPrimitives();
@@ -326,7 +332,7 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
         std::cout
             << "The z axis is already log by default if you used PlottingUtils::Configure2DHistogram()."
             << std::endl;
-        std::cout << "Plot " << prefix + "log_" + output_filename
+        std::cout << "Plot " << prefix + "log_" + output_name
                   << " was not saved." << std::endl;
         std::exit(1);
       };
@@ -335,7 +341,9 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
-    canvas->Print(prefix + "log_" + output_filename, print_option);
+    for (size_t f = 0; f < extensions.size(); f++)
+      canvas->Print(prefix + "log_" + output_name + extensions[f],
+                    print_options[f]);
 
     canvas->SetLogy(kFALSE);
     canvas->Modified();

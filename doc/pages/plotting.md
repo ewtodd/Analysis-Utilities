@@ -12,7 +12,8 @@ styling. No object instantiation required.
 
 - `SetStylePreferences(PlotSaveFormat)` — must be called before using other
   methods (warns if not). Sets global ROOT style and chooses output format
-  (`PlotSaveFormat::kPNG` or `PlotSaveFormat::kPDF`, defaults to PNG). Also
+  (`PlotSaveFormat::kPNG`, `PlotSaveFormat::kPDF`, or
+  `PlotSaveFormat::kPNGAndPDF` for both files per figure; defaults to PNG). Also
   installs a 255-color turbo palette (as in matplotlib) for 2-D color scales.
   Calling `InitUtils::SetROOTPreferences()` takes care of this and is
   recommended.

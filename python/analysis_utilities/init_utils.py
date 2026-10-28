@@ -29,7 +29,8 @@ def set_root_preferences(
     Parameters
     ----------
     save_format : ROOT.PlotSaveFormat, optional
-        Output format for plots. Defaults to
+        Output format for plots: ``kPNG``, ``kPDF``, or ``kPNGAndPDF`` for
+        both files per figure. Defaults to
         :cpp:enumerator:`PlotSaveFormat::kPNG` if not provided.
     plots_dir : str | os.PathLike, optional
         Base directory for plot output. Resolved to an absolute path and

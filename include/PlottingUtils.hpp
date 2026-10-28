@@ -28,8 +28,9 @@ enum class PlotSaveOptions {
 
 /// @brief Output file format for saved figures.
 enum class PlotSaveFormat {
-  kPNG, ///< PNG raster output; line width 2.
-  kPDF  ///< PDF vector output; line width 1.
+  kPNG,      ///< PNG raster output; line width 2.
+  kPDF,      ///< PDF vector output; line width 1.
+  kPNGAndPDF ///< Both, as two files per figure; line width 2.
 };
 
 /**
@@ -52,7 +53,8 @@ public:
    * Sets `gStyle` globally: no stat or fit box, 0.06 axis title and label
    * sizes, 1.2 title offsets, grids on in a light grey dashed style, ticks on
    * both axes, and a 255-colour turbo palette for 2-D colour scales. Also fixes
-   * the line width used by the Configure* methods — 2 for PNG, 1 for PDF.
+   * the line width used by the Configure* methods — 2 for PNG and for PNG
+   * and PDF together, 1 for PDF alone.
    *
    * @param save_format Output format for SaveFigure(). Defaults to
    *                    PlotSaveFormat::kPNG.
@@ -214,9 +216,11 @@ public:
    * @brief Write a canvas to disk under the configured plots base directory.
    *
    * The file lands in `<plots_base>/` or `<plots_base>/<subdirectory>/`, with
-   * the extension chosen by SetStylePreferences(). Missing directories are
-   * created. For PlotSaveOptions::kLOG and PlotSaveOptions::kBOTH the log-y
-   * variant is written with a `log_` filename prefix.
+   * the extension chosen by SetStylePreferences(); with
+   * PlotSaveFormat::kPNGAndPDF each figure is written twice, as `.png` and
+   * `.pdf`. Missing directories are created. For PlotSaveOptions::kLOG and
+   * PlotSaveOptions::kBOTH the log-y variant is written with a `log_`
+   * filename prefix.
    *
    * @param canvas              Canvas to save. Must not be null.
    * @param output_filename     Base filename, without extension.
@@ -582,7 +586,8 @@ public:
   static TString GetRandomName();
 
   /// @brief Line width the Configure* methods apply.
-  /// @return 2 after SetStylePreferences(PlotSaveFormat::kPNG), 1 for kPDF.
+  /// @return 2 after SetStylePreferences(PlotSaveFormat::kPNG) or
+  ///         SetStylePreferences(PlotSaveFormat::kPNGAndPDF), 1 for kPDF.
   static Width_t GetLineWidth() { return line_width_; };
 
   /**
