@@ -114,7 +114,10 @@ multi-peak fits use distinct line styles per peak. Each fit figure is written
 together with a pull-histogram figure in a `residual_hists` subdirectory of
 the same directory;
 `PlottingUtils::SetResidualHistPlotsEnabled(kFALSE)` skips those when they
-are not wanted.
+are not wanted. To restyle a fit for a publication figure,
+`PlottingUtils::SetFitFigureObjectsSaved()` also writes each fit figure's
+data histogram, model curves, fit range and label to a ROOT file named after
+the figure.
 <!---->
 ## Backend-specific notes for RooFitUtils
 <!---->

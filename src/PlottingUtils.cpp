@@ -2,9 +2,13 @@
 #include <TAttLine.h>
 #include <TAttMarker.h>
 #include <TAxis.h>
+#include <TDirectory.h>
+#include <TFile.h>
 #include <THStack.h>
 #include <TList.h>
 #include <TMultiGraph.h>
+#include <TNamed.h>
+#include <TParameter.h>
 #include <TROOT.h>
 #include <TSystem.h>
 #include <TText.h>
@@ -15,6 +19,7 @@ Width_t PlottingUtils::line_width_ = 2;
 TString PlottingUtils::plots_base_dir_ = "plots";
 Bool_t PlottingUtils::batch_graphics_tainted_ = kFALSE;
 Bool_t PlottingUtils::residual_hist_plots_enabled_ = kTRUE;
+Bool_t PlottingUtils::fit_figure_objects_saved_ = kFALSE;
 
 void PlottingUtils::NoteInteractiveEditorClosed() {
   batch_graphics_tainted_ = kTRUE;
@@ -52,6 +57,43 @@ void PlottingUtils::SetResidualHistPlotsEnabled(Bool_t enabled) {
 
 Bool_t PlottingUtils::GetResidualHistPlotsEnabled() {
   return residual_hist_plots_enabled_;
+}
+
+void PlottingUtils::SetFitFigureObjectsSaved(Bool_t enabled) {
+  fit_figure_objects_saved_ = enabled;
+}
+
+Bool_t PlottingUtils::GetFitFigureObjectsSaved() {
+  return fit_figure_objects_saved_;
+}
+
+void PlottingUtils::WriteFitFigureObjects(
+    TH1 *hist, TGraph *total_graph,
+    const std::vector<TGraph *> &component_graphs, Float_t fit_range_low,
+    Float_t fit_range_high, const TString &label, const TString &output_name,
+    const TString &output_subdirectory) {
+  TString base = GetPlotsBaseDir();
+  TString full_dir =
+      output_subdirectory == "" ? base : base + "/" + output_subdirectory;
+  if (gSystem->AccessPathName(full_dir)) {
+    gSystem->mkdir(full_dir, kTRUE);
+  }
+  TDirectory::TContext restore_directory;
+  TFile file(full_dir + "/" + output_name + ".root", "RECREATE");
+  hist->Write("data");
+  if (total_graph)
+    total_graph->Write("total");
+  for (size_t i = 0; i < component_graphs.size(); i++) {
+    if (component_graphs[i])
+      component_graphs[i]->Write(Form("component_%d", (Int_t)i));
+  }
+  TParameter<Double_t> low("fit_range_low", fit_range_low);
+  TParameter<Double_t> high("fit_range_high", fit_range_high);
+  low.Write();
+  high.Write();
+  TNamed label_object("label", label.Data());
+  label_object.Write();
+  file.Close();
 }
 
 void PlottingUtils::WarnIfNotConfigured(const TString method_name) {
@@ -667,6 +709,10 @@ void PlottingUtils::PlotFitWithResiduals(
     const std::vector<TGraph *> &component_graphs, Float_t fit_range_low,
     Float_t fit_range_high, const TString &output_name,
     const TString &output_subdirectory, const TString &label, Bool_t logy) {
+  if (fit_figure_objects_saved_)
+    WriteFitFigureObjects(hist, total_graph, component_graphs, fit_range_low,
+                          fit_range_high, label, output_name,
+                          output_subdirectory);
   TCanvas *canvas = GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);

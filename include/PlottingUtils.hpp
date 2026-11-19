@@ -287,6 +287,34 @@ public:
   static Bool_t GetResidualHistPlotsEnabled();
 
   /**
+   * @brief Enable or disable writing each fit figure's drawn objects to a
+   *        ROOT file, for redrawing the fit in another figure.
+   *
+   * With this on, PlotFitWithResiduals() also writes
+   * `<plots base>/<subdirectory>/<output name>.root` holding what it draws:
+   * the data histogram as `data`, the summed model as `total`, each component
+   * curve as `component_0`, `component_1`, ... in the order passed, the fit
+   * range as the `TParameter<Double_t>` objects `fit_range_low` and
+   * `fit_range_high`, and the label as the `TNamed` `label`. The histogram is
+   * written before the figure restyles it; the curves keep their line
+   * colours and styles, which is how the fit tools tell their components
+   * apart. Everything that plots through PlotFitWithResiduals() — the
+   * FittingUtils, RooFitUtils and simultaneous fit plots — honours this
+   * switch.
+   *
+   * @param enabled `kTRUE` to write the ROOT files, `kFALSE` (the default)
+   *                not to.
+   *
+   * @note The file is opened and closed inside the call; `gDirectory` is
+   *       restored afterwards.
+   */
+  static void SetFitFigureObjectsSaved(Bool_t enabled = kTRUE);
+
+  /// @brief Whether fit figures' drawn objects are currently written.
+  /// @return `kFALSE` by default; `kTRUE` after SetFitFigureObjectsSaved().
+  static Bool_t GetFitFigureObjectsSaved();
+
+  /**
    * @brief Draw a fit over its data with a residual panel and save it.
    *
    * Produces a two-pad figure: the histogram with the total fit and each
@@ -619,11 +647,18 @@ private:
   static TString plots_base_dir_;
   static Bool_t batch_graphics_tainted_;
   static Bool_t residual_hist_plots_enabled_;
+  static Bool_t fit_figure_objects_saved_;
   static void SetTurboPalette();
   static void WarnIfNotConfigured(const TString method_name);
   static TCanvas *CreateCanvas(const TString &name, Int_t width, Int_t height);
   static void PlotPullHistogram(TGraph *residuals, const TString &output_name,
                                 const TString &output_subdirectory);
+  static void
+  WriteFitFigureObjects(TH1 *hist, TGraph *total_graph,
+                        const std::vector<TGraph *> &component_graphs,
+                        Float_t fit_range_low, Float_t fit_range_high,
+                        const TString &label, const TString &output_name,
+                        const TString &output_subdirectory);
   static void PrintInFormats(TCanvas *canvas, const TString &path);
   static void CollectLineAttributes(TObject *object,
                                     std::vector<TAttLine *> &lines);
