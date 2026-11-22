@@ -352,6 +352,9 @@ public:
   /**
    * @brief Create, style and draw a legend on the current pad.
    *
+   * The text is a 34 px font (43): below the 38 px of AddText() annotations
+   * and the 48 px of the axis titles and labels on the standard canvas.
+   *
    * @param x1 Left edge, in NDC (0-1).
    * @param x2 Right edge, in NDC (0-1).
    * @param y1 Bottom edge, in NDC (0-1).
@@ -371,7 +374,7 @@ public:
    *        GetConfiguredCanvasWithSideLegend(), centred on a plot frame.
    *
    * The box spans the legend pad's width, less a small gap at each side, and
-   * is @p n_rows rows of 50 px tall, which spaces AddLegend()'s 30 px font
+   * is @p n_rows rows of 50 px tall, which spaces AddLegend()'s 34 px font
    * evenly. Its middle sits at the middle of @p frame_pad's frame, so the
    * legend lines up with the plot whatever its length. Size the legend pad
    * with LegendWidthPx() from the same labels.
@@ -401,14 +404,14 @@ public:
    * any pad, whatever the pad's size.
    *
    * @param text    Text to measure. ROOT `TLatex` markup is honoured.
-   * @param size_px Font size in pixels. 30 by default, the size AddLegend()
+   * @param size_px Font size in pixels. 34 by default, the size AddLegend()
    *                uses.
    * @param font    ROOT font code, of precision 3 so the size is in pixels.
    *                43 by default, the font AddLegend() uses.
    *
    * @return The width in pixels.
    */
-  static Double_t TextWidthPx(const TString &text, Double_t size_px = 30.0,
+  static Double_t TextWidthPx(const TString &text, Double_t size_px = 34.0,
                               Int_t font = 43);
 
   /**
@@ -421,7 +424,8 @@ public:
    *
    * @param labels     The entry labels. ROOT `TLatex` markup is honoured.
    * @param header     The header, or empty for none.
-   * @param size_px    Font size in pixels. 30 by default.
+   * @param size_px    Font size in pixels. 34 by default, the size AddLegend()
+   *                   uses.
    * @param margin     The legend's symbol-column fraction. 0.25 by default,
    *                   `TLegend`'s own default.
    * @param padding_px Clear space inside each side of the box, in pixels. 15
@@ -431,7 +435,7 @@ public:
    */
   static Double_t LegendWidthPx(const std::vector<TString> &labels,
                                 const TString &header = "",
-                                Double_t size_px = 30.0, Double_t margin = 0.25,
+                                Double_t size_px = 34.0, Double_t margin = 0.25,
                                 Double_t padding_px = 15.0);
 
   /**
@@ -525,7 +529,7 @@ public:
                                   Int_t reference_height_px = 800);
 
   /**
-   * @brief Set a legend's text to AddLegend()'s 30 px times a scale.
+   * @brief Set a legend's text to AddLegend()'s 34 px times a scale.
    *
    * @param legend Legend to resize. Null is tolerated and ignored.
    * @param scale  Overall scale, normally from FigureScale().
@@ -592,7 +596,9 @@ public:
    * @brief Create and draw a text annotation on the current pad.
    *
    * Useful for subplot labels such as "(a)" and "(b)", or any free annotation.
-   * The text is right-top aligned at the given point.
+   * The text is right-top aligned at the given point, in a 38 px font (43): a
+   * step below the 48 px of the axis titles and labels (their 0.06 of the
+   * standard canvas's 800 px side) and above the 34 px of AddLegend().
    *
    * @param label Text to draw. ROOT `TLatex` markup is honoured.
    * @param x     Horizontal position, in NDC (0-1).

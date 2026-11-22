@@ -470,7 +470,7 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   TLegend *leg = new TLegend(x1, y1, x2, y2);
   leg->SetBorderSize(1);
   leg->SetFillColor(kWhite);
-  leg->SetTextSize(30);
+  leg->SetTextSize(34);
   leg->SetTextFont(43);
   leg->Draw();
 
@@ -634,7 +634,7 @@ void PlottingUtils::ScaleAxisFontsToPad(TH1 *frame, TVirtualPad *pad,
 void PlottingUtils::ScaleLegend(TLegend *legend, Double_t scale) {
   if (!legend)
     return;
-  legend->SetTextSize(30.0 * scale);
+  legend->SetTextSize(34.0 * scale);
 }
 
 void PlottingUtils::ScaleText(TText *text, TVirtualPad *pad, Double_t scale,
@@ -688,7 +688,7 @@ TLatex *PlottingUtils::AddText(const TString label, Double_t x, Double_t y,
                                Double_t angle) {
   TLatex *text = new TLatex(x, y, label);
   text->SetNDC();
-  text->SetTextSize(30);
+  text->SetTextSize(38);
   text->SetTextAlign(33);
   text->SetTextFont(43);
   text->SetTextAngle(angle);

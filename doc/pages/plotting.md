@@ -42,6 +42,10 @@ styling. No object instantiation required.
   for arbitrary annotations (e.g. subplot labels like "(a)", "(b)"). Optional
   `angle` (default 0) sets text rotation in degrees.
 
+On the standard 1200×800 canvas the text comes in three sizes: axis titles and
+labels at 48 px (0.06 of the canvas's shorter side), `AddText` annotations at
+38 px, and `AddLegend` legends at 34 px.
+
 ## Output
 
 - `SaveFigure(canvas, name, subdirectory, PlotSaveOptions)` — saves to
