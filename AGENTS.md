@@ -1,64 +1,80 @@
 # Mandatory Rules
-
+<!---->
 ## In all languages
-
+<!---->
 - Prefer slightly verbose, self-explanatory code over terse code that needs
   comments to be understood.
-- Keep comments to only what explains something non-obvious. This governs
-  inline commentary inside function bodies. Doxygen blocks on public
+- Keep comments to only what explains something non-obvious.
+This governs
+  inline commentary inside function bodies.
+  Doxygen blocks on public
   declarations are exempt and have their own rules under "API documentation
   (Doxygen)" below.
-- Never embed a literal `\n` inside a string or print argument. A line break
-  is always its own explicit statement. In C++/ROOT, use
-  `std::cout << ... << std::endl;`. In Python, split output into separate
+- Never embed a literal `\n` inside a string or print argument.
+A line break
+  is always its own explicit statement.
+  In C++/ROOT, use
+  `std::cout << ... << std::endl;`.
+  In Python, split output into separate
   `print()` calls, and use a bare `print()` for a blank line rather than
   appending `\n`.
-
+<!---->
 ## Nix
-
+<!---->
 - Always use flakes and flake-based commands (`nix run`, `nix shell`, etc.).
   Never use the old `nix-shell` approach.
-- Build only with flake commands (`nix build`, `nix build .#docs`, …). Never
+- Build only with flake commands (`nix build`, `nix build .#docs`, …).
+Never
   run `make`, even though a Makefile exists at the repository root: it is not
   the supported build path for this repo.
-- If you are confused, stop and ask for help. This is especially critical in
+- If you are confused, stop and ask for help.
+This is especially critical in
   Nix.
 - Follow the existing style of the surrounding modules.
-
+<!---->
 ## C++ / ROOT
-
+<!---->
 - Use ROOT data types, and pick the *correct* one for the actual need rather
   than defaulting blindly: `Int_t` for ordinary ints, `Long64_t` for entry
   counts and large/64-bit values, `Double_t` for floating point, `TString`
-  for string convenience, and so on. Match the width and signedness the code
+  for string convenience, and so on.
+  Match the width and signedness the code
   actually requires.
 - Do not use modern C++ features: no `auto`, no smart pointers, no
-  range-based (`for (x : c)`) iteration. Use explicit types and classic
+  range-based (`for (x : c)`) iteration.
+  Use explicit types and classic
   indexed/iterator loops.
 - Lambdas are permitted where they are short, local, and improve readability
   over the alternatives: sort comparators defined next to the std::sort call,
   thread workers whose explicit parameter lists would be longer and harder to
-  scan than an inline capture. A lambda that spans more than about 5 lines or
+  scan than an inline capture.
+  A lambda that spans more than about 5 lines or
   captures by reference outside an immediately obvious scope (e.g. stored in a
   std::function returned from the function) should still be a named function.
   When in doubt, write a named function.
 - In performance-critical code, always gate logging behind a compile- or
-  run-time toggle so it can be disabled. The `std::endl` flush is therefore
+  run-time toggle so it can be disabled.
+  The `std::endl` flush is therefore
   never a concern on hot paths.
-
+<!---->
 ## API documentation (Doxygen)
-
+<!---->
 - Doxygen blocks on public declarations are API reference material, not inline
-  commentary. They are read in the generated HTML with no source next to them,
+  commentary.
+  They are read in the generated HTML with no source next to them,
   so the "only what is non-obvious" rule does not apply: document the obvious
-  parameters too. A reader who can already tell from the source what `sigma`
+  parameters too.
+  A reader who can already tell from the source what `sigma`
   means is not the reader these are written for.
 - Public declarations in `include/*.hpp` — classes, structs, enums, free
-  functions, and public member functions — carry a Doxygen block. Coverage is
+  functions, and public member functions — carry a Doxygen block.
+  Coverage is
   complete and `WARN_IF_UNDOCUMENTED` is on, so adding an undocumented public
-  declaration fails `nix build .#docs`. Private members are not extracted and
+  declaration fails `nix build .#docs`.
+  Private members are not extracted and
   do not need blocks.
-- Document a function at one declaration only. A forward declaration and its
+- Document a function at one declaration only.
+A forward declaration and its
   real declaration are the same entity to doxygen, so two blocks get merged and
   the `@param` list is reported as doubled — see the note above
   `LaunchInteractiveFitEditor` in `FittingUtils.hpp`.
@@ -73,15 +89,19 @@
 - Document the declaration in the header, never the definition in `src/`.
   Comments inside `src/*.cpp` remain ordinary implementation notes and stay
   subject to the "only what is non-obvious" rule.
-- Build with `nix build .#docs`. Output lands in `docs/` (gitignored), warnings
-  in `docs/doxygen-warnings.log`. That log is currently empty and must stay
+- Build with `nix build .#docs`.
+Output lands in `docs/` (gitignored), warnings
+  in `docs/doxygen-warnings.log`.
+  That log is currently empty and must stay
   that way — the build fails outright if it is not, and that derivation is
   what the live site is served from.
-
+<!---->
 ## Documentation layout
-
+<!---->
 - `doc/pages/*.md` is the narrative documentation — guides, worked examples,
-  build and deployment notes. It is what the README used to hold. Prose that
+  build and deployment notes.
+  It is what the README used to hold.
+  Prose that
   explains *how to use* the library goes here, not in the README.
 - `doc/pages/index.md` is the site's main page and the only place the guide list
   lives; a new page must be added there with `@subpage <id>` or it will not
@@ -96,33 +116,36 @@
   a second copy of the documentation.
 - The site's theme (the Kanagawa palette) lives in the website repository
   (github:ewtodd/website), not here. Change colours there.
-
+<!---->
 ## Python
-
+<!---->
 - In Python that uses ROOT, never use matplotlib. Look at nearby files for the
   established plotting approach, or ask which is preferred.
-
+<!---->
 ## Explanations
-
+<!---->
 - For non-trivial changes, explain thoroughly what changed and why. Do not
   over-summarize or truncate the reasoning. Trivial edits can stay terse.
-
+<!---->
 ## Publishing
-
+<!---->
 - docs.ethanwtodd.com/analysis-utilities is the website repository's `docs`
   package (~/Software/website), which takes this repository as a flake input;
-  the Caddy vhost on `nu` serves it. There is no CI publish step.
+  the Caddy vhost on `nu` serves it.
+  There is no CI publish step.
 - To publish a documentation change: push here, run `nix flake update
   analysis-utilities` in ~/Software/website and push that, then `nix flake
   update website` in /etc/nixos and deploy nu (`colmena apply --on nu`).
 - Doxygen emits only relative links, which is what allows the site to be served
-  under a path prefix. Do not introduce root-absolute URLs into `doc/pages`, or
+  under a path prefix.
+  Do not introduce root-absolute URLs into `doc/pages`, or
   the prefixed deployment breaks while local previews still work.
-
+<!---->
 ## Review checklists
-
+<!---->
 - Every change to core analysis logic is human-reviewed before commit
-  (README). Core: fitting models (`FittingUtils`, `RooFitUtils`,
+  (README).
+  Core: fitting models (`FittingUtils`, `RooFitUtils`,
   `RooFitPhotopeakPdfs` and the PDFs' `doEval`/integrals, fit math in the
   `Interactive*FitEditor` classes), signal processing
   (`WaveformProcessingUtils`), result extraction (`FitResult`,
@@ -138,10 +161,18 @@
   excluded", nits last. Leave boxes `- [ ]`.
 - Agent commits are the ones authored by son-of-anton-bot (the history carries
   no `Co-Authored-By` trailers).
-
+<!---->
 ## Commits
-
+<!---->
+- Before committing, check that the version in flake.nix is the current date.
 - A Conventional Commits summary line with scope (`feat(PlottingUtils): …`,
   `fix(RooFitUtils): …`, `docs: …`), a blank line, then a body that explains
   what changed and why.
 - Agent commits: `--author="son-of-anton-bot <307402699+son-of-anton-bot@users.noreply.github.com>"`.
+- End an agent commit's body with a `Model:` trailer naming the model that
+  wrote it: son-of-anton instances use `$SOA_MODEL` (e.g.
+  `Model: radiance/qwen3.8-27b`); other agents give their own model ID
+  (e.g. `Model: claude-opus-5-5`).
+<!---->
+<!---->
+<!---->
