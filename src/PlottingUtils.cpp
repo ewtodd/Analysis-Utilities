@@ -21,6 +21,50 @@ Bool_t PlottingUtils::batch_graphics_tainted_ = kFALSE;
 Bool_t PlottingUtils::residual_hist_plots_enabled_ = kTRUE;
 Bool_t PlottingUtils::fit_figure_objects_saved_ = kFALSE;
 
+namespace {
+
+// Name endings of the pads AU makes around a plot rather than for one: the
+// panel of SplitPadForPanel() and the legend pad of
+// GetConfiguredCanvasWithSideLegend(). SaveFigure()'s log-y copy leaves them
+// at their own scale.
+const char *const PANEL_PAD_SUFFIX = "_panel";
+const char *const LEGEND_PAD_SUFFIX = "_legend";
+
+Bool_t PadHoldsTH2(TVirtualPad *pad) {
+  TIter next(pad->GetListOfPrimitives());
+  TObject *object = nullptr;
+  while ((object = next())) {
+    if (object->InheritsFrom(TH2::Class()))
+      return kTRUE;
+  }
+  return kFALSE;
+}
+
+// The pads holding a figure's plots: the pad itself when it holds no pads,
+// otherwise, recursively, those of its pads that are neither a panel nor a
+// legend pad.
+void CollectPlotPads(TVirtualPad *pad, std::vector<TVirtualPad *> &plot_pads) {
+  std::vector<TVirtualPad *> child_pads;
+  TIter next(pad->GetListOfPrimitives());
+  TObject *object = nullptr;
+  while ((object = next())) {
+    if (object->InheritsFrom(TVirtualPad::Class()))
+      child_pads.push_back(static_cast<TVirtualPad *>(object));
+  }
+  if (child_pads.empty()) {
+    plot_pads.push_back(pad);
+    return;
+  }
+  for (size_t i = 0; i < child_pads.size(); i++) {
+    TString name = child_pads[i]->GetName();
+    if (name.EndsWith(PANEL_PAD_SUFFIX) || name.EndsWith(LEGEND_PAD_SUFFIX))
+      continue;
+    CollectPlotPads(child_pads[i], plot_pads);
+  }
+}
+
+} // namespace
+
 void PlottingUtils::NoteInteractiveEditorClosed() {
   batch_graphics_tainted_ = kTRUE;
 }
@@ -273,7 +317,8 @@ TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(TPad *&plot,
   plot->SetTicks(1, 1);
   plot->SetLogy(logy);
   const Double_t frame_right = split * (1.0 - plot->GetRightMargin());
-  legend_pad = new TPad(GetRandomName(), "", frame_right, 0.0, 1.0, 1.0);
+  legend_pad = new TPad(GetRandomName() + LEGEND_PAD_SUFFIX, "", frame_right,
+                        0.0, 1.0, 1.0);
   legend_pad->SetFillStyle(4000);
   legend_pad->SetMargin(0.0, 0.0, 0.0, 0.0);
   plot->Draw();
@@ -308,7 +353,8 @@ void PlottingUtils::SplitPadForPanel(TVirtualPad *pad, Int_t panel_height_px,
   upper->SetGridy(pad->GetGridy());
   upper->SetTicks(pad->GetTickx(), pad->GetTicky());
   upper->SetLogy(pad->GetLogy());
-  lower = new TPad(GetRandomName(), "", 0.0, 0.0, 1.0, lower_top);
+  lower = new TPad(GetRandomName() + PANEL_PAD_SUFFIX, "", 0.0, 0.0, 1.0,
+                   lower_top);
   lower->SetFillStyle(4000);
   lower->SetLeftMargin(pad->GetLeftMargin());
   lower->SetRightMargin(pad->GetRightMargin());
@@ -367,11 +413,34 @@ void PlottingUtils::SaveFigure(TCanvas *canvas, TString output_name,
       };
     };
 
+    // Log y goes on the pads that hold the plots, not just the canvas: a
+    // figure split by SplitPadForPanel() or built by
+    // GetConfiguredCanvasWithSideLegend() draws its frame in a pad, which
+    // the canvas's own setting does not reach.
+    std::vector<TVirtualPad *> plot_pads;
+    CollectPlotPads(canvas, plot_pads);
+    std::vector<Int_t> previous_logy(plot_pads.size(), 0);
+    for (size_t i = 0; i < plot_pads.size(); i++) {
+      previous_logy[i] = plot_pads[i]->GetLogy();
+      if (plot_pads[i] != canvas && PadHoldsTH2(plot_pads[i])) {
+        std::cerr
+            << "WARNING: SaveFigure: a pad of " << output_name
+            << " holds a 2D histogram; its y axis stays linear in the log variant."
+            << std::endl;
+        continue;
+      }
+      plot_pads[i]->SetLogy(kTRUE);
+      plot_pads[i]->Modified();
+    }
     canvas->SetLogy(kTRUE);
     canvas->Modified();
     canvas->Update();
     PrintInFormats(canvas, prefix + "log_" + output_name);
 
+    for (size_t i = 0; i < plot_pads.size(); i++) {
+      plot_pads[i]->SetLogy(previous_logy[i]);
+      plot_pads[i]->Modified();
+    }
     canvas->SetLogy(kFALSE);
     canvas->Modified();
     canvas->Update();

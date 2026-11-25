@@ -54,7 +54,11 @@ labels at 48 px (0.06 of the canvas's shorter side), `AddText` annotations at
   (CWD-relative) and is configurable via `SetPlotsBaseDir` or
   `InitUtils::SetROOTPreferences`. Parent directories are created automatically.
   `PlotSaveOptions` controls linear (`kLINEAR`), log (`kLOG`), or both
-  (`kBOTH`, default). Log variants are prefixed with `log_`. A PDF gets an
+  (`kBOTH`, default). Log variants are prefixed with `log_`. On a figure made
+  of pads, the log variant sets log y on the plot pads only: the panel of
+  `SplitPadForPanel` and the legend pad of `GetConfiguredCanvasWithSideLegend`
+  keep their scale, so a fit figure gets a log spectrum over a linear pull
+  panel. A PDF gets an
   unrotated page with the canvas's own shape, so it can go straight into
   LaTeX.
 - `SetPlotsBaseDir(dir)` / `GetPlotsBaseDir()` — set/inspect the plot output

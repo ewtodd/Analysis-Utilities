@@ -180,6 +180,9 @@ public:
    *
    * @return The canvas, with a randomised name. **The caller owns this
    *         pointer**; the pads belong to the canvas.
+   *
+   * @note The legend pad's name ends in `_legend`, which is how SaveFigure()
+   *       knows to leave it out of the log-y variant.
    */
   static TCanvas *GetConfiguredCanvasWithSideLegend(TPad *&plot,
                                                     TPad *&legend_pad,
@@ -209,6 +212,10 @@ public:
    * @param[out] upper       The main pad, drawn first.
    * @param[out] lower       The panel, drawn over the main pad's bottom
    *                         margin.
+   *
+   * @note The panel's name ends in `_panel`, which is how SaveFigure() knows
+   *       to keep its y axis linear in the log-y variant, where a pull or
+   *       residual panel's negative values could not be drawn.
    */
   static void SplitPadForPanel(TVirtualPad *pad, Int_t panel_height_px,
                                TPad *&upper, TPad *&lower);
@@ -227,6 +234,15 @@ public:
    * PlotSaveOptions::kBOTH the log-y variant is written with a `log_`
    * filename prefix.
    *
+   * The log-y variant sets log y on the pads that hold the plots: the canvas
+   * when it holds no pads, otherwise each of its pads, searched recursively,
+   * except the panel of SplitPadForPanel() and the legend pad of
+   * GetConfiguredCanvasWithSideLegend(). So a figure with a pull panel, a
+   * side legend, or both gets a logarithmic main plot over a linear panel.
+   * Each pad gets back its own log-y setting afterwards, and the linear
+   * variant draws the pads as the caller set them. The y range is the plot's
+   * own: give it a positive minimum for the log variant.
+   *
    * @param canvas              Canvas to save. Must not be null.
    * @param output_filename     Base filename, without extension.
    * @param output_subdirectory Subdirectory under the plots base; empty means
@@ -240,9 +256,11 @@ public:
    *          refers to the y axis and is meaningless for a 2-D colour plot,
    *          whose z axis is already logarithmic if it went through
    *          Configure2DHistogram(). Use PlotSaveOptions::kLINEAR for those.
+   *          A `TH2` in one of the canvas's pads is not an error: that pad
+   *          keeps a linear y axis in the log variant, with a warning.
    *
    * @note The canvas is left with log-y disabled on return, whatever it was
-   *       set to beforehand.
+   *       set to beforehand; its pads keep their own settings.
    * @note PDFs are printed with ROOT's `Portrait` option, so the page has the
    *       canvas's own shape and is not rotated. Without it ROOT puts any
    *       canvas at least as wide as it is tall onto a portrait page turned
