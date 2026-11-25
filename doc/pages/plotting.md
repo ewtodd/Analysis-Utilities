@@ -35,7 +35,13 @@ styling. No object instantiation required.
 ## Annotations
 
 - `AddLegend(x1, x2, y1, y2)` — returns a drawn `TLegend` with consistent
-  font/border styling.
+  font/border styling and a fixed 60 px symbol column, so a wide box does not
+  stretch its line samples. `LegendWidthPx(labels)` gives the box width its
+  labels need: symbol column, widest label, 15 px of padding.
+- `GetConfiguredCanvasWithSideLegend` and `AddSideLegend` put the legend in a
+  pad right of the frame, sized to `LegendWidthPx` with a 15 px gap each side.
+  Centred on the plot pad, the legend sits at the middle of the whole figure,
+  plot and panel together; on the upper pad of a split, at the main plot's.
   @note The argument order is the extremely sane `(x1, x2, y1, y2)`, not the
   ROOT default `(x1, y1, x2, y2)`.
 - `AddText(label, x, y, angle)` — returns a drawn `TLatex` in NDC coordinates

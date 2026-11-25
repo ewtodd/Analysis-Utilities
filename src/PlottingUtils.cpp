@@ -30,6 +30,14 @@ namespace {
 const char *const PANEL_PAD_SUFFIX = "_panel";
 const char *const LEGEND_PAD_SUFFIX = "_legend";
 
+// The width AddLegend() gives a legend's symbols, in pixels, whatever the
+// box's width; LegendWidthPx() sizes boxes with the same column.
+const Double_t LEGEND_SYMBOL_COLUMN_PX = 60.0;
+
+// Clear space between a side legend's box and the plot frame, and between
+// the box and the canvas's right edge, in pixels.
+const Double_t SIDE_LEGEND_GAP_PX = 15.0;
+
 Bool_t PadHoldsTH2(TVirtualPad *pad) {
   TIter next(pad->GetListOfPrimitives());
   TObject *object = nullptr;
@@ -306,7 +314,13 @@ TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(TPad *&plot,
                                                           Bool_t logy) {
   WarnIfNotConfigured("GetConfiguredCanvasWithSideLegend");
   const Int_t plot_width_px = 1200;
-  const Int_t canvas_width_px = plot_width_px + TMath::Max(0, legend_width_px);
+  // The legend box starts a gap after the frame, over the plot pad's blank
+  // right margin, and the canvas ends a gap after the box.
+  const Double_t right_margin_px = gStyle->GetPadRightMargin() * plot_width_px;
+  const Int_t canvas_width_px =
+      TMath::Max(plot_width_px, TMath::Nint(plot_width_px - right_margin_px +
+                                            2.0 * SIDE_LEGEND_GAP_PX +
+                                            TMath::Max(0, legend_width_px)));
   TCanvas *canvas =
       CreateCanvas(GetRandomName(), canvas_width_px, plot_height_px);
   canvas->SetTicks(1, 1);
@@ -541,6 +555,14 @@ TLegend *PlottingUtils::AddLegend(Double_t x1, Double_t x2, Double_t y1,
   leg->SetFillColor(kWhite);
   leg->SetTextSize(34);
   leg->SetTextFont(43);
+  // The symbols get a fixed column, not TLegend's quarter of the box, which
+  // in a wide box leaves a long line in a wide blank strip.
+  if (gPad) {
+    const Double_t box_width_px =
+        (x2 - x1) * gPad->GetWw() * gPad->GetAbsWNDC();
+    if (box_width_px > 0.0)
+      leg->SetMargin(TMath::Min(0.5, LEGEND_SYMBOL_COLUMN_PX / box_width_px));
+  }
   leg->Draw();
 
   return leg;
@@ -564,8 +586,12 @@ TLegend *PlottingUtils::AddSideLegend(TPad *frame_pad, TPad *legend_pad,
       legend_pad->GetWh() * legend_pad->GetAbsHNDC();
   const Double_t half_height =
       0.5 * n_rows * row_height_px / legend_pad_height_px;
+  const Double_t legend_pad_width_px =
+      legend_pad->GetWw() * legend_pad->GetAbsWNDC();
+  const Double_t gap = TMath::Min(
+      0.25, SIDE_LEGEND_GAP_PX / TMath::Max(1.0, legend_pad_width_px));
   legend_pad->cd();
-  TLegend *leg = AddLegend(0.02, 0.98, TMath::Max(mid - half_height, 0.0),
+  TLegend *leg = AddLegend(gap, 1.0 - gap, TMath::Max(mid - half_height, 0.0),
                            TMath::Min(mid + half_height, 1.0));
   frame_pad->cd();
   return leg;
@@ -604,12 +630,16 @@ Double_t PlottingUtils::TextWidthPx(const TString &text, Double_t size_px,
 
 Double_t PlottingUtils::LegendWidthPx(const std::vector<TString> &labels,
                                       const TString &header, Double_t size_px,
-                                      Double_t margin, Double_t padding_px) {
-  Double_t width_px = TextWidthPx(header, size_px);
+                                      Double_t symbol_column_px,
+                                      Double_t padding_px) {
+  // A header starts at the box's left edge; an entry's label follows the
+  // symbol column, which already holds the space before the symbol.
+  Double_t width_px = TextWidthPx(header, size_px) + 2.0 * padding_px;
   for (std::size_t i = 0; i < labels.size(); i++)
-    width_px = TMath::Max(width_px, TextWidthPx(labels[i], size_px) /
-                                        TMath::Max(0.05, 1.0 - margin));
-  return width_px + 2.0 * padding_px;
+    width_px =
+        TMath::Max(width_px, symbol_column_px +
+                                 TextWidthPx(labels[i], size_px) + padding_px);
+  return width_px;
 }
 
 Double_t PlottingUtils::FigureScale(TVirtualPad *pad,

@@ -158,21 +158,20 @@ public:
    *
    * The plot pad is exactly the standard 1200 px wide and @p plot_height_px
    * tall, with the preferred margins, grid and ticks, so everything drawn on it
-   * comes out as on GetConfiguredCanvas(); the canvas is wider by
-   * @p legend_width_px. The legend pad is transparent and margin-less and
-   * runs from the plot frame's right edge, over the plot pad's blank right
-   * margin, to the canvas edge, so a legend placed in it can sit as close to
-   * the frame as wanted. LegendWidthPx() gives the width a legend needs, from
-   * which the caller picks @p legend_width_px and the box position. A plot
+   * comes out as on GetConfiguredCanvas(). The legend pad is transparent and
+   * margin-less and runs from the plot frame's right edge, over the plot
+   * pad's blank right margin, to the canvas edge; the canvas ends 15 px after
+   * a legend box of @p legend_width_px set 15 px from the frame, which is
+   * where AddSideLegend() puts it (it is never narrower than the plot pad).
+   * LegendWidthPx() gives the width a legend needs. A plot
    * taller than the standard 800 px is for a panel below the plot: see
    * SplitPadForPanel().
    *
    * @param[out] plot            The plot pad, drawn and made current.
    * @param[out] legend_pad      The legend pad, drawn over the plot pad's
    *                             right margin.
-   * @param legend_width_px      Width added to the canvas for the legend, in
-   *                             pixels; the legend pad is this plus the plot
-   *                             pad's right margin.
+   * @param legend_width_px      Width of the legend box, in pixels, as
+   *                             LegendWidthPx() gives it.
    * @param plot_height_px       Height of the plot pad and the canvas, in
    *                             pixels. 800 by default.
    * @param logy                 `kTRUE` for a logarithmic y axis on the plot
@@ -371,7 +370,11 @@ public:
    * @brief Create, style and draw a legend on the current pad.
    *
    * The text is a 34 px font (43): below the 38 px of AddText() annotations
-   * and the 48 px of the axis titles and labels on the standard canvas.
+   * and the 48 px of the axis titles and labels on the standard canvas. The
+   * symbols get a fixed 60 px column at the box's left, whatever the box's
+   * width, rather than `TLegend`'s default quarter of it, which in a wide box
+   * draws a long line in a wide blank strip. LegendWidthPx() sizes a box for
+   * the same column.
    *
    * @param x1 Left edge, in NDC (0-1).
    * @param x2 Right edge, in NDC (0-1).
@@ -391,16 +394,20 @@ public:
    * @brief Create, style and draw a legend in the side pad of
    *        GetConfiguredCanvasWithSideLegend(), centred on a plot frame.
    *
-   * The box spans the legend pad's width, less a small gap at each side, and
-   * is @p n_rows rows of 50 px tall, which spaces AddLegend()'s 34 px font
+   * The box spans the legend pad's width less 15 px at each side, which is
+   * the box LegendWidthPx() sized when the pad came from
+   * GetConfiguredCanvasWithSideLegend() with that width, and is @p n_rows
+   * rows of 50 px tall, which spaces AddLegend()'s 34 px font
    * evenly. Its middle sits at the middle of @p frame_pad's frame, so the
    * legend lines up with the plot whatever its length. Size the legend pad
    * with LegendWidthPx() from the same labels.
    *
-   * @param frame_pad  The pad whose frame the legend centres on: the plot pad
-   *                   of GetConfiguredCanvasWithSideLegend(), or the upper
-   *                   pad of SplitPadForPanel() for a figure with a panel.
-   *                   Must not be null.
+   * @param frame_pad  The pad whose frame the legend centres on. The plot pad
+   *                   of GetConfiguredCanvasWithSideLegend() centres it on
+   *                   the whole figure, the plot and any panel split from it
+   *                   by SplitPadForPanel() together, since their frames share
+   *                   the plot pad's margins; the upper pad of the split
+   *                   centres it on the main plot alone. Must not be null.
    * @param legend_pad The legend pad of GetConfiguredCanvasWithSideLegend().
    *                   Must not be null.
    * @param n_rows     Rows in the legend: its entries, plus one for a header
@@ -435,25 +442,26 @@ public:
   /**
    * @brief Width a legend box needs for its labels at AddLegend()'s font.
    *
-   * A `TLegend` gives the leading @p margin of its width to the symbol column
-   * and draws the labels after it, while a header starts at the box's left
-   * edge, so the box must be the widest label over (1 - margin) or the
-   * header's width, whichever is larger, plus @p padding_px each side.
+   * An entry is its symbol column, holding the space before the symbol, then
+   * its label and @p padding_px of clear space; a header starts at the box's
+   * left edge and gets @p padding_px each side. The box is the wider of the
+   * two.
    *
    * @param labels     The entry labels. ROOT `TLatex` markup is honoured.
    * @param header     The header, or empty for none.
    * @param size_px    Font size in pixels. 34 by default, the size AddLegend()
    *                   uses.
-   * @param margin     The legend's symbol-column fraction. 0.25 by default,
-   *                   `TLegend`'s own default.
-   * @param padding_px Clear space inside each side of the box, in pixels. 15
-   *                   by default.
+   * @param symbol_column_px Width of the symbol column, in pixels. 60 by
+   *                   default, the column AddLegend() gives.
+   * @param padding_px Clear space after the labels, and each side of a
+   *                   header, in pixels. 15 by default.
    *
    * @return The box width in pixels.
    */
   static Double_t LegendWidthPx(const std::vector<TString> &labels,
                                 const TString &header = "",
-                                Double_t size_px = 34.0, Double_t margin = 0.25,
+                                Double_t size_px = 34.0,
+                                Double_t symbol_column_px = 60.0,
                                 Double_t padding_px = 15.0);
 
   /**
