@@ -815,7 +815,10 @@ void PlottingUtils::PlotFitWithResiduals(
   TCanvas *canvas = GetConfiguredCanvas(kFALSE);
 
   TPad *pad1 = new TPad("pad1", "pad1", 0, 0.3, 1, 1.0);
-  TPad *pad2 = new TPad("pad2", "pad2", 0, 0, 1, 0.3);
+  // The residual panel carries the panel suffix, so SaveFigure's log copy
+  // leaves its pulls on a linear axis.
+  TPad *pad2 =
+      new TPad(TString("pad2") + PANEL_PAD_SUFFIX, "pad2", 0, 0, 1, 0.3);
   pad1->SetBottomMargin(0.04);
   pad1->SetGridx(1);
   pad1->SetGridy(1);
