@@ -47,8 +47,10 @@ struct SimEditorChannelView {
   RooAbsPdf *pdf;                      ///< This channel's summed model.
   RooAbsData *data;                    ///< This channel's unbinned dataset.
   std::vector<RooFitPeakModel> *peaks; ///< Per-peak parameter models.
-  RooFitBackgroundModel *bkg;          ///< Background model.
-  Int_t num_peaks;                     ///< Peaks in this channel.
+  /// Fixed lines (RooFitUtils::AddFixedLines()), or null when there are none.
+  std::vector<RooFitPeakModel> *fixed_lines = nullptr;
+  RooFitBackgroundModel *bkg; ///< Background model.
+  Int_t num_peaks;            ///< Peaks in this channel.
 
   /// @name Parameter state
   /// @ref params is the live set the editor writes through; the `original_*`
@@ -162,6 +164,7 @@ private:
   void InitDrawing();
   void InitChannelDrawing(SimEditorChannelView &cv);
   void UpdateCanvases();
+  Double_t ModelDensity(const SimEditorChannelView &cv, const RooArgSet &nset);
   void UpdateChannelGraphs(SimEditorChannelView &cv);
   void UpdateChannelResiduals(SimEditorChannelView &cv);
   void UpdateChannelChi2(SimEditorChannelView &cv);

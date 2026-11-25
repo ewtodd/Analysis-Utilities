@@ -527,6 +527,18 @@ void InteractiveSimultaneousFitEditor::UpdateCanvases() {
   needs_redraw_ = kFALSE;
 }
 
+// The channel model at x_'s current value, from its components rather than its
+// summed pdf, whose cached integrals keep the range it was first evaluated in
+// (RooFitUtils::ChannelModelDensity()).
+Double_t
+InteractiveSimultaneousFitEditor::ModelDensity(const SimEditorChannelView &cv,
+                                               const RooArgSet &nset) {
+  static const std::vector<RooFitPeakModel> no_fixed_lines;
+  return RooFitUtils::ChannelModelDensity(
+      *cv.peaks, cv.fixed_lines ? *cv.fixed_lines : no_fixed_lines, *cv.bkg,
+      nset);
+}
+
 void InteractiveSimultaneousFitEditor::UpdateChannelGraphs(
     SimEditorChannelView &cv) {
   Double_t x_step = (range_high_ - range_low_) / (kNDrawPts - 1);
@@ -534,12 +546,10 @@ void InteractiveSimultaneousFitEditor::UpdateChannelGraphs(
   Double_t saved = x_->getVal();
   RooArgSet nset(*x_);
 
-  Double_t total_exp = cv.pdf->expectedEvents(&nset);
   for (Int_t i = 0; i < kNDrawPts; i++) {
     Double_t xv = range_low_ + i * x_step;
     x_->setVal(xv);
-    cv.total_graph->SetPoint(i, xv,
-                             total_exp * cv.pdf->getVal(&nset) * bin_width);
+    cv.total_graph->SetPoint(i, xv, ModelDensity(cv, nset) * bin_width);
   }
 
   Double_t bkg_yield = cv.bkg->bkg_yield->getVal();
@@ -583,7 +593,6 @@ void InteractiveSimultaneousFitEditor::UpdateChannelResiduals(
   Int_t nbh = cv.hist->GetNbinsX();
   Double_t bin_width = cv.hist->GetBinWidth(1);
   RooArgSet nset(*x_);
-  Double_t total_exp = cv.pdf->expectedEvents(&nset);
   Double_t saved = x_->getVal();
 
   Int_t pt = 0;
@@ -595,7 +604,7 @@ void InteractiveSimultaneousFitEditor::UpdateChannelResiduals(
     Double_t e = cv.hist->GetBinError(i);
     if (e > 0 && d > 0) {
       x_->setVal(xv);
-      Double_t fit_val = total_exp * cv.pdf->getVal(&nset) * bin_width;
+      Double_t fit_val = ModelDensity(cv, nset) * bin_width;
       Double_t pull = (d - fit_val) / e;
       cv.res_graph->SetPoint(pt, xv, pull);
       pt++;
@@ -622,7 +631,6 @@ void InteractiveSimultaneousFitEditor::UpdateChannelChi2(
   Int_t nbh = cv.hist->GetNbinsX();
   Double_t bin_width = cv.hist->GetBinWidth(1);
   RooArgSet nset(*x_);
-  Double_t total_exp = cv.pdf->expectedEvents(&nset);
   Double_t saved = x_->getVal();
   for (Int_t i = 1; i <= nbh; i++) {
     Double_t xv = cv.hist->GetBinCenter(i);
@@ -632,7 +640,7 @@ void InteractiveSimultaneousFitEditor::UpdateChannelChi2(
     Double_t e = cv.hist->GetBinError(i);
     if (e > 0 && d > 0) {
       x_->setVal(xv);
-      Double_t fit_val = total_exp * cv.pdf->getVal(&nset) * bin_width;
+      Double_t fit_val = ModelDensity(cv, nset) * bin_width;
       Double_t r = (d - fit_val) / e;
       chi2_sum += r * r;
       ndf_bins++;

@@ -328,6 +328,14 @@ background) sharing a single observable with the others.
   `LinkPeakShape()` used to link `Mu`
   as well; a `.simroofits` state saved then has no line for the target
   centroid, which on load starts from its source's value.
+- **`HoldParameter(target, value)`** — hold one parameter, as
+  `"<channel>:<parameter>"`, at a value through the fit: it is set and made
+  constant after any seed and again after a saved state loads, and the editor
+  shows it fixed.
+  Use it for a shape taken from elsewhere, such as a tail
+  measured on other lines, where `lock_shape_after_seed` would also fix the
+  peak's width and yield.
+  Holding a linked parameter holds every name linked to it.
 - **`AddFixedLines(channel, shape_peak, mus, gaus_yields)`** — add lines of
   known position and yield to a channel, drawn with one of its peaks' shapes;
   see @ref fixed-lines "Fixed lines".

@@ -453,6 +453,8 @@ private:
 
   std::vector<RooFitChannelConfig> sim_channels_;
   std::vector<RooFitParamLink> sim_links_;
+  // Parameters held at a value by HoldParameter(), by full name.
+  std::map<TString, Double_t> sim_holds_;
   // The centroid pair of every LinkPeakShape call, which is not linked; see
   // LoadSimInteractiveParams().
   std::vector<RooFitParamLink> sim_shape_mu_pairs_;
@@ -500,6 +502,7 @@ private:
   void ApplyChannelBkgLocks();
   void ApplyChannelShapeLocks();
   void FixChannelCoefRanges(Bool_t split_range);
+  Bool_t ApplyParameterHolds(const std::map<TString, RooRealVar *> &registry);
   void SaveSimInteractiveParams(const TString &input_name,
                                 const TString &base_label);
   Bool_t LoadSimInteractiveParams(const TString &input_name,
@@ -683,6 +686,29 @@ public:
    */
   static std::vector<Double_t> LoadEventsFromTree(TTree *tree,
                                                   const TString &branch_name);
+  /**
+   * @brief A channel's expected events per unit of the observable at its
+   *        current value, summed over the channel's components.
+   *
+   * Every peak and fixed line contributes its Gaussian, step and tails, and
+   * the background its own term, each component normalised over the
+   * observable's current range. Use it rather than the channel's summed
+   * `RooAddPdf` to draw or score a model whose range has moved: the sum keeps
+   * integrals cached for the range it was first evaluated in, so after a
+   * range change its `expectedEvents()` and `getVal()` no longer match its own
+   * components, while the components follow the new range.
+   *
+   * @param peaks       The channel's fitted peaks.
+   * @param fixed_lines The channel's fixed lines; empty when it has none.
+   * @param bkg         The channel's background.
+   * @param nset        The normalisation set, the observable alone.
+   * @return Expected events per unit of the observable; times a bin width,
+   *         the expected content of that bin.
+   */
+  static Double_t
+  ChannelModelDensity(const std::vector<RooFitPeakModel> &peaks,
+                      const std::vector<RooFitPeakModel> &fixed_lines,
+                      const RooFitBackgroundModel &bkg, const RooArgSet &nset);
   /**
    * @brief Bin events into a display histogram.
    * @param events                Event-level values.
@@ -1057,6 +1083,23 @@ public:
    *       yields rather than their shapes.
    */
   void LinkParameter(const TString &target, const TString &source);
+  /**
+   * @brief Hold a parameter at a value throughout a simultaneous fit.
+   *
+   * The parameter is set to @p value and made constant once the channels are
+   * built, after any seed, and again after a saved `.simroofits` state loads,
+   * so neither moves it. The editor shows it fixed.
+   *
+   * @param target Parameter to hold, as `"<channel>:<parameter>"`.
+   * @param value  Value it is held at, inside the parameter's range.
+   *
+   * @note A parameter linked by LinkParameter() or LinkPeakShape() is one
+   *       parameter, so holding either name holds both.
+   * @note FitSimultaneous() aborts with an empty result when the target does
+   *       not exist or @p value lies outside its range. Call it before
+   *       FitSimultaneous(); a second call for one target replaces the first.
+   */
+  void HoldParameter(const TString &target, Double_t value);
   /**
    * @brief Constrain the spacing between two peaks to a known value.
    *

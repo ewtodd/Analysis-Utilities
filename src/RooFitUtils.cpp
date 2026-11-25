@@ -429,6 +429,29 @@ void RooFitUtils::BuildExpTailYields(RooFitPeakModel &p, RooRealVar &sigma,
   RegisterOwned(p.high_exp_yield);
 }
 
+// One peak's or fixed line's expected events per unit of the observable: its
+// Gaussian, step and tails, each on its own coefficient.
+static Double_t PeakModelDensity(const RooFitPeakModel &p,
+                                 const RooArgSet &nset) {
+  return p.GausYieldCoefficient().getVal() * p.gauss_pdf->getVal(&nset) +
+         p.step_yield->getVal() * p.step_pdf->getVal(&nset) +
+         p.low_exp_yield->getVal() * p.low_exp_pdf->getVal(&nset) +
+         p.low_lin_yield->getVal() * p.low_lin_pdf->getVal(&nset) +
+         p.high_exp_yield->getVal() * p.high_exp_pdf->getVal(&nset);
+}
+
+Double_t RooFitUtils::ChannelModelDensity(
+    const std::vector<RooFitPeakModel> &peaks,
+    const std::vector<RooFitPeakModel> &fixed_lines,
+    const RooFitBackgroundModel &bkg, const RooArgSet &nset) {
+  Double_t density = bkg.bkg_yield->getVal() * bkg.bkg_pdf->getVal(&nset);
+  for (size_t pi = 0; pi < peaks.size(); pi++)
+    density += PeakModelDensity(peaks[pi], nset);
+  for (size_t li = 0; li < fixed_lines.size(); li++)
+    density += PeakModelDensity(fixed_lines[li], nset);
+  return density;
+}
+
 void RooFitUtils::SetPeakWindows(std::vector<RooFitPeakModel> &peaks,
                                  Double_t low, Double_t high) {
   for (size_t pi = 0; pi < peaks.size(); pi++)
@@ -2344,6 +2367,39 @@ void RooFitUtils::LinkParameter(const TString &target, const TString &source) {
   sim_links_.push_back(lk);
 }
 
+void RooFitUtils::HoldParameter(const TString &target, Double_t value) {
+  if (target.Index(":") < 0) {
+    std::cerr << "ERROR: HoldParameter expects 'channel:Param' format"
+              << std::endl;
+    return;
+  }
+  sim_holds_[target] = value;
+}
+
+Bool_t RooFitUtils::ApplyParameterHolds(
+    const std::map<TString, RooRealVar *> &registry) {
+  for (std::map<TString, Double_t>::const_iterator it = sim_holds_.begin();
+       it != sim_holds_.end(); ++it) {
+    std::map<TString, RooRealVar *>::const_iterator found =
+        registry.find(it->first);
+    if (found == registry.end() || !found->second) {
+      std::cerr << "ERROR: HoldParameter target " << it->first
+                << " is not a parameter of this fit." << std::endl;
+      return kFALSE;
+    }
+    RooRealVar *var = found->second;
+    if (it->second < var->getMin() || it->second > var->getMax()) {
+      std::cerr << "ERROR: HoldParameter value " << it->second << " for "
+                << it->first << " lies outside its range [" << var->getMin()
+                << ", " << var->getMax() << "]." << std::endl;
+      return kFALSE;
+    }
+    var->setVal(it->second);
+    var->setConstant(kTRUE);
+  }
+  return kTRUE;
+}
+
 void RooFitUtils::LinkPeakShape(const TString &target_channel,
                                 Int_t target_peak,
                                 const TString &source_channel,
@@ -2908,9 +2964,10 @@ void RooFitUtils::ApplyChannelShapeLocks() {
   }
 }
 
-Double_t RooFitUtils::ComputeChannelChi2(
-    const TString &channel, const std::vector<RooFitPeakModel> & /*peaks*/,
-    const RooFitBackgroundModel & /*bkg*/, Int_t &ndof) {
+Double_t
+RooFitUtils::ComputeChannelChi2(const TString &channel,
+                                const std::vector<RooFitPeakModel> &peaks,
+                                const RooFitBackgroundModel &bkg, Int_t &ndof) {
   RooAbsPdf *pdf = sim_channel_pdfs_[channel];
   RooFitChannelConfig const *cfg = nullptr;
   for (size_t i = 0; i < sim_channels_.size(); i++) {
@@ -2926,7 +2983,8 @@ Double_t RooFitUtils::ComputeChannelChi2(
   Double_t saved_val = x_->getVal();
 
   RooArgSet nset(*x_);
-  Double_t total_exp = pdf->expectedEvents(&nset);
+  const std::vector<RooFitPeakModel> &fixed_lines =
+      sim_channel_fixed_lines_[channel];
   Double_t bin_width = cfg->hist->GetBinWidth(1);
 
   Double_t chi2 = 0;
@@ -2941,7 +2999,8 @@ Double_t RooFitUtils::ComputeChannelChi2(
     if (error <= 0 || data <= 0)
       continue;
     x_->setVal(xv);
-    Double_t fit_val = total_exp * pdf->getVal(&nset) * bin_width;
+    Double_t fit_val =
+        ChannelModelDensity(peaks, fixed_lines, bkg, nset) * bin_width;
     Double_t residual = (data - fit_val) / error;
     chi2 += residual * residual;
     nbins_in_range++;
@@ -3297,6 +3356,11 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
   ApplyChannelMuLocks();
   ApplyChannelBkgLocks();
   ApplyChannelShapeLocks();
+  if (!ApplyParameterHolds(registry)) {
+    std::cerr << "ERROR: aborting simultaneous fit '" << base_label
+              << "': a held parameter could not be held." << std::endl;
+    return std::vector<FitResult>();
+  }
   BuildSeparationConstraints();
 
   sim_category_ = new RooCategory("channel", "channel");
@@ -3349,6 +3413,8 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
       ApplyChannelMuLocks();
       ApplyChannelBkgLocks();
       ApplyChannelShapeLocks();
+      // Validated before the load, so it cannot fail here.
+      ApplyParameterHolds(registry);
 
       // Optionally treat the loaded parameters as a SEED rather than as the
       // answer, and actually minimise from there. See SetRefitAfterLoad().
@@ -3399,6 +3465,7 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
         v.peaks = &sim_channel_peaks_[cfg.name];
         v.bkg = &sim_channel_bkg_[cfg.name];
         v.num_peaks = cfg.num_peaks;
+        v.fixed_lines = &sim_channel_fixed_lines_[cfg.name];
         views.push_back(v);
       }
       // The editor fits every channel over one shared range, without
