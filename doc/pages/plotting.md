@@ -42,6 +42,9 @@ styling. No object instantiation required.
   pad right of the frame, sized to `LegendWidthPx` with a 15 px gap each side.
   Centred on the plot pad, the legend sits at the middle of the whole figure,
   plot and panel together; on the upper pad of a split, at the main plot's.
+  `plot_width_px` (1200 by default) widens the plot pad beside the same
+  legend: margins, text and lines keep their standard pixel sizes and only
+  the frame grows, wider or (with `plot_height_px`) taller.
   @note The argument order is the extremely sane `(x1, x2, y1, y2)`, not the
   ROOT default `(x1, y1, x2, y2)`.
 - `AddText(label, x, y, angle)` — returns a drawn `TLatex` in NDC coordinates

@@ -156,16 +156,21 @@ public:
   /**
    * @brief A canvas with the standard plot area and a legend pad to its right.
    *
-   * The plot pad is exactly the standard 1200 px wide and @p plot_height_px
-   * tall, with the preferred margins, grid and ticks, so everything drawn on it
-   * comes out as on GetConfiguredCanvas(). The legend pad is transparent and
-   * margin-less and runs from the plot frame's right edge, over the plot
-   * pad's blank right margin, to the canvas edge; the canvas ends 15 px after
-   * a legend box of @p legend_width_px set 15 px from the frame, which is
-   * where AddSideLegend() puts it (it is never narrower than the plot pad).
-   * LegendWidthPx() gives the width a legend needs. A plot
+   * The plot pad is the standard 1200 px wide, or @p plot_width_px, and
+   * @p plot_height_px tall, with the preferred margins, grid and ticks, so
+   * everything drawn on it comes out as on GetConfiguredCanvas(). The legend
+   * pad is transparent and margin-less and runs from the plot frame's right
+   * edge, over the plot pad's blank right margin, to the canvas edge; the
+   * canvas ends 15 px after a legend box of @p legend_width_px set 15 px from
+   * the frame, which is where AddSideLegend() puts it (it is never narrower
+   * than the plot pad). LegendWidthPx() gives the width a legend needs. A plot
    * taller than the standard 800 px is for a panel below the plot: see
    * SplitPadForPanel().
+   *
+   * A plot pad wider or taller than the standard gives the frame more room
+   * beside the same legend: its margins, text, markers and lines stay at
+   * their standard sizes in pixels and only the frame grows. ScaleFigure() on
+   * this plot pad sets those sizes, as it does for the standard size.
    *
    * @param[out] plot            The plot pad, drawn and made current.
    * @param[out] legend_pad      The legend pad, drawn over the plot pad's
@@ -176,18 +181,25 @@ public:
    *                             pixels. 800 by default.
    * @param logy                 `kTRUE` for a logarithmic y axis on the plot
    *                             pad.
+   * @param plot_width_px        Width of the plot pad, in pixels. 1200 by
+   *                             default, the standard plot area; a wider pad
+   *                             widens only the frame. Values below 1 are
+   *                             taken as 1200.
    *
    * @return The canvas, with a randomised name. **The caller owns this
    *         pointer**; the pads belong to the canvas.
    *
    * @note The legend pad's name ends in `_legend`, which is how SaveFigure()
-   *       knows to leave it out of the log-y variant.
+   *       knows to leave it out of the log-y variant; the plot pad's ends in
+   *       `_sideplot`, which is how FigureScale() knows to treat it as the
+   *       standard plot area whatever its width.
    */
   static TCanvas *GetConfiguredCanvasWithSideLegend(TPad *&plot,
                                                     TPad *&legend_pad,
                                                     Int_t legend_width_px = 600,
                                                     Int_t plot_height_px = 800,
-                                                    Bool_t logy = kFALSE);
+                                                    Bool_t logy = kFALSE,
+                                                    Int_t plot_width_px = 1200);
 
   /**
    * @brief Split a pad into a main pad above and a panel below, leaving the
@@ -472,7 +484,10 @@ public:
    * print at the same size as on the standard 1200x800 canvas. This is that
    * proportion, the pad's pixel width over @p reference_width_px. For a
    * canvas it is the canvas width; for the plot pad of
-   * GetConfiguredCanvasWithSideLegend() it is 1.
+   * GetConfiguredCanvasWithSideLegend() it is 1, whatever that pad's width
+   * or height, so a side-legend plot widened or heightened keeps the
+   * standard text, lines, markers and pixel margins (ScalePad() fits the
+   * margins to each axis).
    *
    * @param pad                Pad, or canvas, to measure. Null gives 1.
    * @param reference_width_px Width of the standard plot area, in pixels.

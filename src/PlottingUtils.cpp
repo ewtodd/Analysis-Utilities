@@ -30,6 +30,13 @@ namespace {
 const char *const PANEL_PAD_SUFFIX = "_panel";
 const char *const LEGEND_PAD_SUFFIX = "_legend";
 
+// The name ending of GetConfiguredCanvasWithSideLegend()'s plot pad, which
+// FigureScale() takes as the standard plot area whatever its width.
+const char *const SIDE_PLOT_PAD_SUFFIX = "_sideplot";
+
+// The standard plot area's width, in pixels.
+const Int_t STANDARD_PLOT_WIDTH_PX = 1200;
+
 // The width AddLegend() gives a legend's symbols, in pixels, whatever the
 // box's width; LegendWidthPx() sizes boxes with the same column.
 const Double_t LEGEND_SYMBOL_COLUMN_PX = 60.0;
@@ -307,16 +314,19 @@ TCanvas *PlottingUtils::GetConfiguredCanvas(Bool_t logy) {
   return canvas;
 }
 
-TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(TPad *&plot,
-                                                          TPad *&legend_pad,
-                                                          Int_t legend_width_px,
-                                                          Int_t plot_height_px,
-                                                          Bool_t logy) {
+TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(
+    TPad *&plot, TPad *&legend_pad, Int_t legend_width_px, Int_t plot_height_px,
+    Bool_t logy, Int_t plot_width_px) {
   WarnIfNotConfigured("GetConfiguredCanvasWithSideLegend");
-  const Int_t plot_width_px = 1200;
-  // The legend box starts a gap after the frame, over the plot pad's blank
-  // right margin, and the canvas ends a gap after the box.
-  const Double_t right_margin_px = gStyle->GetPadRightMargin() * plot_width_px;
+  if (plot_width_px < 1)
+    plot_width_px = STANDARD_PLOT_WIDTH_PX;
+  // The plot pad keeps the standard right margin in pixels (ScaleFigure()
+  // turns the style's fraction of the standard width into this pad's
+  // fraction), so its frame ends that far from the pad's edge. The legend
+  // box starts a gap after the frame, over that blank margin, and the canvas
+  // ends a gap after the box.
+  const Double_t right_margin_px =
+      gStyle->GetPadRightMargin() * STANDARD_PLOT_WIDTH_PX;
   const Int_t canvas_width_px =
       TMath::Max(plot_width_px, TMath::Nint(plot_width_px - right_margin_px +
                                             2.0 * SIDE_LEGEND_GAP_PX +
@@ -325,12 +335,16 @@ TCanvas *PlottingUtils::GetConfiguredCanvasWithSideLegend(TPad *&plot,
       CreateCanvas(GetRandomName(), canvas_width_px, plot_height_px);
   canvas->SetTicks(1, 1);
   const Double_t split = Double_t(plot_width_px) / Double_t(canvas_width_px);
-  plot = new TPad(GetRandomName(), "", 0.0, 0.0, split, 1.0);
+  plot = new TPad(GetRandomName() + SIDE_PLOT_PAD_SUFFIX, "", 0.0, 0.0, split,
+                  1.0);
   plot->SetGridx(1);
   plot->SetGridy(1);
   plot->SetTicks(1, 1);
   plot->SetLogy(logy);
-  const Double_t frame_right = split * (1.0 - plot->GetRightMargin());
+  const Double_t margin_share =
+      Double_t(STANDARD_PLOT_WIDTH_PX) / Double_t(plot_width_px);
+  const Double_t frame_right =
+      split * (1.0 - plot->GetRightMargin() * margin_share);
   legend_pad = new TPad(GetRandomName() + LEGEND_PAD_SUFFIX, "", frame_right,
                         0.0, 1.0, 1.0);
   legend_pad->SetFillStyle(4000);
@@ -647,6 +661,16 @@ Double_t PlottingUtils::FigureScale(TVirtualPad *pad,
   if (!pad || !pad->GetCanvas() || reference_width_px <= 0)
     return 1.0;
   const Double_t pad_width_px = pad->GetCanvas()->GetWw() * pad->GetAbsWNDC();
+  // A side-legend plot pad keeps the standard sizes however far it is
+  // widened or heightened: its scale is its drawn width over the width it
+  // was made with, which for the standard 1200 px pad is the usual
+  // pad_width_px / 1200 (a batch canvas draws a few pixels narrower than it
+  // was made). ScalePad() then fits its margins to each axis.
+  if (TString(pad->GetName()).EndsWith(SIDE_PLOT_PAD_SUFFIX)) {
+    const Double_t made_width_px =
+        pad->GetCanvas()->GetWindowWidth() * pad->GetAbsWNDC();
+    return made_width_px > 0.0 ? pad_width_px / made_width_px : 1.0;
+  }
   return pad_width_px / Double_t(reference_width_px);
 }
 
