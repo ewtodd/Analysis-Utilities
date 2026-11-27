@@ -49,6 +49,17 @@ RooAbsPdf *RooFitFunctions::MakeLinearBackground(const TString &name,
   return new RooPolynomial(name.Data(), name.Data(), x, RooArgList(slope));
 }
 
+RooAbsPdf *RooFitFunctions::MakeQuadraticBackground(
+    const TString &name, RooRealVar &x, RooRealVar &slope,
+    RooRealVar &curvature, const TString &reference_range) {
+  RooChebychev *pdf = new RooChebychev(name.Data(), name.Data(), x,
+                                       RooArgList(slope, curvature));
+  // Forced, so the ranges a fit later selects for normalisation leave the
+  // mapping onto [-1, 1] on the window the coefficients were fitted in.
+  pdf->selectNormalizationRange(reference_range.Data(), kTRUE);
+  return pdf;
+}
+
 void RooFitUtils::RegisterOwned(RooAbsArg *arg) { owned_args_.push_back(arg); }
 
 void RooFitUtils::InitState() {
@@ -58,6 +69,7 @@ void RooFitUtils::InitState() {
   fit_range_high_ = 0;
   display_bin_width_kev_ = 0;
   use_flat_background_ = kFALSE;
+  use_quadratic_background_ = kFALSE;
   use_step_ = kFALSE;
   use_low_exp_tail_ = kFALSE;
   use_low_lin_tail_ = kFALSE;
@@ -196,13 +208,15 @@ RooFitUtils::RooFitUtils(const std::vector<Double_t> &events,
                          Float_t display_bin_width_kev,
                          Bool_t use_flat_background, Bool_t use_step,
                          Bool_t use_low_exp_tail, Bool_t use_low_lin_tail,
-                         Bool_t use_high_exp_tail) {
+                         Bool_t use_high_exp_tail,
+                         Bool_t use_quadratic_background) {
   InitState();
   events_ = events;
   fit_range_low_ = fit_range_low;
   fit_range_high_ = fit_range_high;
   display_bin_width_kev_ = display_bin_width_kev;
   use_flat_background_ = use_flat_background;
+  use_quadratic_background_ = use_quadratic_background;
   use_step_ = use_step;
   use_low_exp_tail_ = use_low_exp_tail;
   use_low_lin_tail_ = use_low_lin_tail;
@@ -212,7 +226,13 @@ RooFitUtils::RooFitUtils(const std::vector<Double_t> &events,
 
   std::cout << "Fit configuration:" << std::endl;
   std::cout << std::endl;
-  if (use_flat_background_) {
+  if (use_quadratic_background_) {
+    if (use_flat_background_)
+      std::cout << "WARNING: flat and quadratic backgrounds both requested; "
+                   "the quadratic takes precedence."
+                << std::endl;
+    std::cout << "Background: QUADRATIC" << std::endl;
+  } else if (use_flat_background_) {
     std::cout << "Background: FLAT" << std::endl;
   } else {
     std::cout << "Background: LINEAR" << std::endl;
@@ -510,6 +530,21 @@ void RooFitUtils::BuildBackground(Double_t bkg_estimate, Double_t peak_height,
   RegisterOwned(bkg_.bkg_yield);
   RegisterOwned(bkg_.bkg_slope);
 
+  if (use_quadratic_background_) {
+    // Chebyshev coefficients over the fit range: the background is
+    // 1 + slope x' + curvature (2 x'^2 - 1), x' in [-1, 1], so coefficients
+    // of magnitude 1 already reach zero at the window's edges.
+    bkg_.bkg_slope->setRange(-1.0, 1.0);
+    bkg_.bkg_slope->setVal(0.0);
+    bkg_.bkg_curvature =
+        new RooRealVar("BkgCurvature", "BkgCurvature", 0.0, -1.0, 1.0);
+    RegisterOwned(bkg_.bkg_curvature);
+    bkg_.bkg_pdf = RooFitFunctions::MakeQuadraticBackground(
+        "bkg_pdf", *x_, *bkg_.bkg_slope, *bkg_.bkg_curvature, kFitRangeName);
+    RegisterOwned(bkg_.bkg_pdf);
+    return;
+  }
+  bkg_.bkg_curvature = nullptr;
   bkg_.bkg_pdf =
       RooFitFunctions::MakeLinearBackground("bkg_pdf", *x_, *bkg_.bkg_slope);
   if (use_flat_background_) {
@@ -724,6 +759,9 @@ std::vector<RooRealVar *> RooFitUtils::CollectAllParams() {
   }
   out.push_back(bkg_.bkg_yield);
   out.push_back(bkg_.bkg_slope);
+  // Last, so every other parameter keeps the index it has without it.
+  if (bkg_.bkg_curvature)
+    out.push_back(bkg_.bkg_curvature);
   return out;
 }
 
@@ -881,6 +919,10 @@ void RooFitUtils::FillFitResults(Int_t num_peaks, Double_t final_chi2,
   results.bkg_constant_error = bkg_.bkg_yield->getError();
   results.lin_bkg_slope = bkg_.bkg_slope->getVal();
   results.lin_bkg_slope_error = bkg_.bkg_slope->getError();
+  if (bkg_.bkg_curvature) {
+    results.quad_bkg_curvature = bkg_.bkg_curvature->getVal();
+    results.quad_bkg_curvature_error = bkg_.bkg_curvature->getError();
+  }
   results.reduced_chi2 = final_chi2;
   results.valid = kTRUE;
 }
@@ -1298,6 +1340,8 @@ void RooFitUtils::SaveSimInteractiveParams(const TString &input_name,
       ordered.push_back(bkg.bkg_yield);
     if (seen.insert(bkg.bkg_slope).second)
       ordered.push_back(bkg.bkg_slope);
+    if (bkg.bkg_curvature && seen.insert(bkg.bkg_curvature).second)
+      ordered.push_back(bkg.bkg_curvature);
   }
 
   for (size_t i = 0; i < ordered.size(); i++) {
@@ -1340,6 +1384,8 @@ Bool_t RooFitUtils::LoadSimInteractiveParams(const TString &input_name,
     RooFitBackgroundModel &bkg = sim_channel_bkg_[cname];
     by_name[bkg.bkg_yield->GetName()] = bkg.bkg_yield;
     by_name[bkg.bkg_slope->GetName()] = bkg.bkg_slope;
+    if (bkg.bkg_curvature)
+      by_name[bkg.bkg_curvature->GetName()] = bkg.bkg_curvature;
   }
 
   std::string token;
@@ -2303,7 +2349,8 @@ void RooFitUtils::AddChannel(
     Bool_t use_high_exp_tail, const std::vector<Bool_t> &mu_fixed,
     Bool_t bkg_yield_fixed, Bool_t bkg_slope_fixed,
     Bool_t lock_shape_after_seed, const std::vector<Bool_t> &use_step_per_peak,
-    const std::vector<Bool_t> &shape_lock_per_peak) {
+    const std::vector<Bool_t> &shape_lock_per_peak,
+    Bool_t use_quadratic_background) {
   if (!sim_mode_) {
     std::cerr << "ERROR: AddChannel called on a single-channel RooFitUtils "
                  "instance; construct with the default ctor for sim mode."
@@ -2344,6 +2391,12 @@ void RooFitUtils::AddChannel(
   cfg.lock_shape_after_seed = lock_shape_after_seed;
   cfg.shape_lock_per_peak = shape_lock_per_peak;
   cfg.use_flat_background = use_flat_background;
+  cfg.use_quadratic_background = use_quadratic_background;
+  if (use_quadratic_background && use_flat_background)
+    std::cout << "WARNING: channel '" << name
+              << "': flat and quadratic backgrounds both requested; the "
+                 "quadratic takes precedence."
+              << std::endl;
   cfg.use_step = use_step;
   cfg.use_low_exp_tail = use_low_exp_tail;
   cfg.use_low_lin_tail = use_low_lin_tail;
@@ -2700,11 +2753,19 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
   bkg.bkg_yield = ResolveOrCreate(cfg.name, "BkgConstant", registry,
                                   bkg_estimate * range_width, 0,
                                   peak_height * range_width * 10.0);
-  Double_t slope_lo = -0.9 / cfg.fit_range_high;
-  Double_t slope_hi = 5.0 / range_width;
+  // A quadratic's coefficients are Chebyshev ones over the channel's window
+  // (MakeQuadraticBackground): magnitude 1 already reaches zero at its edges.
+  Double_t slope_lo =
+      cfg.use_quadratic_background ? -1.0 : -0.9 / cfg.fit_range_high;
+  Double_t slope_hi = cfg.use_quadratic_background ? 1.0 : 5.0 / range_width;
   bkg.bkg_slope =
       ResolveOrCreate(cfg.name, "BkgSlope", registry, 0.0, slope_lo, slope_hi);
-  if (!bkg.bkg_yield || !bkg.bkg_slope) {
+  bkg.bkg_curvature =
+      cfg.use_quadratic_background
+          ? ResolveOrCreate(cfg.name, "BkgCurvature", registry, 0.0, -1.0, 1.0)
+          : nullptr;
+  if (!bkg.bkg_yield || !bkg.bkg_slope ||
+      (cfg.use_quadratic_background && !bkg.bkg_curvature)) {
     std::cerr << "ERROR: channel '" << cfg.name
               << "': could not resolve background parameters (see the link "
                  "error above). Aborting the channel build rather than "
@@ -2713,11 +2774,17 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
     return kFALSE;
   }
   TString bkg_pdf_name = "bkg_pdf_" + cfg.name;
-  bkg.bkg_pdf =
-      RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_, *bkg.bkg_slope);
-  if (cfg.use_flat_background) {
-    bkg.bkg_slope->setVal(0.0);
-    bkg.bkg_slope->setConstant(kTRUE);
+  if (cfg.use_quadratic_background) {
+    bkg.bkg_pdf = RooFitFunctions::MakeQuadraticBackground(
+        bkg_pdf_name, *x_, *bkg.bkg_slope, *bkg.bkg_curvature,
+        sim_channel_range_names_[cfg.name]);
+  } else {
+    bkg.bkg_pdf = RooFitFunctions::MakeLinearBackground(bkg_pdf_name, *x_,
+                                                        *bkg.bkg_slope);
+    if (cfg.use_flat_background) {
+      bkg.bkg_slope->setVal(0.0);
+      bkg.bkg_slope->setConstant(kTRUE);
+    }
   }
   RegisterOwned(bkg.bkg_pdf);
 
@@ -2895,6 +2962,8 @@ void RooFitUtils::ApplySeedToChannel(const TString &channel) {
     bkg.bkg_yield->setVal(seed.bkg_constant);
   if (seed.lin_bkg_slope > -1e6)
     bkg.bkg_slope->setVal(seed.lin_bkg_slope);
+  if (bkg.bkg_curvature)
+    bkg.bkg_curvature->setVal(seed.quad_bkg_curvature);
 }
 
 void RooFitUtils::ApplyChannelMuLocks() {
@@ -3139,6 +3208,9 @@ RooFitUtils::ExtractParameterDiagnostics(const TString &channel) {
                                TString(channel + ":BkgConstant").Data(), diags);
   RooFitExtractParamDiagnostic(bkg.bkg_slope,
                                TString(channel + ":BkgSlope").Data(), diags);
+  if (bkg.bkg_curvature)
+    RooFitExtractParamDiagnostic(
+        bkg.bkg_curvature, TString(channel + ":BkgCurvature").Data(), diags);
 
   return diags;
 }
@@ -3609,6 +3681,11 @@ std::vector<FitResult> RooFitUtils::FitSimultaneous(const TString &input_name,
     cr.bkg_constant_error = sim_channel_bkg_[cfg.name].bkg_yield->getError();
     cr.lin_bkg_slope = sim_channel_bkg_[cfg.name].bkg_slope->getVal();
     cr.lin_bkg_slope_error = sim_channel_bkg_[cfg.name].bkg_slope->getError();
+    RooRealVar *curvature = sim_channel_bkg_[cfg.name].bkg_curvature;
+    if (curvature) {
+      cr.quad_bkg_curvature = curvature->getVal();
+      cr.quad_bkg_curvature_error = curvature->getError();
+    }
     cr.reduced_chi2 = chi2;
     cr.valid = sim_valid;
     cr.has_fit_diagnostics = has_diag;

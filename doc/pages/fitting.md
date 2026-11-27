@@ -40,6 +40,9 @@ can coexist for the same input.
 ## The model
 <!---->
 **Base model**: Gaussian peak + linear or flat background.
+The RooFit backend also offers a quadratic background
+(`use_quadratic_background`), a second-order Chebyshev polynomial over the fit
+window, for a continuum that curves across it.
 <!---->
 **Optional components** (individually togglable, for semiconductor detectors
 with segmented electrodes):
@@ -313,8 +316,9 @@ background) sharing a single observable with the others.
 - **`AddChannel(name, events, fit_range_low, fit_range_high, display_bin_width_kev, num_peaks, mu_inits, ...)`**
   — adds a channel.
   The component flags (`use_flat_background`, `use_step`,
-  `use_low_exp_tail`, `use_low_lin_tail`, `use_high_exp_tail`) match the
-  single-channel model, plus the per-channel locking options below.
+  `use_low_exp_tail`, `use_low_lin_tail`, `use_high_exp_tail`, and the trailing
+  `use_quadratic_background`) match the single-channel model, plus the
+  per-channel locking options below.
 - **`LinkParameter(target, source)`** /
   **`LinkPeakShape(target_channel, target_peak, source_channel, source_peak)`**
   — tie a parameter (or a peak's whole shape) in one channel to another so they

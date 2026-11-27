@@ -247,6 +247,10 @@ struct FitResult {
   std::vector<PeakFitResult> peaks; ///< One entry per peak; 1 to 3 supported.
   Float_t bkg_constant = -1, bkg_constant_error = -1;   ///< Background offset.
   Float_t lin_bkg_slope = -1, lin_bkg_slope_error = -1; ///< Background slope.
+  /// Second-order coefficient of a quadratic background (RooFitUtils only;
+  /// RooFitFunctions::MakeQuadraticBackground()), whose first-order
+  /// coefficient is then @ref lin_bkg_slope. Zero for any other background.
+  Float_t quad_bkg_curvature = 0, quad_bkg_curvature_error = -1;
   Float_t reduced_chi2 = -1; ///< Chi-squared per degree of freedom.
   /// In the RooFit backend this is computed post hoc against the display
   /// binning, and drives component pruning; the fit itself is unbinned.

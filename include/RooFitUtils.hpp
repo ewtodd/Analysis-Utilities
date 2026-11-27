@@ -12,6 +12,7 @@
 #include <RooArgList.h>
 #include <RooArgSet.h>
 #include <RooCategory.h>
+#include <RooChebychev.h>
 #include <RooCmdArg.h>
 #include <RooDataSet.h>
 #include <RooFitResult.h>
@@ -165,6 +166,28 @@ RooAbsPdf *MakeHighExpTail(const TString &name, RooRealVar &x, RooRealVar &mu,
  */
 RooAbsPdf *MakeLinearBackground(const TString &name, RooRealVar &x,
                                 RooRealVar &slope);
+/**
+ * @brief Build a quadratic background component.
+ *
+ * The background is `1 + slope T1(x') + curvature T2(x')`, the Chebyshev
+ * polynomials of first and second order in `x'`, the observable mapped from
+ * @p reference_range onto [-1, 1] (a RooChebychev). Unlike `1 + slope x` of
+ * MakeLinearBackground(), the polynomial is centred on the fit window: a
+ * quadratic in `x` itself would need a negative constant to curve down over a
+ * window far from zero, which a constant held at 1 cannot give.
+ *
+ * @param name            RooFit object name, unique within the workspace.
+ * @param x               Observable.
+ * @param slope           Coefficient of `T1(x') = x'`, dimensionless.
+ * @param curvature       Coefficient of `T2(x') = 2 x'^2 - 1`, dimensionless.
+ * @param reference_range Named range of @p x that maps onto [-1, 1], the fit
+ *                        window; held fixed whatever normalisation range the
+ *                        fit later selects.
+ * @return A newly allocated PDF; the caller owns it.
+ */
+RooAbsPdf *MakeQuadraticBackground(const TString &name, RooRealVar &x,
+                                   RooRealVar &slope, RooRealVar &curvature,
+                                   const TString &reference_range);
 } // namespace RooFitFunctions
 
 /**
@@ -287,7 +310,13 @@ struct RooFitPeakModel {
  */
 struct RooFitBackgroundModel {
   RooRealVar *bkg_yield = nullptr;
+  // The linear slope per unit x, or with a quadratic background the
+  // first-order Chebyshev coefficient
+  // (RooFitFunctions::MakeQuadraticBackground).
   RooRealVar *bkg_slope = nullptr;
+  // The second-order Chebyshev coefficient; null unless the background is
+  // quadratic.
+  RooRealVar *bkg_curvature = nullptr;
   RooAbsPdf *bkg_pdf = nullptr;
 };
 
@@ -317,6 +346,7 @@ struct RooFitChannelConfig {
   // all peaks are locked (backward-compatible with lock_shape_after_seed).
   std::vector<Bool_t> shape_lock_per_peak;
   Bool_t use_flat_background;
+  Bool_t use_quadratic_background = kFALSE;
   Bool_t use_step;
   Bool_t use_low_exp_tail;
   Bool_t use_low_lin_tail;
@@ -411,6 +441,7 @@ private:
   Float_t display_bin_width_kev_;
 
   Bool_t use_flat_background_;
+  Bool_t use_quadratic_background_;
   Bool_t use_step_;
   Bool_t use_low_exp_tail_;
   Bool_t use_low_lin_tail_;
@@ -668,13 +699,19 @@ public:
    * @param use_low_exp_tail      Enable the low-energy exponential tail.
    * @param use_low_lin_tail      Enable the low-energy linear tail.
    * @param use_high_exp_tail     Enable the high-energy exponential tail.
+   * @param use_quadratic_background `kTRUE` for a quadratic background over the
+   *                              fit range
+   *                              (RooFitFunctions::MakeQuadraticBackground());
+   *                              it takes precedence over
+   *                              @p use_flat_background.
    */
   RooFitUtils(const std::vector<Double_t> &events, Float_t fit_range_low,
               Float_t fit_range_high, Float_t display_bin_width_kev,
               Bool_t use_flat_background = kFALSE, Bool_t use_step = kFALSE,
               Bool_t use_low_exp_tail = kFALSE,
               Bool_t use_low_lin_tail = kFALSE,
-              Bool_t use_high_exp_tail = kFALSE);
+              Bool_t use_high_exp_tail = kFALSE,
+              Bool_t use_quadratic_background = kFALSE);
   /// @brief Destroys every RooFit object this instance created.
   ~RooFitUtils();
 
@@ -741,8 +778,13 @@ public:
 
   /// @brief Choose the background shape.
   /// @param use_flat_background `kTRUE` for constant, `kFALSE` for linear.
-  void SetBackgroundModel(Bool_t use_flat_background) {
+  /// @param use_quadratic_background `kTRUE` for a quadratic over the fit
+  ///        range (RooFitFunctions::MakeQuadraticBackground()), taking
+  ///        precedence over @p use_flat_background.
+  void SetBackgroundModel(Bool_t use_flat_background,
+                          Bool_t use_quadratic_background = kFALSE) {
     use_flat_background_ = use_flat_background;
+    use_quadratic_background_ = use_quadratic_background;
   }
   /// @brief Offer the step shelf to the component search.
   /// @param use_step `kTRUE` to enable.
@@ -1039,7 +1081,10 @@ public:
    *                              at its @p mu_inits value instead of floating.
    *                              Empty means all float.
    * @param bkg_yield_fixed       Hold this channel's background yield constant.
-   * @param bkg_slope_fixed       Hold this channel's background slope constant.
+   * @param bkg_slope_fixed       Hold this channel's background slope constant
+   *                              (with a quadratic background, its first-order
+   *                              coefficient only; HoldParameter() holds
+   *                              `channel:BkgCurvature`).
    * @param lock_shape_after_seed After seeding, fix sigma, the Gaussian yield
    *                              and every tail and step shape parameter, so
    *                              only peak positions and normalisations float.
@@ -1051,9 +1096,17 @@ public:
    *                              @p lock_shape_after_seed: entry `i` controls
    *                              whether peak `i`'s shape locks. Empty locks
    *                              every peak.
+   * @param use_quadratic_background `kTRUE` for a quadratic background over
+   *                              this channel's fit range
+   *                              (RooFitFunctions::MakeQuadraticBackground());
+   *                              it takes precedence over
+   *                              @p use_flat_background.
    *
    * @note Simultaneous mode only — the instance must have been
    *       default-constructed.
+   * @note The interactive editors list a channel's background constant and
+   *       slope; a quadratic background's curvature is fitted, saved and
+   *       reported but has no editor row.
    */
   void AddChannel(
       const TString &name, const std::vector<Double_t> &events,
@@ -1067,7 +1120,8 @@ public:
       Bool_t bkg_yield_fixed = kFALSE, Bool_t bkg_slope_fixed = kFALSE,
       Bool_t lock_shape_after_seed = kFALSE,
       const std::vector<Bool_t> &use_step_per_peak = std::vector<Bool_t>(),
-      const std::vector<Bool_t> &shape_lock_per_peak = std::vector<Bool_t>());
+      const std::vector<Bool_t> &shape_lock_per_peak = std::vector<Bool_t>(),
+      Bool_t use_quadratic_background = kFALSE);
   /**
    * @brief Tie one parameter to another, fitting them as one degree of freedom.
    * @param target Parameter to tie, as `"<channel>:<parameter>"`.

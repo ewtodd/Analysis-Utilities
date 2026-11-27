@@ -41,7 +41,7 @@
           };
         };
 
-        version = "26.11.25";
+        version = "26.11.26";
 
         # ROOT for both builds: nixpkgs' 6.40 derivation rebuilt from the
         # root-src master commit above. Released ROOT up to 6.40.04 computes a
