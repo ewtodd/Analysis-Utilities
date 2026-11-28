@@ -2521,6 +2521,47 @@ void RooFitUtils::AddFixedLines(const TString &channel, Int_t shape_peak,
   cfg->fixed_line_gaus_yields = gaus_yields;
 }
 
+void RooFitUtils::AddLinkedLines(const TString &channel, Int_t shape_peak,
+                                 const std::vector<Double_t> &mus,
+                                 const std::vector<Double_t> &yield_ratios) {
+  RooFitChannelConfig *cfg = nullptr;
+  for (size_t i = 0; i < sim_channels_.size(); i++) {
+    if (sim_channels_[i].name == channel) {
+      cfg = &sim_channels_[i];
+      break;
+    }
+  }
+  if (!cfg) {
+    std::cerr << "ERROR: AddLinkedLines: no channel '" << channel
+              << "'; call AddChannel first." << std::endl;
+    return;
+  }
+  if (shape_peak < 0 || shape_peak >= cfg->num_peaks) {
+    std::cerr << "ERROR: AddLinkedLines: channel '" << channel << "' has "
+              << cfg->num_peaks << " peaks; shape_peak " << shape_peak
+              << " is not one of them." << std::endl;
+    return;
+  }
+  if (mus.size() != yield_ratios.size()) {
+    std::cerr << "ERROR: AddLinkedLines: " << mus.size() << " centroids but "
+              << yield_ratios.size() << " yield ratios." << std::endl;
+    return;
+  }
+  for (size_t i = 0; i < yield_ratios.size(); i++) {
+    if (!(yield_ratios[i] >= 0) || !std::isfinite(yield_ratios[i])) {
+      std::cerr << "ERROR: AddLinkedLines: line " << i << " has yield ratio "
+                << yield_ratios[i]
+                << "; ratios must be finite and non-negative." << std::endl;
+      return;
+    }
+  }
+  for (size_t i = 0; i < mus.size(); i++) {
+    cfg->linked_line_shape_peaks.push_back(shape_peak);
+    cfg->linked_line_mus.push_back(mus[i]);
+    cfg->linked_line_yield_ratios.push_back(yield_ratios[i]);
+  }
+}
+
 void RooFitUtils::SeedChannel(const TString &channel_name,
                               const FitResult &result) {
   sim_seeds_[channel_name] = result;
@@ -2833,47 +2874,75 @@ RooFitUtils::BuildChannelModel(const RooFitChannelConfig &cfg,
 
 // Each line is a RooFitPeakModel that owns only its centroid and yield, both
 // constant, and holds the shape peak's own shape variables and the channel's
-// window. gaus_yield is the whole-line yield; the Gaussian's coefficient is
-// that times the Gaussian's share inside the window, which is what a fitted
-// peak's GausAmplitude counts, so every component yield built on
-// GausYieldCoefficient() comes out as it does for a fitted peak.
+// window. A fixed line's gaus_yield is the whole-line yield; the Gaussian's
+// coefficient is that times the Gaussian's share inside the window, which is
+// what a fitted peak's GausAmplitude counts, so every component yield built on
+// GausYieldCoefficient() comes out as it does for a fitted peak. A linked
+// line's gaus_yield is its ratio to the shape peak; its coefficient is the
+// ratio times the shape peak's in-window Gaussian yield, taken to the whole
+// line through the peak's window share and back into the window through the
+// line's own.
 Bool_t RooFitUtils::BuildChannelFixedLines(
     const RooFitChannelConfig &cfg, const std::vector<RooFitPeakModel> &peaks,
     RooArgList &pdf_list, RooArgList &coef_list) {
   std::vector<RooFitPeakModel> lines;
   sim_channel_fixed_lines_[cfg.name] = lines;
-  if (cfg.fixed_line_mus.empty())
+  const size_t n_fixed = cfg.fixed_line_mus.size();
+  const size_t n_linked = cfg.linked_line_mus.size();
+  if (n_fixed == 0 && n_linked == 0)
     return kTRUE;
-  if (cfg.fixed_line_shape_peak < 0 ||
-      cfg.fixed_line_shape_peak >= (Int_t)peaks.size()) {
-    std::cerr << "ERROR: channel '" << cfg.name << "': fixed-line shape peak "
-              << cfg.fixed_line_shape_peak << " does not exist." << std::endl;
-    return kFALSE;
-  }
-  const RooFitPeakModel &shape = peaks[cfg.fixed_line_shape_peak];
-  for (size_t li = 0; li < cfg.fixed_line_mus.size(); li++) {
+  for (size_t li = 0; li < n_fixed + n_linked; li++) {
+    const Bool_t linked = li >= n_fixed;
+    const size_t k = linked ? li - n_fixed : li;
+    const Int_t shape_peak =
+        linked ? cfg.linked_line_shape_peaks[k] : cfg.fixed_line_shape_peak;
+    if (shape_peak < 0 || shape_peak >= (Int_t)peaks.size()) {
+      std::cerr << "ERROR: channel '" << cfg.name
+                << "': " << (linked ? "linked" : "fixed") << "-line shape peak "
+                << shape_peak << " does not exist." << std::endl;
+      return kFALSE;
+    }
+    const RooFitPeakModel &shape = peaks[shape_peak];
     RooFitPeakModel p = shape;
+    const TString kind = linked ? "linked" : "fixed";
     TString suffix =
-        TString::Format("_%s_fixed%d", cfg.name.Data(), (Int_t)li + 1);
-    p.mu = new RooRealVar(("FixedLineMu" + suffix).Data(), "",
-                          cfg.fixed_line_mus[li]);
+        TString::Format("_%s_%s%d", cfg.name.Data(), kind.Data(), (Int_t)k + 1);
+    p.mu = new RooRealVar(
+        ((linked ? "LinkedLineMu" : "FixedLineMu") + suffix).Data(), "",
+        linked ? cfg.linked_line_mus[k] : cfg.fixed_line_mus[k]);
     p.mu->setConstant(kTRUE);
-    p.gaus_yield = new RooRealVar(("FixedLineYield" + suffix).Data(), "",
-                                  cfg.fixed_line_gaus_yields[li]);
-    p.gaus_yield->setConstant(kTRUE);
     p.gaus_yield_ratio = 1.0;
-    p.gaus_yield_scaled =
-        new RooFormulaVar(("fixed_line_window_yield" + suffix).Data(),
-                          "@0*0.5*(TMath::Erf((@4-@1)/(sqrt(2.0)*@2))"
-                          "-TMath::Erf((@3-@1)/(sqrt(2.0)*@2)))",
-                          RooArgList(*p.gaus_yield, *p.mu, *p.sigma,
-                                     *p.window_low, *p.window_high));
+    if (linked) {
+      p.gaus_yield = new RooRealVar(("LinkedLineRatio" + suffix).Data(), "",
+                                    cfg.linked_line_yield_ratios[k]);
+      p.gaus_yield->setConstant(kTRUE);
+      // ratio * peak_in_window / f_peak * f_line, each f an erf difference
+      // whose factor 1/2 cancels.
+      p.gaus_yield_scaled = new RooFormulaVar(
+          ("linked_line_window_yield" + suffix).Data(),
+          "@0*@1*(TMath::Erf((@6-@4)/(sqrt(2.0)*@3))"
+          "-TMath::Erf((@5-@4)/(sqrt(2.0)*@3)))"
+          "/(TMath::Erf((@6-@2)/(sqrt(2.0)*@3))"
+          "-TMath::Erf((@5-@2)/(sqrt(2.0)*@3)))",
+          RooArgList(*p.gaus_yield, shape.GausYieldCoefficient(), *shape.mu,
+                     *p.sigma, *p.mu, *p.window_low, *p.window_high));
+    } else {
+      p.gaus_yield = new RooRealVar(("FixedLineYield" + suffix).Data(), "",
+                                    cfg.fixed_line_gaus_yields[k]);
+      p.gaus_yield->setConstant(kTRUE);
+      p.gaus_yield_scaled =
+          new RooFormulaVar(("fixed_line_window_yield" + suffix).Data(),
+                            "@0*0.5*(TMath::Erf((@4-@1)/(sqrt(2.0)*@2))"
+                            "-TMath::Erf((@3-@1)/(sqrt(2.0)*@2)))",
+                            RooArgList(*p.gaus_yield, *p.mu, *p.sigma,
+                                       *p.window_low, *p.window_high));
+    }
     RegisterOwned(p.mu);
     RegisterOwned(p.gaus_yield);
     RegisterOwned(p.gaus_yield_scaled);
 
     TString pdf_suffix =
-        "_" + cfg.name + "_fixed" + TString::Format("%d", (Int_t)li + 1);
+        "_" + cfg.name + "_" + kind + TString::Format("%d", (Int_t)k + 1);
     p.gauss_pdf = RooFitFunctions::MakeGaussian("gauss_pdf" + pdf_suffix, *x_,
                                                 *p.mu, *p.sigma);
     p.step_pdf = RooFitFunctions::MakeStepShelf("step_pdf" + pdf_suffix, *x_,
@@ -2909,20 +2978,24 @@ Bool_t RooFitUtils::BuildChannelFixedLines(
                                       p.low_lin_yield, p.high_exp_yield};
     RooRealVar *optional_ratios[4] = {p.ratio_step, p.ratio_low_exp,
                                       p.ratio_low_lin, p.ratio_high_exp};
-    for (Int_t k = 0; k < 4; k++) {
-      Bool_t switched_off = optional_ratios[k]->isConstant() &&
-                            optional_ratios[k]->getVal() == 0.0;
+    for (Int_t c = 0; c < 4; c++) {
+      Bool_t switched_off = optional_ratios[c]->isConstant() &&
+                            optional_ratios[c]->getVal() == 0.0;
       if (switched_off)
         continue;
-      pdf_list.add(*optional_pdfs[k]);
-      coef_list.add(*optional_yields[k]);
+      pdf_list.add(*optional_pdfs[c]);
+      coef_list.add(*optional_yields[c]);
     }
     lines.push_back(p);
   }
   sim_channel_fixed_lines_[cfg.name] = lines;
-  std::cout << "Channel '" << cfg.name << "': " << lines.size()
-            << " fixed lines with the shape of peak "
-            << cfg.fixed_line_shape_peak + 1 << std::endl;
+  if (n_fixed > 0)
+    std::cout << "Channel '" << cfg.name << "': " << n_fixed
+              << " fixed lines with the shape of peak "
+              << cfg.fixed_line_shape_peak + 1 << std::endl;
+  if (n_linked > 0)
+    std::cout << "Channel '" << cfg.name << "': " << n_linked
+              << " lines linked to its peaks' yields" << std::endl;
   return kTRUE;
 }
 

@@ -356,6 +356,12 @@ struct RooFitChannelConfig {
   Int_t fixed_line_shape_peak = -1;
   std::vector<Double_t> fixed_line_mus;
   std::vector<Double_t> fixed_line_gaus_yields;
+  // Lines of known position whose yields are fixed multiples of one of the
+  // channel's peaks'; see RooFitUtils::AddLinkedLines(). One entry per line,
+  // each naming the peak it follows. Empty when the channel has none.
+  std::vector<Int_t> linked_line_shape_peaks;
+  std::vector<Double_t> linked_line_mus;
+  std::vector<Double_t> linked_line_yield_ratios;
 };
 
 /**
@@ -493,8 +499,9 @@ private:
   RooArgSet sim_constraint_set_;
   std::map<TString, FitResult> sim_seeds_;
   std::map<TString, std::vector<RooFitPeakModel>> sim_channel_peaks_;
-  // Each channel's AddFixedLines() lines, built like peaks but kept apart from
-  // them: they are not results, saved parameters or editor rows.
+  // Each channel's AddFixedLines() and AddLinkedLines() lines, built like
+  // peaks but kept apart from them: they are not results, saved parameters or
+  // editor rows.
   std::map<TString, std::vector<RooFitPeakModel>> sim_channel_fixed_lines_;
   // The fixed lines of the channel being plotted; see PlotChannel().
   std::vector<RooFitPeakModel> fixed_lines_;
@@ -1236,6 +1243,47 @@ public:
   void AddFixedLines(const TString &channel, Int_t shape_peak,
                      const std::vector<Double_t> &mus,
                      const std::vector<Double_t> &gaus_yields);
+  /**
+   * @brief Add lines of known position to a channel whose Gaussian yields are
+   *        fixed multiples of one of its peaks'.
+   *
+   * Each line is drawn as AddFixedLines() draws one: a Gaussian at a fixed
+   * centroid plus the step and tails of peak @p shape_peak, borrowing that
+   * peak's `Sigma`, step and tail parameters. Its Gaussian yield over the
+   * whole line is `ratio` times the shape peak's Gaussian yield over the whole
+   * line, so the lines rise and fall with the peak's `GausAmplitude` through
+   * the fit and add no free parameter. Use them for a set of lines whose
+   * relative intensities are known and whose common intensity is the
+   * measurement, such as the X-ray escape series of a line: fit one escape
+   * line as the peak and link the others to it.
+   *
+   * Whole-line yields are related through each line's in-window share, so a
+   * line near a window edge is counted as AddFixedLines() counts one: the
+   * line's in-window Gaussian yield is `ratio * GausAmplitude * f_line /
+   * f_peak`, with `f` each Gaussian's share of the window at its own centroid
+   * and the shared sigma.
+   *
+   * @param channel      Channel to add the lines to; AddChannel() must have
+   *                     registered it.
+   * @param shape_peak   Index of the channel's peak the lines follow, in yield
+   *                     and shape, from 0 in @p mu_inits order of AddChannel().
+   * @param mus          Centroid of each line, in the observable's units.
+   * @param yield_ratios Each line's whole-line Gaussian yield over the shape
+   *                     peak's. One entry per entry of @p mus, each finite and
+   *                     non-negative.
+   *
+   * @note Each call adds lines; call once per shape peak, so two peaks fitted
+   *       apart can each carry their own linked lines. The lines appear where
+   *       AddFixedLines() lines do: the channel's model, chi-squared, plots
+   *       (in the same combined component curve) and the simultaneous
+   *       editor's total curve, not FitResult::peaks, saved states or editor
+   *       rows. Editing the shape peak's `GausAmplitude` in the editor moves
+   *       them with it.
+   * @note Simultaneous mode only. Call it before FitSimultaneous().
+   */
+  void AddLinkedLines(const TString &channel, Int_t shape_peak,
+                      const std::vector<Double_t> &mus,
+                      const std::vector<Double_t> &yield_ratios);
   /**
    * @brief Use a prior single-channel fit as starting values for a channel.
    * @param channel_name Channel to seed.

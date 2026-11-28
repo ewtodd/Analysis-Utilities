@@ -343,6 +343,9 @@ background) sharing a single observable with the others.
 - **`AddFixedLines(channel, shape_peak, mus, gaus_yields)`** — add lines of
   known position and yield to a channel, drawn with one of its peaks' shapes;
   see @ref fixed-lines "Fixed lines".
+- **`AddLinkedLines(channel, shape_peak, mus, yield_ratios)`** — add lines of
+  known position whose yields are fixed multiples of one of the channel's
+  peaks', drawn with its shape; see @ref linked-lines "Linked lines".
 - **`SeedChannel(channel_name, result)`** — supply a prior single-channel
   `FitResult` as starting values for that channel.
 - **`FitSimultaneous(input_name, base_label)`** — builds the `RooSimultaneous`,
@@ -414,6 +417,37 @@ sim.AddFixedLines("run", 1, mus, yields);
   without them load unchanged.
 - Call it once per channel, after `AddChannel()` and before
   `FitSimultaneous()`; a second call for the same channel replaces the first.
+<!---->
+### Linked lines {#linked-lines}
+<!---->
+When the relative intensities of a set of lines are known and their common
+intensity is the measurement, fit one of them as a peak and link the others to
+it.
+`AddLinkedLines(channel, shape_peak, mus, yield_ratios)` adds lines at
+fixed centroids whose Gaussian yields over the whole line are fixed multiples
+of the shape peak's, so they follow its `GausAmplitude` through the fit:
+<!---->
+```cpp
+RooFitUtils sim;
+// The Cd K-beta1 escape of a 95.9 keV line as the one fitted peak, its centroid
+// held, and the other escapes at known yields relative to it, on a linear
+// continuum with a low exponential tail.
+sim.AddChannel("run", events, 66, 74.5, 0.255, 1, {95.9 - 26.09}, kFALSE,
+               kFALSE, kTRUE, kFALSE, kFALSE, {kTRUE});
+std::vector<Double_t> mus = {95.9 - 26.64, 95.9 - 23.17, 95.9 - 22.98};
+std::vector<Double_t> ratios = {0.19, 2.42, 1.27};
+sim.AddLinkedLines("run", 0, mus, ratios);
+```
+<!---->
+- The lines borrow the shape peak's `Sigma`, step and tails as fixed lines
+  do, and add no free parameter.
+- A ratio relates whole-line Gaussian yields; each line's in-window yield is
+  the ratio times the peak's `GausAmplitude` times the line's window share over
+  the peak's.
+- Each call adds lines, so two peaks fitted apart can each carry their own.
+  The lines appear where fixed lines do (model, chi-squared, the plots' fixed-line
+  curve, the editor's total curve) and not in results, saved states or editor
+  rows; editing the peak's `GausAmplitude` in the editor moves them with it.
 <!---->
 ## References
 <!---->
