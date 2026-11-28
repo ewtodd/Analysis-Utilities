@@ -8,6 +8,7 @@ docs/
 *.o
 lib
 result
+result*
 .cache
 __pycache__
 conda
